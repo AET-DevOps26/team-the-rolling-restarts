@@ -1,0 +1,115 @@
+@startuml usecase
+left to right direction
+
+' ── Styling ─────────────────────────────────────────────
+skinparam DefaultFontName         "Segoe UI"
+skinparam DefaultFontSize         12
+
+skinparam Actor {
+  BorderColor                     #1A252F
+  BackgroundColor                 #D5E8D4
+  FontStyle                       bold
+  FontSize                        13
+}
+
+skinparam Usecase {
+  BorderColor                     #1F618D
+  BackgroundColor                 #EBF5FB
+  BorderThickness                 1.5
+  FontSize                        12
+}
+
+skinparam Rectangle {
+  BorderColor                     #1A252F
+  BorderThickness                 2
+  BackgroundColor                 #FDFEFE
+  FontStyle                       bold
+  FontSize                        14
+}
+
+skinparam Arrow {
+  Color                           #2C3E50
+  FontSize                        11
+  FontStyle                       italic
+}
+
+skinparam Note {
+  BackgroundColor                 #FEF9E7
+  BorderColor                     #F0B27A
+}
+' ────────────────────────────────────────────────────────
+
+actor "Visitor" as Visitor
+actor "User"    as User
+Visitor <|-- User
+
+rectangle "News Aggregator System" {
+
+  ' --- Account Management ---
+  usecase "Register Account (ID:11a)" as UC11a
+  usecase "Log In (ID:11b)"           as UC11b
+
+  ' --- Core Content Interaction ---
+  usecase "Browse Personalized Feed (ID:1)" as UC1
+  usecase "View Article (ID:12)"            as UC12
+  usecase "Search & Filter News (ID:5)"     as UC5
+
+  ' --- Article Enhancements ---
+  usecase "View AI Summary (ID:2)"        as UC2
+  usecase "Get Concept Explanation (ID:3)" as UC3
+  usecase "View Sentiment & Bias (ID:6)"  as UC6
+
+  ' --- Personalization ---
+  usecase "Receive Recommendations (ID:4)" as UC4
+  usecase "View Trending Topics (ID:9)"    as UC9
+
+  ' --- User Library ---
+  usecase "Bookmark Article (ID:7)"    as UC7
+  usecase "Organize Bookmarks (ID:7b)" as UC7b
+
+  ' --- Notifications ---
+  usecase "Receive Notifications (ID:8)" as UC8
+
+  ' --- Automated Internal Process ---
+  usecase "Auto-tag & Categorize (ID:10)" as UC10
+
+}
+
+note right of UC10
+  Automated internal process.
+  Triggered by browsing and search;
+  no external actor initiates it.
+end note
+
+note right of UC8
+  System delivers notifications;
+  User is the beneficiary.
+  No external System actor needed.
+end note
+
+' --- Actor Connections ---
+Visitor --> UC11a
+Visitor --> UC11b
+
+User --> UC1
+User --> UC5
+User --> UC12
+User --> UC9
+User --> UC7b
+User --> UC8
+
+' --- Use Case Relationships ---
+UC1 --> UC12  : <<include>>
+UC5 --> UC12  : <<include>>
+
+UC12 <.. UC2  : <<extend>>
+UC12 <.. UC3  : <<extend>>
+UC12 <.. UC6  : <<extend>>
+UC12 <.. UC7  : <<extend>>
+
+UC1  <.. UC4  : <<extend>>
+
+UC1  --> UC10 : <<include>>
+UC5  --> UC10 : <<include>>
+
+@enduml
