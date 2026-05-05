@@ -51,7 +51,7 @@ rectangle "News Aggregator System" {
 
   ' --- Core Content Interaction ---
   usecase "Browse Personalized Feed (ID:1)" as UC1
-  usecase "View Article (ID:12)"            as UC12
+  usecase "View Article"                    as UC12
   usecase "Search & Filter News (ID:5)"     as UC5
 
   ' --- Article Enhancements ---
