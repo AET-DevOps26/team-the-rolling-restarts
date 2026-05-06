@@ -1,0 +1,147 @@
+@startuml AnalysisObjectModel
+title Personalised News Aggregator - Analysis Object Model
+
+' Style: keep it simple, attributes only (analysis level, no methods)
+hide circle
+hide empty methods
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam linetype ortho
+
+' ===== Identity =====
+
+class User {
+  username
+  email
+  passwordHash
+  createdAt
+}
+
+' ===== Content taxonomy =====
+
+class Topic {
+  name
+  description
+}
+
+class Tag {
+  name
+  type           ' keyword | entity
+}
+
+class Publisher {
+  name
+  feedUrl
+  feedType       ' rss | api | scraper
+}
+
+' ===== Core content =====
+
+class Article {
+  title
+  url
+  publishedAt
+  language
+  cleanText
+}
+
+' ===== AI-generated artefacts =====
+
+class Summary {
+  text
+  style          ' neutral | analytical | simplified
+  format         ' short | long | bullet
+  generatedAt
+}
+
+class Explanation {
+  text
+  readingLevel   ' beginner | intermediate | expert
+  generatedAt
+}
+
+class SentimentAnalysis {
+  sentiment      ' positive | neutral | negative
+  tone
+  biasScore
+  confidence
+  analysedAt
+}
+
+' ===== User library =====
+
+class Folder {
+  name
+}
+
+class Bookmark {
+  savedAt
+  notes
+}
+
+' ===== User intelligence =====
+
+class Interaction {
+  type           ' view | click | share
+  occurredAt
+  dwellTime
+}
+
+class Recommendation {
+  score
+  reason
+  generatedAt
+}
+
+' ===== Outbound =====
+
+class Notification {
+  message
+  channel        ' push | email | in-app
+  sentAt
+  read
+}
+
+' ===== Discovery =====
+
+class TrendingTopic {
+  score
+  periodStart
+  periodEnd
+}
+
+' =====================================================
+' Associations
+' =====================================================
+
+' --- User-centric ---
+User "*"  -- "*" Topic           : follows >
+User "1"  -- "*" Folder          : organises >
+User "1"  -- "*" Bookmark        : owns >
+User "1"  -- "*" Interaction     : performs >
+User "1"  -- "*" Recommendation  : receives >
+User "1"  -- "*" Notification    : receives >
+
+' --- Library ---
+Folder   "1" -- "*" Bookmark     : groups >
+Bookmark "*" -- "1" Article      : refers to >
+
+' --- Content pipeline ---
+Publisher "1" -- "*" Article     : publishes >
+Article   "*" -- "*" Topic       : categorised under >
+Article   "*" -- "*" Tag         : tagged with >
+
+' --- AI artefacts attached to articles ---
+Article "1" -- "*"    Summary           : has >
+Article "1" -- "*"    Explanation       : has >
+Article "1" -- "0..1" SentimentAnalysis : analysed by >
+
+' --- Activity / personalisation ---
+Interaction    "*" -- "1" Article : on >
+Recommendation "*" -- "1" Article : suggests >
+
+' --- Outbound + discovery ---
+Notification  "*" -- "0..1" Article : about >
+TrendingTopic "*" -- "1"    Topic   : ranks >
+
+@enduml
