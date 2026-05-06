@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-diagrams:
@@ -22,54 +22,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get changed .puml files (added/modified/renamed)
-        uses: tj-actions/changed-files@v44
-        id: changed
-        with:
-          files: |
-            **/*.puml
-          include_all_old_new_renamed_files: true
-
       - name: Install PlantUML
         run: |
           sudo apt-get update
           sudo apt-get install -y plantuml
 
-      - name: Generate diagrams (PNG)
-        if: steps.changed.outputs.any_changed == 'true'
+      - name: Generate diagrams (PNG) for all .puml files (mirrored structure)
+        shell: bash
         run: |
-          echo "Files: ${{ steps.changed.outputs.all_changed_files }}"
+          set -euo pipefail
 
-          for entry in ${{ steps.changed.outputs.all_changed_files }}; do
-            # entry can be "old.puml,new.puml" for renames
-            file="${entry##*,}"  # take the "new" path
-            if [[ -f "$file" && "$file" == *.puml ]]; then
-              dir=$(dirname "$file")
-              out="$dir/generated_diagram"
-              mkdir -p "$out"
-              plantuml -tpng -outputDir "$out" "$file"
-            fi
-          done
+          OUT_ROOT="generated-diagrams"
+          rm -rf "$OUT_ROOT"
+          mkdir -p "$OUT_ROOT"
 
-      - name: Upload artifacts
-        if: hashFiles('**/generated_diagram/**') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: diagrams
-          path: '**/generated_diagram'
+          mapfile -d '' files < <(find . -type f -name '*.puml' -print0)
 
-      - name: Commit and push generated diagrams
-        if: github.event_name != 'pull_request' && hashFiles('**/generated_diagram/**') != ''
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add '**/generated_diagram'
-
-          if git diff --cached --quiet; then
-            echo "No diagram changes to commit."
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No .puml files found."
             exit 0
           fi
 
-          git commit -m "chore(uml): auto-generate PlantUML diagrams"
-          git push
+          echo "Found ${#files[@]} .puml files"
+          for file in "${files[@]}"; do
+            rel_dir="$(dirname "${file#./}")"
+            out_dir="$OUT_ROOT/$rel_dir"
+            mkdir -p "$out_dir"
+            plantuml -tpng -outputDir "$out_dir" "$file"
+          done
+
+      - name: Upload artifacts
+        if: hashFiles('generated-diagrams/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagrams-${{ github.ref_name }}-${{ github.sha }}
+          path: generated-diagrams
+          retention-days: 30
