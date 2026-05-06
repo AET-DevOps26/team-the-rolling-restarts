@@ -55,6 +55,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: diagrams-${{ github.ref_name }}-${{ github.sha }}
+          # Unique and safe: doesn't include branch names (which may contain '/')
+          name: diagrams-${{ github.run_id }}-${{ github.run_attempt }}
           path: generated-diagrams
           retention-days: 30
