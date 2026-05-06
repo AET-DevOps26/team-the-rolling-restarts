@@ -75,20 +75,16 @@ jobs:
             mkdir -p "$out_dir"
 
             # PlantUML's -o expects an output directory RELATIVE TO THE INPUT FILE'S DIRECTORY.
-            # Compute the relative path from the input directory (rel_dir) to out_dir.
-            out_rel_from_input_dir=$(python3 - <<'PY'
-import os
-rel_dir=os.environ['REL_DIR']
-out_dir=os.environ['OUT_DIR']
-print(os.path.relpath(out_dir, start=rel_dir))
-PY
-            )
+            # We compute it without heredocs to avoid YAML parsing issues.
+            out_rel_from_input_dir=$(python3 -c 'import os; print(os.path.relpath(os.environ["OUT_DIR"], start=os.environ["REL_DIR"]))' \
+              REL_DIR="$rel_dir" OUT_DIR="$out_dir")
 
             echo "Generating PNG for: $file"
             echo "  input dir: $rel_dir"
             echo "  out_dir:   $out_dir"
             echo "  -o arg:    $out_rel_from_input_dir"
 
+            # plantuml writes output relative to the input file directory when using -o
             plantuml -verbose -tpng -o "$out_rel_from_input_dir" "$file"
 
             echo "Contents of $out_dir after generation:"
