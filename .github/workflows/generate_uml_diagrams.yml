@@ -74,7 +74,7 @@ jobs:
             out_dir="$OUT_ROOT/$rel_dir"
             mkdir -p "$out_dir"
             echo "Generating PNG for: $file -> $out_dir"
-            plantuml -verbose -tpng -outputDir "$out_dir" "$file"
+            plantuml -verbose -tpng -o "$out_dir" "$file"
           done
 
           echo "Generated files under $OUT_ROOT:"
