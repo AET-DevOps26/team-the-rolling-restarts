@@ -1,0 +1,46 @@
+name: Build PlantUML Diagrams
+
+on:
+  push:
+    paths:
+      - '**/*.puml'
+  pull_request:
+    paths:
+      - '**/*.puml'
+  workflow_dispatch:
+
+jobs:
+  build-diagrams:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # required for proper diffing
+
+      - name: Get changed files
+        uses: tj-actions/changed-files@v44
+        id: changed
+
+      - name: Install PlantUML
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y plantuml
+
+      - name: Generate diagrams for changed .puml files
+        run: |
+          for file in ${{ steps.changed.outputs.all_changed_files }}; do
+            if [[ "$file" == *.puml ]]; then
+              dir=$(dirname "$file")
+              out="$dir/generated_diagrams"
+              mkdir -p "$out"
+              plantuml -outputDir "$out" "$file"
+            fi
+          done
+
+      - name: Upload generated diagrams (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagrams
+          path: '**/generated_diagrams'
