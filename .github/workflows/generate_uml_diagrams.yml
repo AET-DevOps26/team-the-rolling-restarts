@@ -21,88 +21,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Debug workspace (list .puml files)
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "GITHUB_REF=$GITHUB_REF"
-          echo "GITHUB_SHA=$GITHUB_SHA"
-          echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
-          echo "Repo root listing:"
-          ls -la
-          echo "All .puml files (find):"
-          find . -type f -name '*.puml' -print
-          echo "All .puml files (git ls-files + grep):"
-          git ls-files | grep -E '\.puml$' || true
-
-      - name: Install PlantUML + dependencies
+      - name: Install PlantUML
         run: |
           sudo apt-get update
-          # plantuml uses Java and often relies on graphviz (dot) for some diagrams
-          sudo apt-get install -y plantuml graphviz default-jre
-          echo "plantuml version:"
-          plantuml -version || true
-          echo "dot version:"
-          dot -V || true
+          sudo apt-get install -y plantuml
 
-      - name: Generate diagrams (PNG) for all .puml files (mirrored structure)
+      - name: Generate PNG diagrams
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
 
-          OUT_ROOT="generated-diagrams"
-          rm -rf "$OUT_ROOT"
-          mkdir -p "$OUT_ROOT"
+          OUT=generated-diagrams
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
 
-          # Use a tracked file list then filter by extension.
-          mapfile -t files < <(
-            git ls-files | grep -E '\.puml$' || true
-          )
-
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No .puml files found (git ls-files | grep)."
-            echo "This usually means the .puml files are not committed on this ref."
-            exit 1
-          fi
-
-          echo "Found ${#files[@]} .puml files"
-          for file in "${files[@]}"; do
-            rel_dir="$(dirname "$file")"
-            out_dir="$OUT_ROOT/$rel_dir"
-            mkdir -p "$out_dir"
-
-            # PlantUML's -o expects an output directory RELATIVE TO THE INPUT FILE'S DIRECTORY.
-            # We compute it without heredocs to avoid YAML parsing issues.
-            out_rel_from_input_dir=$(python3 -c 'import os; print(os.path.relpath(os.environ["OUT_DIR"], start=os.environ["REL_DIR"]))' \
-              REL_DIR="$rel_dir" OUT_DIR="$out_dir")
-
-            echo "Generating PNG for: $file"
-            echo "  input dir: $rel_dir"
-            echo "  out_dir:   $out_dir"
-            echo "  -o arg:    $out_rel_from_input_dir"
-
-            # plantuml writes output relative to the input file directory when using -o
-            plantuml -verbose -tpng -o "$out_rel_from_input_dir" "$file"
-
-            echo "Contents of $out_dir after generation:"
-            find "$out_dir" -maxdepth 2 -print || true
+          # Generate PNGs next to their .puml files (simple + reliable)
+          for f in $(git ls-files '*.puml'); do
+            echo "Generating: $f"
+            plantuml -tpng "$f"
           done
 
-          echo "Tree under $OUT_ROOT:"
-          find "$OUT_ROOT" -maxdepth 6 -print || true
+          # Copy all generated PNGs into the artifact directory (keep folder structure)
+          for p in $(find . -name '*.png'); do
+            dest="$OUT/${p#./}"
+            mkdir -p "$(dirname "$dest")"
+            cp "$p" "$dest"
+          done
 
-          echo "All PNGs in repo (diagnostic):"
-          find . -type f -iname '*.png' -print | head -n 200 || true
-
-          png_count=$(find "$OUT_ROOT" -type f -iname '*.png' | wc -l)
-          echo "PNG count under $OUT_ROOT: $png_count"
-          if [ "$png_count" -eq 0 ]; then
-            echo "ERROR: No PNGs were generated under $OUT_ROOT."
-            exit 1
-          fi
+          echo "PNG files in artifact directory:"
+          find "$OUT" -name '*.png'
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
