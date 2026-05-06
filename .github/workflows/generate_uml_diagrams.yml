@@ -31,8 +31,10 @@ jobs:
           echo "GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
           echo "Repo root listing:"
           ls -la
-          echo "All .puml files:"
+          echo "All .puml files (find):"
           find . -type f -name '*.puml' -print
+          echo "All .puml files (git ls-files + grep):"
+          git ls-files | grep -E '\.puml$' || true
 
       - name: Install PlantUML
         run: |
@@ -48,14 +50,15 @@ jobs:
           rm -rf "$OUT_ROOT"
           mkdir -p "$OUT_ROOT"
 
-          # Restrict search to tracked files to avoid surprises with untracked build output,
-          # and to make behavior consistent across local vs CI.
-          mapfile -d '' files < <(
-            git ls-files -z -- '*.puml' || true
+          # Use a tracked file list then filter by extension.
+          # This avoids pathspec/globbing quirks across environments and ensures we only
+          # process committed .puml files.
+          mapfile -t files < <(
+            git ls-files | grep -E '\.puml$' || true
           )
 
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No .puml files found (git ls-files)."
+            echo "No .puml files found (git ls-files | grep)."
             echo "This usually means the .puml files are not committed on this ref."
             exit 1
           fi
