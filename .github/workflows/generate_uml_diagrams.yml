@@ -36,10 +36,15 @@ jobs:
           echo "All .puml files (git ls-files + grep):"
           git ls-files | grep -E '\.puml$' || true
 
-      - name: Install PlantUML
+      - name: Install PlantUML + dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y plantuml
+          # plantuml uses Java and often relies on graphviz (dot) for some diagrams
+          sudo apt-get install -y plantuml graphviz default-jre
+          echo "plantuml version:"
+          plantuml -version || true
+          echo "dot version:"
+          dot -V || true
 
       - name: Generate diagrams (PNG) for all .puml files (mirrored structure)
         shell: bash
@@ -68,8 +73,19 @@ jobs:
             rel_dir="$(dirname "$file")"
             out_dir="$OUT_ROOT/$rel_dir"
             mkdir -p "$out_dir"
-            plantuml -tpng -outputDir "$out_dir" "$file"
+            echo "Generating PNG for: $file -> $out_dir"
+            plantuml -verbose -tpng -outputDir "$out_dir" "$file"
           done
+
+          echo "Generated files under $OUT_ROOT:"
+          find "$OUT_ROOT" -type f -print || true
+
+          png_count=$(find "$OUT_ROOT" -type f -name '*.png' | wc -l)
+          echo "PNG count: $png_count"
+          if [ "$png_count" -eq 0 ]; then
+            echo "ERROR: No PNGs were generated."
+            exit 1
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
