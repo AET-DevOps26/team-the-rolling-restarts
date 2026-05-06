@@ -14,24 +14,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # required for proper diffing
+          fetch-depth: 0
 
-      - name: Get changed files
+      - name: Get changed .puml files (added/modified/renamed)
         uses: tj-actions/changed-files@v44
         id: changed
+        with:
+          files: |
+            **/*.puml
+          since_last_remote_commit: true
 
       - name: Install PlantUML
         run: |
           sudo apt-get update
           sudo apt-get install -y plantuml
 
-      - name: Generate diagrams for changed .puml files
+      - name: Generate diagrams
         run: |
+          echo "Files: ${{ steps.changed.outputs.all_changed_files }}"
+
           for file in ${{ steps.changed.outputs.all_changed_files }}; do
-            if [[ "$file" == *.puml ]]; then
+            if [[ -f "$file" && "$file" == *.puml ]]; then
               dir=$(dirname "$file")
               out="$dir/generated_diagrams"
               mkdir -p "$out"
@@ -39,7 +45,8 @@ jobs:
             fi
           done
 
-      - name: Upload generated diagrams (optional)
+      - name: Upload artifacts
+        if: hashFiles('**/generated_diagrams/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: diagrams
