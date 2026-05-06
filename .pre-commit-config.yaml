@@ -6,6 +6,7 @@ repos:
         entry: npx @redocly/cli lint
         language: system
         files: ^api/openapi\.yaml$
+        
       - id: generate-api-clients
         name: Generate API Clients
         entry: ./api/scripts/gen-all.sh
