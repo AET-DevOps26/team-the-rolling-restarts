@@ -30,7 +30,7 @@ jobs:
       - name: Generate diagrams (PNG) for all .puml files (mirrored structure)
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
 
           OUT_ROOT="generated-diagrams"
           rm -rf "$OUT_ROOT"
