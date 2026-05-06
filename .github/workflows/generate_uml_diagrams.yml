@@ -4,9 +4,11 @@ on:
   push:
     paths:
       - '**/*.puml'
+      - '.github/workflows/generate_uml_diagrams.yml'
   pull_request:
     paths:
       - '**/*.puml'
+      - '.github/workflows/generate_uml_diagrams.yml'
   workflow_dispatch:
 
 permissions:
@@ -56,8 +58,6 @@ jobs:
           mkdir -p "$OUT_ROOT"
 
           # Use a tracked file list then filter by extension.
-          # This avoids pathspec/globbing quirks across environments and ensures we only
-          # process committed .puml files.
           mapfile -t files < <(
             git ls-files | grep -E '\.puml$' || true
           )
@@ -73,17 +73,38 @@ jobs:
             rel_dir="$(dirname "$file")"
             out_dir="$OUT_ROOT/$rel_dir"
             mkdir -p "$out_dir"
-            echo "Generating PNG for: $file -> $out_dir"
-            plantuml -verbose -tpng -o "$out_dir" "$file"
+
+            # PlantUML's -o expects an output directory RELATIVE TO THE INPUT FILE'S DIRECTORY.
+            # Compute the relative path from the input directory (rel_dir) to out_dir.
+            out_rel_from_input_dir=$(python3 - <<'PY'
+import os
+rel_dir=os.environ['REL_DIR']
+out_dir=os.environ['OUT_DIR']
+print(os.path.relpath(out_dir, start=rel_dir))
+PY
+            )
+
+            echo "Generating PNG for: $file"
+            echo "  input dir: $rel_dir"
+            echo "  out_dir:   $out_dir"
+            echo "  -o arg:    $out_rel_from_input_dir"
+
+            plantuml -verbose -tpng -o "$out_rel_from_input_dir" "$file"
+
+            echo "Contents of $out_dir after generation:"
+            find "$out_dir" -maxdepth 2 -print || true
           done
 
-          echo "Generated files under $OUT_ROOT:"
-          find "$OUT_ROOT" -type f -print || true
+          echo "Tree under $OUT_ROOT:"
+          find "$OUT_ROOT" -maxdepth 6 -print || true
 
-          png_count=$(find "$OUT_ROOT" -type f -name '*.png' | wc -l)
-          echo "PNG count: $png_count"
+          echo "All PNGs in repo (diagnostic):"
+          find . -type f -iname '*.png' -print | head -n 200 || true
+
+          png_count=$(find "$OUT_ROOT" -type f -iname '*.png' | wc -l)
+          echo "PNG count under $OUT_ROOT: $png_count"
           if [ "$png_count" -eq 0 ]; then
-            echo "ERROR: No PNGs were generated."
+            echo "ERROR: No PNGs were generated under $OUT_ROOT."
             exit 1
           fi
 
