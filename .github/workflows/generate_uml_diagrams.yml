@@ -37,13 +37,13 @@ jobs:
           mkdir -p "$OUT"
 
           # Generate PNGs next to their .puml files (simple + reliable)
-          for f in $(git ls-files '*.puml'); do
+          git ls-files -z '*.puml' | while IFS= read -r -d '' f; do
             echo "Generating: $f"
             plantuml -tpng "$f"
           done
 
           # Copy all generated PNGs into the artifact directory (keep folder structure)
-          for p in $(find . -name '*.png'); do
+          find . -name '*.png' -print0 | while IFS= read -r -d '' p; do
             dest="$OUT/${p#./}"
             mkdir -p "$(dirname "$dest")"
             cp "$p" "$dest"
