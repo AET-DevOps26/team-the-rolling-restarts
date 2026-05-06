@@ -28,6 +28,7 @@ jobs:
         with:
           files: |
             **/*.puml
+          include_all_old_new_renamed_files: true
 
       - name: Install PlantUML
         run: |
@@ -39,7 +40,9 @@ jobs:
         run: |
           echo "Files: ${{ steps.changed.outputs.all_changed_files }}"
 
-          for file in ${{ steps.changed.outputs.all_changed_files }}; do
+          for entry in ${{ steps.changed.outputs.all_changed_files }}; do
+            # entry can be "old.puml,new.puml" for renames
+            file="${entry##*,}"  # take the "new" path
             if [[ -f "$file" && "$file" == *.puml ]]; then
               dir=$(dirname "$file")
               out="$dir/generated_diagram"
