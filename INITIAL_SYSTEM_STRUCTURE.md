@@ -15,10 +15,10 @@ The Personalised News Aggregator lets users follow topics and consume articles e
 
 ### 2.2 API Server (Spring Boot)
 
-- **Stack**: Java 21, Spring Boot 3 (WebFlux or Web MVC), Spring Security, Spring Data JPA, Flyway/Liquibase for migrations.
-- **Responsibilities**: Authentication and session management, user profile and preferences, article CRUD and search, bookmark/folder management, notification dispatch, and orchestrating GenAI requests. Holds the canonical business logic and is the only service that writes to PostgreSQL on the request path.
-- **Talks to**: PostgreSQL (read/write), the GenAI Service (REST) for AI-derived content, and the external push/email provider. Receives requests from the Web Client.
-- **Why a separate deployable**: Java/Spring is the right tool for transactional persistence, role-based authorisation, and large concurrent request fan-out; isolating it keeps GenAI experimentation from destabilising the persistence layer.
+- **Stack**: Java 21, Spring Boot 4.0.6 (Web MVC), Spring Security (OAuth2), Spring Cloud Config/Eureka/Gateway/Loadbalancer, Spring Data MongoDB, PostgreSQL driver. Generated code via OpenAPI Generator.
+- **Responsibilities**: Authentication and session management, API Gateway, user profile and preferences, article CRUD and search, bookmark/folder management. Orchestrates GenAI requests. Holds the canonical business logic.
+- **Talks to**: PostgreSQL and MongoDB, the GenAI Service (REST) for AI-derived content, and external monitoring (InfluxDB, Sentry). Receives requests from the Web Client.
+- **Why a separate deployable**: Java/Spring offers robust cloud-native tools (Eureka/Gateway) for scaled, distributed architectures and handles complex security/transactions reliably.
 
 ### 2.3 GenAI Service (Python + LangChain)
 
@@ -27,10 +27,10 @@ The Personalised News Aggregator lets users follow topics and consume articles e
 - **Talks to**: Receives requests from the API Server. Sends prompts to an external LLM provider over HTTPS. Does not access PostgreSQL directly; the API Server passes in any required context and persists results.
 - **Why a separate deployable**: The Python ML ecosystem (LangChain, tokenizers, embedding clients) lives most comfortably outside the JVM. Prompt iteration, model swaps, and dependency churn can happen without redeploying the API. Scaling is also different — GenAI calls are slow and concurrency-bound, so this service can scale horizontally on its own.
 
-### 2.4 Database (PostgreSQL)
+### 2.4 Database (PostgreSQL & MongoDB)
 
-- **Stack**: PostgreSQL 16. Optional `pgvector` extension if/when we move semantic article search in-house.
-- **Responsibilities**: Single source of truth for users, topics, articles (cleaned text + metadata), tags, bookmarks, folders, interactions, recommendations, notifications, and persisted GenAI artefacts (summaries, explanations, sentiment results).
+- **Stack**: PostgreSQL and MongoDB. Optional `pgvector` extension if/when we move semantic article search in-house.
+- **Responsibilities**: Single source of truth for users, topics, articles (cleaned text + metadata), tags, bookmarks, folders, interactions, recommendations, notifications, and persisted GenAI artefacts.
 - **Talks to**: Only the API Server and the News Ingestion Scheduler. The Web Client and GenAI Service never connect directly.
 - **Why a separate deployable**: Standard managed-database concerns — backups, point-in-time recovery, connection pooling — and a clean enforcement boundary that the only writers are services we control.
 
