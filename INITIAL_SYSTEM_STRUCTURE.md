@@ -42,22 +42,22 @@ The Personalised News Aggregator lets users follow topics and consume articles e
 
 ## 3. UML Diagrams
 
-The diagrams below are authored as PlantUML in `docs/diagrams/` and rendered to PNG by [.github/workflows/generate_uml_diagrams.yml](../.github/workflows/generate_uml_diagrams.yml). The PNGs are produced as a workflow artifact rather than committed to the repo; if an image fails to render here, download the artifact and place each `<name>.png` next to its source `<name>.puml` under `docs/diagrams/`.
+The diagrams below are authored as PlantUML in [docs/diagrams/](./docs/diagrams/) and rendered to PNG by [.github/workflows/generate_uml_diagrams.yml](./.github/workflows/generate_uml_diagrams.yml).
 
 ### 3.1 Analysis Object Model
 
-![Analysis object model](./diagrams/analysis-object-model.png)
+![Analysis object model](./docs/diagrams/AnalysisObjectModel.png)
 
-A UML class diagram of the problem-domain entities (`User`, `Article`, `Topic`, `Tag`, `Publisher`, `Summary`, `Explanation`, `SentimentAnalysis`, `Bookmark`, `Folder`, `Interaction`, `Recommendation`, `Notification`, `TrendingTopic`) with their associations and multiplicities. Attributes only — no methods — because this is the *what*, not the *how*. Source: [docs/diagrams/analysis-object-model.puml](./diagrams/analysis-object-model.puml).
+A UML class diagram of the problem-domain entities (`User`, `Article`, `Topic`, `Tag`, `Publisher`, `Summary`, `Explanation`, `SentimentAnalysis`, `Bookmark`, `Folder`, `Interaction`, `Recommendation`, `Notification`, `TrendingTopic`) with their associations and multiplicities. Attributes only — no methods — because this is the *what*, not the *how*. Source: [docs/diagrams/analysis-object-model.puml](./docs/diagrams/analysis-object-model.puml).
 
 ### 3.2 Use Cases
 
-![Use case diagram](./diagrams/use-case.png)
+![Use case diagram](./docs/diagrams/usecase.png)
 
-A UML use case diagram covering the eleven backlog stories: account creation/login, browsing the personalised feed, viewing an article (with `<<extend>>` paths to AI summary, explanation, sentiment, and bookmarking), search & filter, recommendations, trending topics, bookmark organisation, notifications, and the automated tag/categorisation process. Two actors: an unauthenticated `Visitor` generalised by an authenticated `User`. Source: [docs/diagrams/use-case.puml](./diagrams/use-case.puml).
+A UML use case diagram covering the eleven backlog stories: account creation/login, browsing the personalised feed, viewing an article (with `<<extend>>` paths to AI summary, explanation, sentiment, and bookmarking), search & filter, recommendations, trending topics, bookmark organisation, notifications, and the automated tag/categorisation process. Two actors: an unauthenticated `Visitor` generalised by an authenticated `User`. Source: [docs/diagrams/use-case.puml](./docs/diagrams/use-case.puml).
 
 ### 3.3 Top-Level Architecture (Component Diagram)
 
-![Top-level component diagram](./diagrams/architecture-component-diagram.png)
+![Top-level component diagram](./docs/diagrams/ArchitectureComponentDiagram.png)
 
-A UML component diagram of the deployable units described in section 2 and how they connect on the request path: `End User -> Web Client (Next.js) -> API Service (Spring Boot) -> GenAI Service (Python + LangChain) -> External LLM Provider`, with the API Service also reading/writing PostgreSQL and dispatching to the push/email provider. The News Ingestion Scheduler runs asynchronously off the request path, polling publisher feeds and persisting articles. Source: [docs/diagrams/architecture-component-diagram.puml](./diagrams/architecture-component-diagram.puml).
+A UML component diagram of the deployable units described in section 2 and how they connect on the request path: `End User -> Web Client (Next.js) -> API Service (Spring Boot) -> GenAI Service (Python + LangChain) -> External LLM Provider`, with the API Service also reading/writing PostgreSQL and dispatching to the push/email provider. The News Ingestion Scheduler runs asynchronously off the request path, polling publisher feeds and persisting articles. Source: [docs/diagrams/architecture-component-diagram.puml](./docs/diagrams/architecture-component-diagram.puml).
