@@ -40,8 +40,9 @@ rectangle "Presentation" #FFF8E1 {
 
 ' ── Backend ──────────────────────────────────────────
 rectangle "Backend" #E3F2FD {
-  [API Service\n(Spring Boot)] as ApiService
-  [News Ingestion\nScheduler] as Scheduler
+  [API Service\n(Spring Boot)]          as ApiService
+  [GenAI Service\n(Python + LangChain)] as GenAiService
+  [News Ingestion\nScheduler]           as Scheduler
 }
 
 ' ── Data ─────────────────────────────────────────────
@@ -66,9 +67,10 @@ rectangle "Notification Services" #FFF3E0 {
 EndUser    --> WebClient  : <<HTTPS>>
 WebClient  --> ApiService : REST API\n<<JWT Bearer>>
 
-ApiService --> RelationalDb : read / write
-ApiService --> AiProvider   : summarise, analyse,\nrecommend
-ApiService --> NotificationProvider : send alerts
+ApiService   --> RelationalDb        : read / write
+ApiService   --> GenAiService        : summarise / explain /\nanalyse / recommend\n<<REST>>
+GenAiService --> AiProvider          : prompt LLM\n<<HTTPS>>
+ApiService   --> NotificationProvider : send alerts
 
 ' Ingestion is async / scheduled – not on the user request path
 Scheduler  .down.> NewsFeeds   : poll articles\n<<async>>
