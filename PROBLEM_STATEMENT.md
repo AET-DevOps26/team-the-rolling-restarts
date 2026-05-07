@@ -12,7 +12,7 @@ Users are overwhelmed by the volume of online news and struggle to quickly find,
 
 The application is a personalised news aggregation platform that:
 
-- Collects articles from multiple sources (RSS feeds of publishers, Google RSS Wrapper)
+- Collects articles from multiple sources (publisher RSS feeds, Google News RSS feeds)
 - Cleans, normalises, and enriches content (topics, tags, metadata)
 - Generates personalised feeds based on user behaviour and interests
 - Provides AI-generated summaries and explanations of news content
