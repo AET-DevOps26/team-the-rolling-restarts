@@ -1,0 +1,10 @@
+openapi: 3.0.3
+info:
+  title: API
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+servers:
+  - url: https://api.mycompany.com
+paths: {}

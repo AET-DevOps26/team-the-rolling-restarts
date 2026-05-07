@@ -1,0 +1,12 @@
+openapi: 3.0.3
+info:
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: API
+  version: 1.0.0
+servers:
+- url: https://api.mycompany.com
+paths: {}
+components:
+  schemas: {}
