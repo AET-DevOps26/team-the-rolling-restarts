@@ -201,3 +201,9 @@ dist
 *.xhtml
 
 # End of https://www.toptal.com/developers/gitignore/api/node,java,web,visualstudiocode
+
+# PlantUML generated outputs
+**/generated-diagrams/
+
+# (legacy folder name used previously)
+**/generated_diagram/

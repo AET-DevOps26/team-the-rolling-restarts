@@ -1,0 +1,79 @@
+@startuml ArchitectureComponentDiagram
+title Personalised News Aggregator – Component Diagram (Top-Level)
+
+top to bottom direction
+
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam nodesep 55
+skinparam ranksep 70
+skinparam ArrowColor #555555
+skinparam ArrowFontSize 10
+skinparam ArrowFontColor #444444
+
+skinparam rectangle {
+  BorderColor #444444
+  FontStyle bold
+  FontSize 12
+}
+
+skinparam component {
+  BackgroundColor #DDEEFF
+  BorderColor #336699
+  FontColor #003366
+}
+
+skinparam database {
+  BackgroundColor #E8F5E9
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+
+' ── Actors ───────────────────────────────────────────
+actor "End User" as EndUser
+
+' ── Presentation ─────────────────────────────────────
+rectangle "Presentation" #FFF8E1 {
+  [Web Client\n(Next.js)] as WebClient
+}
+
+' ── Backend ──────────────────────────────────────────
+rectangle "Backend" #E3F2FD {
+  [API Service\n(Spring Boot)]          as ApiService
+  [GenAI Service\n(Python + LangChain)] as GenAiService
+  [News Ingestion\nScheduler]           as Scheduler
+}
+
+' ── Data ─────────────────────────────────────────────
+rectangle "Data" #E8F5E9 {
+  database "PostgreSQL" as RelationalDb
+}
+
+' ── Third-party integrations ─────────────────────────
+rectangle "Data Sources" #FBE9E7 {
+  [News Publisher\nAPIs / RSS Feeds] as NewsFeeds
+}
+
+rectangle "AI Services" #F3E5F5 {
+  [LLM / AI Provider] as AiProvider
+}
+
+rectangle "Notification Services" #FFF3E0 {
+  [Push / Email\nProvider] as NotificationProvider
+}
+
+' ── Connections ──────────────────────────────────────
+EndUser    --> WebClient  : <<HTTPS>>
+WebClient  --> ApiService : REST API\n<<JWT Bearer>>
+
+ApiService   --> RelationalDb        : read / write
+ApiService   --> GenAiService        : summarise / explain /\nanalyse / recommend\n<<REST>>
+GenAiService --> AiProvider          : prompt LLM\n<<HTTPS>>
+ApiService   --> NotificationProvider : send alerts
+
+' Ingestion is async / scheduled – not on the user request path
+Scheduler  .down.> NewsFeeds   : poll articles\n<<async>>
+Scheduler  .down.> RelationalDb : store articles\n<<async>>
+
+@enduml
