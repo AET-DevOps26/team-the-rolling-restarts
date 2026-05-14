@@ -10,22 +10,18 @@ on:
       - '**/*.puml'
       - '.github/workflows/generate_uml_diagrams.yml'
   workflow_dispatch:
-
+    
 permissions:
   contents: read
 
 jobs:
   build-diagrams:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-24.04
+    container:
+      image: plantuml/plantuml:1.2026.1
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install PlantUML
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y plantuml
+        uses: actions/checkout@v5
 
       - name: Generate PNG diagrams
         shell: bash
