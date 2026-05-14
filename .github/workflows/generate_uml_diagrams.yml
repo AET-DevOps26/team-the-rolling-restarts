@@ -53,7 +53,7 @@ jobs:
           find "$OUT" -name '*.png'
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: diagrams-${{ github.run_id }}-${{ github.run_attempt }}
           path: generated-diagrams
