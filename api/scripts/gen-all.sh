@@ -2,7 +2,7 @@
 set -euo pipefail
 
 openapi-generator-cli generate -i api/openapi.yaml -g spring \
-  -o services/server/generated 
+  -o services/spring-api/generated 
 
 #openapi-python-client generate --path api/openapi.yaml \
 #  --output-path services/py-recommender/client \
