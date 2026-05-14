@@ -36,25 +36,25 @@ jobs:
           rm -rf "$OUT"
           mkdir -p "$OUT"
 
-          # Generate PNGs and copy only generated files
+          # Generate PNGs for all .puml files
           find . -name '*.puml' -print0 | while IFS= read -r -d '' f; do
             echo "Generating: $f"
-
             java -jar /opt/plantuml.jar -tpng "$f"
+          done
 
-            generated_png="${f%.puml}.png"
-            dest="$OUT/${generated_png#./}"
-
+          # Copy generated PNGs into artifact directory
+          find . -name '*.png' -print0 | while IFS= read -r -d '' p; do
+            dest="$OUT/${p#./}"
             mkdir -p "$(dirname "$dest")"
-            cp "$generated_png" "$dest"
+            cp "$p" "$dest"
           done
 
           echo "PNG files in artifact directory:"
           find "$OUT" -name '*.png'
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: diagrams-${{ github.run_id }}-${{ github.run_attempt }}
-          path: generated-diagrams/**/*.png
+          path: generated-diagrams
           retention-days: 30
