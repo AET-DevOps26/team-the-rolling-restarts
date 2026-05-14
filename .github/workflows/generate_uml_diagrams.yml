@@ -5,20 +5,24 @@ on:
     paths:
       - '**/*.puml'
       - '.github/workflows/generate_uml_diagrams.yml'
+
   pull_request:
     paths:
       - '**/*.puml'
       - '.github/workflows/generate_uml_diagrams.yml'
+
   workflow_dispatch:
-    
+
 permissions:
   contents: read
 
 jobs:
   build-diagrams:
     runs-on: ubuntu-24.04
+
     container:
       image: plantuml/plantuml:1.2026.1
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -32,13 +36,13 @@ jobs:
           rm -rf "$OUT"
           mkdir -p "$OUT"
 
-          # Generate PNGs next to their .puml files (simple + reliable)
-          git ls-files -z '*.puml' | while IFS= read -r -d '' f; do
+          # Generate PNGs for all .puml files
+          find . -name '*.puml' -print0 | while IFS= read -r -d '' f; do
             echo "Generating: $f"
             plantuml -tpng "$f"
           done
 
-          # Copy all generated PNGs into the artifact directory (keep folder structure)
+          # Copy generated PNGs into artifact directory
           find . -name '*.png' -print0 | while IFS= read -r -d '' p; do
             dest="$OUT/${p#./}"
             mkdir -p "$(dirname "$dest")"
@@ -51,7 +55,6 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          # Unique and safe: doesn't include branch names (which may contain '/')
           name: diagrams-${{ github.run_id }}-${{ github.run_attempt }}
           path: generated-diagrams
           retention-days: 30
