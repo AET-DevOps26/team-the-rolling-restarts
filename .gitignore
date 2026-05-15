@@ -207,3 +207,6 @@ dist
 
 # (legacy folder name used previously)
 **/generated_diagram/
+
+# macOS
+*.DS_Store
