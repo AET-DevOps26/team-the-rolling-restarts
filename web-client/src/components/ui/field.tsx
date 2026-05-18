@@ -79,6 +79,8 @@ function Field({
       role="group"
       data-slot="field"
       data-orientation={orientation}
+      data-horizontal={orientation === "horizontal" ? "true" : undefined}
+      data-vertical={orientation === "vertical" ? "true" : undefined}
       className={cn(fieldVariants({ orientation }), className)}
       {...props}
     />
