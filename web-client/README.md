@@ -19,15 +19,38 @@ web-client/
 ├── src/
 │   ├── app/                routes (App Router)
 │   │   ├── layout.tsx
-│   │   ├── page.tsx        landing placeholder
+│   │   ├── page.tsx        hub with links into core flows
+│   │   ├── (app)/          route group: shared app shell (nav)
+│   │   │   ├── layout.tsx
+│   │   │   ├── dashboard/
+│   │   │   └── settings/
+│   │   ├── (auth)/         route group: unauthenticated flows
+│   │   │   └── login/
 │   │   └── globals.css     Tailwind + shadcn theme tokens
-│   ├── components/ui/      shadcn primitives (button, card)
-│   └── lib/utils.ts        shadcn `cn()` helper
+│   ├── components/
+│   │   ├── layout/         app chrome (e.g. AppNav)
+│   │   └── ui/             shadcn primitives (button, card)
+│   └── lib/
+│       ├── routes.ts       path constants + nav/hub metadata
+│       └── utils.ts        shadcn `cn()` helper
 ├── components.json         shadcn config
 ├── next.config.ts
 ├── tsconfig.json           import alias `@/*` -> `./src/*`
 └── eslint.config.mjs
 ```
+
+## Initial routes (structure only)
+
+Placeholder pages and `next/link` navigation—no real auth or API calls yet.
+
+| Path          | Purpose                                      |
+| ------------- | -------------------------------------------- |
+| `/`           | Hub listing login, dashboard, settings       |
+| `/login`      | Placeholder sign-in; link through to shell   |
+| `/dashboard`  | Main app surface placeholder (not gated)    |
+| `/settings`   | Preferences placeholder                     |
+
+Shared nav for dashboard/settings lives in `(app)/layout.tsx` via `AppNav`; route metadata is centralized in `src/lib/routes.ts` for easier refactors.
 
 ## Local development
 
@@ -64,4 +87,4 @@ This app is currently a static scaffold. Once the backend services (`services/sp
 
 ## Notes for agents
 
-`AGENTS.md` (committed by `create-next-app`) warns that this Next.js version may differ from older training data. Check `node_modules/next/dist/docs/` if APIs behave unexpectedly.
+`AGENTS.md` warns that this Next.js version may differ from older training data. Check `node_modules/next/dist/docs/` if APIs behave unexpectedly. For UI and React patterns, see **`$HOME/.agents/skills`** as described in `AGENTS.md`.
