@@ -19,7 +19,7 @@ web-client/
 ├── src/
 │   ├── app/                routes (App Router)
 │   │   ├── layout.tsx
-│   │   ├── page.tsx        hub with links into core flows
+│   │   ├── page.tsx        marketing landing page (hero/features/CTA)
 │   │   ├── (app)/          route group: shared app shell (nav)
 │   │   │   ├── layout.tsx
 │   │   │   ├── dashboard/
@@ -28,7 +28,7 @@ web-client/
 │   │   │   └── login/
 │   │   └── globals.css     Tailwind + shadcn theme tokens
 │   ├── components/
-│   │   ├── layout/         app chrome (e.g. AppNav)
+│   │   ├── layout/         app chrome (e.g. AppSidebar/AppTopbar)
 │   │   └── ui/             shadcn primitives (button, card)
 │   └── lib/
 │       ├── routes.ts       path constants + nav/hub metadata
@@ -45,12 +45,16 @@ Placeholder pages and `next/link` navigation—no real auth or API calls yet.
 
 | Path          | Purpose                                      |
 | ------------- | -------------------------------------------- |
-| `/`           | Hub listing login, dashboard, settings       |
-| `/login`      | Placeholder sign-in; link through to shell   |
-| `/dashboard`  | Main app surface placeholder (not gated)    |
-| `/settings`   | Preferences placeholder                     |
+| `/`           | Marketing landing page (hero, features, CTA) |
+| `/login`      | Placeholder sign-in form                     |
+| `/signup`     | Placeholder registration form                |
+| `/forgot-password` | Password reset request placeholder      |
+| `/dashboard`  | Main feed/dashboard placeholder (app shell) |
+| `/saved`      | Saved articles placeholder (app shell)      |
+| `/settings`   | Preferences placeholder (app shell)         |
+| `/article/[id]` | Placeholder article detail view            |
 
-Shared nav for dashboard/settings lives in `(app)/layout.tsx` via `AppNav`; route metadata is centralized in `src/lib/routes.ts` for easier refactors.
+Shared app chrome for dashboard/saved/settings lives in `(app)/layout.tsx` via `AppSidebar` and `AppTopbar`; route metadata is centralized in `src/lib/routes.ts` for easier refactors.
 
 ## Local development
 

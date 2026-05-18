@@ -55,7 +55,7 @@ export function MarketingFooter() {
         ))}
       </div>
       <div className="border-t border-border px-4 py-4 text-center text-xs text-muted-foreground">
-        © {new Date(2026, 4, 14).getFullYear()} NewsLens. All rights reserved.
+        © {new Date().getFullYear()} NewsLens. All rights reserved.
       </div>
     </footer>
   );
