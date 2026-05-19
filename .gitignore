@@ -259,3 +259,4 @@ dmypy.json
 .ruff_cache/
 # macOS
 *.DS_Store
+docs/site/
