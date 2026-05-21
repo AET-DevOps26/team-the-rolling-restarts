@@ -4,12 +4,13 @@ FROM gradle:jdk-25-and-25 AS build
 WORKDIR /app
 
 # Copy gradle configuration and sources
-COPY build.gradle settings.gradle ./
+COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 COPY src ./src
 
-# Build the application
-RUN gradle bootJar --no-daemon
+# Build the application using the project's Gradle wrapper
+RUN chmod +x ./gradlew
+RUN ./gradlew bootJar --no-daemon
 
 # Stage 2: Run the application
 FROM gcr.io/distroless/java25-debian13
