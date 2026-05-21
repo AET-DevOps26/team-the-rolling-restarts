@@ -32,7 +32,7 @@ cp infra/.env.example infra/.env
 
 Main variables:
 
-- `NEXT_PUBLIC_API_BASE_URL` - URL used by browser-side client calls (defaults to `http://localhost:8080`)
+- `NEXT_PUBLIC_API_BASE_URL` - reserved for upcoming API integration; current client pages use mock data (defaults to `http://localhost:8080`)
 - `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LOG_LEVEL` - GenAI service settings
 - `MONGO_*` and `POSTGRES_*` - database credentials and ports
 - `WATCHPACK_POLLING` - optional file-watch compatibility flag for local Linux/VM setups
