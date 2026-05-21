@@ -76,7 +76,7 @@ services:
     healthcheck:
       test:
         - CMD-SHELL
-        - mongosh --quiet --eval "db.adminCommand('ping').ok" localhost:27017/test | grep 1 >/dev/null
+        - mongosh --quiet --host localhost --port 27017 --username ${MONGO_ROOT_USERNAME:-root} --password ${MONGO_ROOT_PASSWORD:-secret} --authenticationDatabase admin --eval "db.adminCommand('ping').ok" admin | grep 1 >/dev/null
       interval: 10s
       timeout: 5s
       retries: 10

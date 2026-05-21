@@ -2,6 +2,10 @@
 
 This folder contains a multi-service Docker setup for local development and testing.
 
+## Prerequisites
+
+- Docker Engine with Docker Compose v2.24+ (the dev override uses the Compose `!reset` merge tag)
+
 ## Services in the stack
 
 - `web-client` (Next.js) on `3000`
