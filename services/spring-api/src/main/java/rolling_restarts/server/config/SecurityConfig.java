@@ -12,8 +12,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .authorizeHttpRequests(authorize -> authorize
-                // allow anonymous access to the root and the hello API used for smoke testing
-                .requestMatchers("/", "/api/hello", "/actuator/**", "/favicon.ico", "/css/**", "/js/**").permitAll()
+                // allow anonymous access to the root, the hello API used for smoke testing, and health checks
+                .requestMatchers("/", "/api/hello", "/actuator/health", "/actuator/health/**", "/favicon.ico", "/css/**", "/js/**").permitAll()
                 .anyRequest().authenticated()
             )
             .csrf(csrf -> csrf.disable())
