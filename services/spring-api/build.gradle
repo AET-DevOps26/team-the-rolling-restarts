@@ -1,5 +1,7 @@
 plugins {
 	id 'java'
+	// generate IDE project files to help editors (Eclipse/VS Code Java) resolve the classpath
+	id 'eclipse'
 	id 'org.springframework.boot' version '4.0.6'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'org.asciidoctor.jvm.convert' version '4.0.5'
@@ -40,7 +42,7 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
 	implementation 'org.springframework.cloud:spring-cloud-config-server'
 	implementation 'org.springframework.cloud:spring-cloud-starter-config'
-	implementation 'org.springframework.cloud:spring-cloud-starter-gateway-server-webflux'
+	// Use the Spring Cloud Gateway Web MVC starter (remove WebFlux variant to avoid classpath conflicts)
 	implementation 'org.springframework.cloud:spring-cloud-starter-gateway-server-webmvc'
 	implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
@@ -49,6 +51,12 @@ dependencies {
 	runtimeOnly 'io.micrometer:micrometer-registry-influx'
 	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+	// include the standard Spring Boot test starter for MockMvc and testing utilities
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	// explicit test modules (ensure availability of test autoconfiguration/annotations)
+	testImplementation 'org.springframework.boot:spring-boot-test'
+	testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-mongodb-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-opentelemetry-test'
