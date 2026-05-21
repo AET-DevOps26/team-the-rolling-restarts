@@ -54,9 +54,6 @@ dependencies {
 
 	// include the standard Spring Boot test starter for MockMvc and testing utilities
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	// explicit test modules (ensure availability of test autoconfiguration/annotations)
-	testImplementation 'org.springframework.boot:spring-boot-test'
-	testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-mongodb-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-opentelemetry-test'
