@@ -42,4 +42,5 @@ Dockerfile*
 
 # Docs and misc
 *.md
+!README.md
 *.log
