@@ -1,4 +1,25 @@
 services:
+  web-client:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  spring-api:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  gen-ai:
+    ports: !reset []
+
+  mongodb:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  grafana-lgtm:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
   web-client-test:
     profiles: ["test"]
     build:
@@ -8,9 +29,6 @@ services:
     command: sh -c "npm run lint && npm run build"
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://spring-api:8080}
-    depends_on:
-      spring-api:
-        condition: service_started
     networks:
       - frontend
 

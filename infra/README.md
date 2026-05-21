@@ -53,16 +53,23 @@ This command starts and connects client, API, GenAI, and supporting services tog
 
 ## Test workflow
 
-Run stack dependencies and test containers in one command:
+Run dependencies once, then execute test containers sequentially:
 
 ```bash
-docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml --profile test up --build --abort-on-container-exit
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml up -d mongodb postgres gen-ai
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml run --rm spring-api-test
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml run --rm gen-ai-test
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml run --rm web-client-test
 ```
 
-When the run finishes, clean up:
+This avoids premature shutdown from `--abort-on-container-exit` and keeps test execution deterministic.
+
+In `docker-compose.test.yaml`, base app services (`web-client`, `spring-api`, `grafana-lgtm`) are assigned a non-test profile (`manual`) so `--profile test` does not start them by default.
+
+When the run finishes, clean up test dependencies:
 
 ```bash
-docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml --profile test down -v
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml down -v
 ```
 
 ## Service dependencies
