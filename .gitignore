@@ -208,6 +208,9 @@ dist
 # (legacy folder name used previously)
 **/generated_diagram/
 
+# Superpowers Agent Skill Outputs
+docs/superpowers/
+
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
