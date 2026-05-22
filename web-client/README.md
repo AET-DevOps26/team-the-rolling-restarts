@@ -19,15 +19,42 @@ web-client/
 ├── src/
 │   ├── app/                routes (App Router)
 │   │   ├── layout.tsx
-│   │   ├── page.tsx        landing placeholder
+│   │   ├── page.tsx        marketing landing page (hero/features/CTA)
+│   │   ├── (app)/          route group: shared app shell (nav)
+│   │   │   ├── layout.tsx
+│   │   │   ├── dashboard/
+│   │   │   └── settings/
+│   │   ├── (auth)/         route group: unauthenticated flows
+│   │   │   └── login/
 │   │   └── globals.css     Tailwind + shadcn theme tokens
-│   ├── components/ui/      shadcn primitives (button, card)
-│   └── lib/utils.ts        shadcn `cn()` helper
+│   ├── components/
+│   │   ├── layout/         app chrome (e.g. AppSidebar/AppTopbar)
+│   │   └── ui/             shadcn primitives (button, card)
+│   └── lib/
+│       ├── routes.ts       path constants + nav/hub metadata
+│       └── utils.ts        shadcn `cn()` helper
 ├── components.json         shadcn config
 ├── next.config.ts
 ├── tsconfig.json           import alias `@/*` -> `./src/*`
 └── eslint.config.mjs
 ```
+
+## Initial routes (structure only)
+
+Placeholder pages and `next/link` navigation—no real auth or API calls yet.
+
+| Path          | Purpose                                      |
+| ------------- | -------------------------------------------- |
+| `/`           | Marketing landing page (hero, features, CTA) |
+| `/login`      | Placeholder sign-in form                     |
+| `/signup`     | Placeholder registration form                |
+| `/forgot-password` | Password reset request placeholder      |
+| `/dashboard`  | Main feed/dashboard placeholder (app shell) |
+| `/saved`      | Saved articles placeholder (app shell)      |
+| `/settings`   | Preferences placeholder (app shell)         |
+| `/article/[id]` | Placeholder article detail view            |
+
+Shared app chrome for dashboard/saved/settings lives in `(app)/layout.tsx` via `AppSidebar` and `AppTopbar`; route metadata is centralized in `src/lib/routes.ts` for easier refactors.
 
 ## Local development
 
@@ -64,4 +91,4 @@ This app is currently a static scaffold. Once the backend services (`services/sp
 
 ## Notes for agents
 
-`AGENTS.md` (committed by `create-next-app`) warns that this Next.js version may differ from older training data. Check `node_modules/next/dist/docs/` if APIs behave unexpectedly.
+`AGENTS.md` warns that this Next.js version may differ from older training data. Check `node_modules/next/dist/docs/` if APIs behave unexpectedly. For UI and React patterns, see **`$HOME/.agents/skills`** as described in `AGENTS.md`.
