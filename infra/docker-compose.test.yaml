@@ -1,0 +1,75 @@
+services:
+  web-client:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  spring-api:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  gen-ai:
+    ports: !reset []
+
+  mongodb:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  grafana-lgtm:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  web-client-test:
+    profiles: ["test"]
+    build:
+      context: ../web-client
+      dockerfile: Dockerfile
+      target: development
+    command: sh -c "npm run lint && npm run build"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://spring-api:8080}
+    networks:
+      - frontend
+
+  spring-api-test:
+    profiles: ["test"]
+    image: gradle:jdk-25-and-25
+    working_dir: /workspace
+    command: ./gradlew test --no-daemon
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      gen-ai:
+        condition: service_healthy
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      GEN_AI_BASE_URL: http://gen-ai:8000
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DATABASE:-mydatabase}?authSource=admin
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    volumes:
+      - ../services/spring-api:/workspace
+      - spring-gradle-cache:/home/gradle/.gradle
+    networks:
+      - backend
+
+  gen-ai-test:
+    profiles: ["test"]
+    build:
+      context: ../services/gen-ai
+      dockerfile: Dockerfile
+    command: sh -c "pip install --no-cache-dir -e '.[dev]' && pytest -q"
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - backend
+
+volumes:
+  spring-gradle-cache:
