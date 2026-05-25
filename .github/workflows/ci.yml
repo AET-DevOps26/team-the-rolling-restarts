@@ -34,10 +34,10 @@ jobs:
             command: npm ci && npm run lint && npm run build
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: npm
@@ -46,7 +46,7 @@ jobs:
             web-client/package-lock.json
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
           cache: pip
@@ -55,7 +55,7 @@ jobs:
 
       - name: Setup Java (spring-api)
         if: matrix.service == 'spring-api'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
@@ -84,7 +84,7 @@ jobs:
     needs: generate-and-test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Contract verification (if configured)
         shell: bash
         run: |

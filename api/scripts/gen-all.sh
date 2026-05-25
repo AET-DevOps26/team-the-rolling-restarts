@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-openapi-generator-cli generate -i api/openapi.yaml -g spring -o services/spring-api/generated
+npx @openapitools/openapi-generator-cli generate -i api/openapi.yaml -g spring -o services/spring-api/generated
 
 openapi-python-client generate --path api/openapi.yaml --output-path services/gen-ai/generated --overwrite
 
