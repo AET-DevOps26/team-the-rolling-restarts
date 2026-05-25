@@ -1,10 +1,63 @@
 openapi: 3.0.3
 info:
-  title: API
-  version: 1.0.0
+  title: OpenAPI definition
+  version: v0
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    url: https://unlicense.org
+    name: UNLICENSED
 servers:
-  - url: https://api.mycompany.com
-paths: {}
+  - url: /
+security: []
+paths:
+  /test:
+    get:
+      tags:
+        - root-controller
+      operationId: test
+      summary: Get test message
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Bad Request
+  /:
+    get:
+      tags:
+        - root-controller
+      operationId: root
+      summary: Get root message
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Bad Request
+  /dummy:
+    get:
+      tags:
+        - root-controller
+      operationId: dummy
+      summary: Get dummy message
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Bad Request
+components:
+  schemas:
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
