@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'README.md'
+  pull_request:
+
+concurrency: ci-${{ github.ref }}
+
+jobs:
+  generate-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - service: spring-api
+            working_directory: services/spring-api
+            command: ./gradlew --no-daemon test
+          - service: gen-ai
+            working_directory: services/gen-ai
+            command: |
+              pip install -e .[dev]
+              status=0
+              pytest || status=$?
+              if [[ $status -eq 5 ]]; then
+                echo "No tests collected for ${SERVICE_NAME}; skipping test execution."
+                exit 0
+              fi
+              exit $status
+          - service: web-client
+            working_directory: web-client
+            command: npm ci && npm run lint && npm run build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web-client/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            services/gen-ai/pyproject.toml
+
+      - name: Setup Java (spring-api)
+        if: matrix.service == 'spring-api'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Install OpenAPI tooling
+        run: |
+          npm ci
+          python -m pip install --upgrade pip
+          python -m pip install openapi-python-client
+
+      - name: Lint OpenAPI
+        run: npx @redocly/cli lint api/openapi.yaml
+
+      - name: Generate code
+        run: ./api/scripts/gen-all.sh
+        shell: bash
+
+      - name: Build & test
+        working-directory: ${{ matrix.working_directory }}
+        env:
+          SERVICE_NAME: ${{ matrix.service }}
+        run: ${{ matrix.command }}
+
+  contract-test:
+    needs: generate-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Contract verification (if configured)
+        shell: bash
+        run: |
+          if [[ -x ./scripts/run-pact.sh ]]; then
+            ./scripts/run-pact.sh
+          else
+            echo "No contract verification script at scripts/run-pact.sh; skipping."
+          fi
