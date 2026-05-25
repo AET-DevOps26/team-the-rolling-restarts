@@ -16,6 +16,8 @@ public class SecurityConfig {
                         // health checks
                         .requestMatchers(
                                 "/",
+                                "/test",
+                                "/dummy",
                                 "/api/hello",
                                 "/actuator/health",
                                 "/actuator/health/**",
