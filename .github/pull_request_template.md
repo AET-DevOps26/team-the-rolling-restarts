@@ -8,7 +8,7 @@ Briefly describe the change and the user-facing impact.
 
 - [ ] Passing CI
 - [ ] Updated spec
-- [ ] Short doc added or updated in `/docs/adr-xyz.md`
+- [ ] Updated docs as needed
 
 
 ## Testing
