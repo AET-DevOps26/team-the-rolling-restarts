@@ -1,0 +1,42 @@
+# Gradle and build outputs
+.gradle
+build/
+**/build/
+
+# Gradle wrapper distribution and caches
+# Keep the gradle wrapper in the build context so the wrapper jar is available to the image
+# gradle/wrapper/
+
+# IntelliJ / IDE files
+.idea/
+*.iml
+
+# Eclipse/VS Code
+.classpath
+.project
+.settings/
+.vscode/
+
+# Git
+.git
+.gitignore
+
+# Node
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp
+*.log
+*.tmp
+logs/
+
+# Docker compose or local docker files (optional)
+docker-compose.yml
+docker-compose.override.yml
+
+# JARs and distribution artifacts
+*.jar
+*.war

@@ -1,23 +1,127 @@
+name: rolling-restarts
+
 services:
-  grafana-lgtm:
-    image: 'grafana/otel-lgtm:latest'
+  web-client:
+    build:
+      context: ../web-client
+      dockerfile: Dockerfile
+      target: production
     ports:
-      - '3000:3000'
-      - '4317'
-      - '4318'
+      - "${WEB_CLIENT_PORT:-3000}:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      NODE_ENV: production
+    depends_on:
+      spring-api:
+        condition: service_started
+    networks:
+      - frontend
+
+  spring-api:
+    build:
+      context: ../services/spring-api
+      dockerfile: Dockerfile
+    ports:
+      - "${SPRING_API_PORT:-8080}:8080"
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      GEN_AI_BASE_URL: http://gen-ai:8000
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DATABASE:-mydatabase}?authSource=admin
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      gen-ai:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+
+  gen-ai:
+    build:
+      context: ../services/gen-ai
+      dockerfile: Dockerfile
+    ports:
+      - "${GEN_AI_PORT:-8000}:8000"
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen("http://localhost:8000/health")
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend
+
   mongodb:
-    image: 'mongo:latest'
-    environment:
-      - 'MONGO_INITDB_DATABASE=mydatabase'
-      - 'MONGO_INITDB_ROOT_PASSWORD=secret'
-      - 'MONGO_INITDB_ROOT_USERNAME=root'
+    image: mongo:8
     ports:
-      - '27017'
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-mydatabase}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-secret}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mongosh --quiet --host localhost --port 27017 --username ${MONGO_ROOT_USERNAME:-root} --password ${MONGO_ROOT_PASSWORD:-secret} --authenticationDatabase admin --eval "db.adminCommand('ping').ok" admin | grep 1 >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - backend
+
   postgres:
-    image: 'postgres:latest'
-    environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+    image: postgres:17-alpine
     ports:
-      - '5432'
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}
+      POSTGRES_USER: ${POSTGRES_USER:-myuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-mydatabase}
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  grafana-lgtm:
+    image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+    ports:
+      - "${LGTM_GRAFANA_PORT:-3001}:3000"
+      - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
+      - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
+    networks:
+      - backend
+
+volumes:
+  mongodb-data:
+  postgres-data:
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge

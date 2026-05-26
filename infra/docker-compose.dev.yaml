@@ -1,0 +1,44 @@
+services:
+  web-client:
+    build:
+      context: ../web-client
+      dockerfile: Dockerfile
+      target: development
+    command: >-
+      sh -c "if [ ! -d node_modules ] || [ -z \"$(ls -A node_modules 2>/dev/null)\" ];
+      then npm ci; fi && npm run dev -- --hostname 0.0.0.0 --port 3000"
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      WATCHPACK_POLLING: ${WATCHPACK_POLLING:-false}
+    volumes:
+      - ../web-client:/app
+      - web-client-node-modules:/app/node_modules
+
+  spring-api:
+    build: !reset null
+    image: gradle:jdk-25-and-25
+    working_dir: /workspace
+    command: ./gradlew bootRun --no-daemon
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      GEN_AI_BASE_URL: http://gen-ai:8000
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DATABASE:-mydatabase}?authSource=admin
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+    volumes:
+      - ../services/spring-api:/workspace
+      - spring-gradle-cache:/home/gradle/.gradle
+
+  gen-ai:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude .venv
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+    volumes:
+      - ../services/gen-ai:/app
+
+volumes:
+  web-client-node-modules:
+  spring-gradle-cache:
