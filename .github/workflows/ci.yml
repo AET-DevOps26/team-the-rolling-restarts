@@ -68,7 +68,7 @@ jobs:
           python -m pip install openapi-python-client
 
       - name: Lint OpenAPI
-        run: npx @redocly/cli lint api/openapi.yaml
+        run: npx @redocly/cli@2.30.3 lint api/openapi.yaml
 
       - name: Generate code
         run: ./api/scripts/gen-all.sh

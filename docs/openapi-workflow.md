@@ -45,12 +45,20 @@ pre-commit install --hook-type post-merge
 
 The extra hook types matter because `generate-api-clients` is configured for `post-checkout` and `post-merge`. You do not need to re-run them unless you want to re-register or repair the local hooks.
 
+If `.pre-commit-config.yaml` changes, refresh the local hooks with the same install commands so your checkout picks up the updated hook definitions:
+
+```bash
+pre-commit install
+pre-commit install --hook-type post-checkout
+pre-commit install --hook-type post-merge
+```
+
 ## Lint the OpenAPI spec
 
 Run the spec lint directly with the same command used in CI:
 
 ```bash
-npx @redocly/cli lint api/openapi.yaml
+npx @redocly/cli@2.30.3 lint api/openapi.yaml
 ```
 
 You can also run just the pre-commit hook:
@@ -96,7 +104,7 @@ pre-commit run generate-api-clients --hook-stage post-checkout --all-files
 Use the lint command when you want to verify the spec before committing changes:
 
 ```bash
-npx @redocly/cli lint api/openapi.yaml
+npx @redocly/cli@2.30.3 lint api/openapi.yaml
 ```
 
 Use the generator script after changing the OpenAPI definition to refresh all generated outputs:
