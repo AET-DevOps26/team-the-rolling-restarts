@@ -4,10 +4,11 @@ docs_dir: .
 site_dir: ../site
 use_directory_urls: true
 theme:
-  name: readthedocs
+  name: material
 # optional: add a nav: section to control ordering
 nav: 
   - Home: index.md
   - Inital Backlog: INITIAL_BACKLOG.md
   - Problem Statement: PROBLEM_STATEMENT.md
   - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
+  - API Docs: api.html
