@@ -263,3 +263,4 @@ dmypy.json
 # macOS
 *.DS_Store
 **/generated
+docs/site/

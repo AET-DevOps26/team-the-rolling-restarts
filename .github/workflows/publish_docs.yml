@@ -1,0 +1,72 @@
+name: Publish Documentation
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+      - name: Generate PlantUML diagrams
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          OUT=generated-diagrams
+          rm -rf "$OUT"
+          mkdir -p "$OUT"
+
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            plantuml/plantuml:1.2026.1 \
+            bash -lc 'set -euo pipefail; find docs/source/diagrams -name "*.puml" -print0 | while IFS= read -r -d "" f; do echo "Generating: $f"; java -jar /opt/plantuml.jar -tpng "$f"; done'
+
+          find docs/source/diagrams -name '*.png' -print0 | while IFS= read -r -d '' p; do
+            dest="$OUT/${p#./}"
+            mkdir -p "$(dirname "$dest")"
+            cp "$p" "$dest"
+          done
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Build API docs
+        run: npx @redocly/cli@2.30.3 build-docs api/openapi.yaml -o docs/source/api.html
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.x
+
+      - run: pip install mkdocs-material
+
+      - name: Build site
+        run: mkdocs build -f docs/source/mkdocs.yml
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/site
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
