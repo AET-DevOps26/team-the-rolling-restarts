@@ -1,6 +1,25 @@
+# Infrastructure
+
+This folder contains both local Docker setup and cloud automation assets.
+
+## Contents
+
+- `docker-compose*.yaml` - local/test container orchestration
+- `terraform/azure-vm` - Azure VM provisioning (Terraform)
+- `ansible` - VM configuration and project deployment (Ansible)
+- `scripts/generate-ansible-inventory.sh` - build Ansible inventory from Terraform outputs
+
+## Azure automation quick links
+
+- Terraform guide: `infra/terraform/azure-vm/README.md`
+- Ansible guide: `infra/ansible/README.md`
+- Helper tasks: `Makefile` (`make terraform-plan`, `make deploy-azure`)
+
+---
+
 # Local Docker Setup
 
-This folder contains a multi-service Docker setup for local development and testing.
+This section describes the multi-service Docker setup for local development and testing.
 
 ## Prerequisites
 

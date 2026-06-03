@@ -262,3 +262,16 @@ dmypy.json
 .ruff_cache/
 # macOS
 *.DS_Store
+
+# Terraform local artifacts
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+infra/terraform/azure-vm/terraform.tfvars
+
+# Ansible local/sensitive files
+infra/ansible/inventories/production.ini
+infra/ansible/group_vars/all.yml
+infra/ansible/.vault_pass.txt
