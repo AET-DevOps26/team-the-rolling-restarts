@@ -16,6 +16,9 @@ This directory automates VM configuration and project deployment after Azure inf
 - Ansible `>= 2.15`
 - SSH access to VM created by Terraform
 - Git access to this repository from the VM
+- The VM's SSH host key trusted locally (see "Trust VM host key" below);
+  `host_key_checking = True` means a fresh VM fails until its key is in
+  `~/.ssh/known_hosts`
 
 ## Configure inventory and vars
 
@@ -42,6 +45,19 @@ Script environment overrides:
 
 - Do not commit plaintext secrets in `group_vars/all.yml`.
 - Recommended: encrypt secrets with Ansible Vault (`ansible-vault encrypt group_vars/all.yml`).
+
+## Trust VM host key
+
+Ansible enables strict host key checking. On a freshly provisioned VM, add its
+host key to `~/.ssh/known_hosts` before the first run to avoid
+`Host key verification failed`:
+
+```bash
+VM_IP="$(terraform -chdir=../terraform/azure-vm output -raw vm_public_ip)"
+ssh-keyscan -H "$VM_IP" >> ~/.ssh/known_hosts
+```
+
+Or SSH to the VM once interactively and accept the key prompt.
 
 ## Run deployment
 

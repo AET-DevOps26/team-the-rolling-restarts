@@ -53,6 +53,18 @@ cp group_vars/all.yml.example group_vars/all.yml
 ansible-playbook playbooks/deploy.yml
 ```
 
+Trust the new VM's SSH host key first. Ansible uses strict host key checking
+(`host_key_checking = True`), so a freshly provisioned VM that is not yet in
+`~/.ssh/known_hosts` causes `Host key verification failed`. Seed it once before
+running the playbook:
+
+```bash
+VM_IP="$(terraform -chdir=../terraform/azure-vm output -raw vm_public_ip)"
+ssh-keyscan -H "$VM_IP" >> ~/.ssh/known_hosts
+```
+
+Alternatively, SSH to the VM once interactively and accept the key prompt.
+
 Optional helper workflow from repo root:
 
 ```bash

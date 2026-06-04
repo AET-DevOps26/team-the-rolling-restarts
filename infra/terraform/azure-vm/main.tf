@@ -53,7 +53,7 @@ resource "azurerm_network_security_rule" "allow_app_ports" {
     for idx, port in var.application_ports : idx => port
   }
 
-  name                        = "allow-app-${each.value}"
+  name                        = "allow-app-${each.key}-${each.value}"
   priority                    = 200 + each.key
   direction                   = "Inbound"
   access                      = "Allow"
@@ -108,7 +108,7 @@ resource "azurerm_linux_virtual_machine" "main" {
 
   admin_ssh_key {
     username   = var.admin_username
-    public_key = file(var.public_key_path)
+    public_key = file(pathexpand(var.public_key_path))
   }
 
   os_disk {
