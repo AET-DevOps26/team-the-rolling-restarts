@@ -3,13 +3,13 @@
 terraform-init:
 	cd infra/terraform/azure-vm && terraform init
 
-terraform-plan:
+terraform-plan: terraform-init
 	cd infra/terraform/azure-vm && terraform plan
 
-terraform-apply:
+terraform-apply: terraform-init
 	cd infra/terraform/azure-vm && terraform apply
 
-terraform-destroy:
+terraform-destroy: terraform-init
 	cd infra/terraform/azure-vm && terraform destroy
 
 ansible-inventory:
