@@ -9,7 +9,7 @@ terraform-plan: terraform-init
 terraform-apply: terraform-init
 	cd infra/terraform/azure-vm && terraform apply
 
-terraform-destroy:
+terraform-destroy: terraform-init
 	cd infra/terraform/azure-vm && terraform destroy
 
 ansible-inventory:
