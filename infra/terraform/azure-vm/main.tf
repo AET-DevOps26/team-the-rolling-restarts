@@ -54,7 +54,7 @@ resource "azurerm_network_security_rule" "allow_app_ports" {
   }
 
   name                        = "allow-app-${each.key}-${each.value}"
-  priority                    = 200 + each.key
+  priority                    = 200 + tonumber(each.key)
   direction                   = "Inbound"
   access                      = "Allow"
   protocol                    = "Tcp"
