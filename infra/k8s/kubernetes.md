@@ -1,5 +1,5 @@
 
-# (optional)Set kubectl config
+# (optional)Set kubectl config default namespace (useful for rancher)
 
 set context using
 
