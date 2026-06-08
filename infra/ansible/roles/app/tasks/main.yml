@@ -1,0 +1,52 @@
+---
+- name: Ensure deployment root exists
+  ansible.builtin.file:
+    path: "{{ project_root }}"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+
+- name: Clone or update project repository
+  ansible.builtin.git:
+    repo: "{{ project_repo_url }}"
+    dest: "{{ project_root }}"
+    version: "{{ project_repo_version }}"
+    update: true
+  become_user: "{{ ansible_user }}"
+
+- name: Render deployment environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ project_root }}/{{ compose_env_path }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0600"
+
+- name: Render systemd unit for compose stack
+  ansible.builtin.template:
+    src: rolling-restarts.service.j2
+    dest: /etc/systemd/system/rolling-restarts.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable and start project service
+  ansible.builtin.systemd:
+    name: rolling-restarts
+    enabled: true
+    state: restarted
+
+- name: Verify project endpoint responds
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_env.WEB_CLIENT_PORT }}/"
+    status_code: 200
+    timeout: 30
+  register: web_health
+  retries: 5
+  delay: 10
+  until: web_health.status == 200

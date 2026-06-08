@@ -1,0 +1,28 @@
+---
+project_root: /opt/rolling-restarts
+project_repo_url: https://github.com/<org-or-user>/team-the-rolling-restarts.git
+project_repo_version: main
+
+compose_file: infra/docker-compose.yaml
+compose_env_path: infra/.env
+
+app_env:
+  NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080"
+  LLM_PROVIDER: "openai"
+  LLM_API_KEY: "replace-with-vault-secret"
+  LLM_MODEL: "gpt-4o-mini"
+  LOG_LEVEL: "INFO"
+  WEB_CLIENT_PORT: "3000"
+  SPRING_API_PORT: "8080"
+  GEN_AI_PORT: "8000"
+  MONGO_PORT: "27017"
+  MONGO_DATABASE: "mydatabase"
+  MONGO_ROOT_USERNAME: "root"
+  MONGO_ROOT_PASSWORD: "replace-with-vault-secret"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "mydatabase"
+  POSTGRES_USER: "myuser"
+  POSTGRES_PASSWORD: "replace-with-vault-secret"
+  LGTM_GRAFANA_PORT: "3001"
+  LGTM_OTLP_GRPC_PORT: "4317"
+  LGTM_OTLP_HTTP_PORT: "4318"
