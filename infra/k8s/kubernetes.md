@@ -24,3 +24,5 @@ Confim with
 ```bash
 kubectl config view
 ```
+
+# Push images to registry
