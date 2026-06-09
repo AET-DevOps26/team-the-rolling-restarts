@@ -52,8 +52,8 @@ jobs:
           file: ./web-client/Dockerfile
           push: true
           tags: |
-            ghcr.io/AET-DevOps26/rolling-restarts/web-client:${{ steps.meta.outputs.sha }}
-            ghcr.io/AET-DevOps26/rolling-restarts/web-client:${{ steps.meta.outputs.channel }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.channel }}
 
       # ---------------- SPRING API ----------------
       - name: Build spring-api
@@ -63,8 +63,8 @@ jobs:
           file: ./services/spring-api/Dockerfile
           push: true
           tags: |
-            ghcr.io/AET-DevOps26/rolling-restarts/spring-api:${{ steps.meta.outputs.sha }}
-            ghcr.io/AET-DevOps26/rolling-restarts/spring-api:${{ steps.meta.outputs.channel }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.channel }}
 
       # ---------------- GEN AI ----------------
       - name: Build gen-ai
@@ -74,25 +74,29 @@ jobs:
           file: ./services/gen-ai/Dockerfile
           push: true
           tags: |
-            ghcr.io/AET-DevOps26/rolling-restarts/gen-ai:${{ steps.meta.outputs.sha }}
-            ghcr.io/AET-DevOps26/rolling-restarts/gen-ai:${{ steps.meta.outputs.channel }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.channel }}
 
       # ---------------- HELM VALUES (SHA ONLY) ----------------
       - name: Generate Helm values
         run: |
+          OWNER="aet-devops26"
+          PROJECT="rolling-restarts"
+          SHA=${GITHUB_SHA::7}
+
           cat > helm-values.yaml <<EOF
           webClient:
-            image: ghcr.io/AET-DevOps26/rolling-restarts/web-client:${GITHUB_SHA::7}
+            image: ghcr.io/${OWNER}/${PROJECT}/web-client:${SHA}
 
           springApi:
-            image: ghcr.io/AET-DevOps26/rolling-restarts/spring-api:${GITHUB_SHA::7}
+            image: ghcr.io/${OWNER}/${PROJECT}/spring-api:${SHA}
 
           genAi:
-            image: ghcr.io/AET-DevOps26/rolling-restarts/gen-ai:${GITHUB_SHA::7}
+            image: ghcr.io/${OWNER}/${PROJECT}/gen-ai:${SHA}
           EOF
 
       - name: Upload Helm artifact
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: helm-values
           path: helm-values.yaml
