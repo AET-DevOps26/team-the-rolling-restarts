@@ -4,10 +4,10 @@
 # For more details, see the .github/workflows/upload_images.yml workflow file.
 # You can also use wip which always points to the latest image push NOT from the main or dev branch, dev for dev and main for main instead of the SHA for easier testing and development.
 webClient:
-  image: ghcr.io/AET-DevOps26/team-the-rolling-restarts/web-client:f0ad9bb
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:1eb2b0a
 
 springApi:
-  image: ghcr.io/AET-DevOps26/team-the-rolling-restarts/spring-api:f0ad9bb
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:1eb2b0a
 
 genAi:
-  image: ghcr.io/AET-DevOps26/team-the-rolling-restarts/gen-ai:f0ad9bb
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:1eb2b0a
