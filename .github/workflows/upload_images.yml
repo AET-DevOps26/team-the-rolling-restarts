@@ -27,7 +27,7 @@ jobs:
       - name: Compute tags
         id: meta
         run: |
-          OWNER="AET-DevOps26"
+          OWNER="aet-devops26"
           PROJECT="rolling-restarts"
           SHORT_SHA=${GITHUB_SHA::7}
 
