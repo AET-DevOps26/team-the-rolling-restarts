@@ -1,108 +1,108 @@
 name: build-and-package
 
 on:
-    push:
-    pull_request:
-    workflow_dispatch:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-        permissions:
-            contents: read
-            packages: write
+    permissions:
+      contents: read
+      packages: write
 
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v6.0.3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
 
-            - name: Docker login
-              uses: docker/login-action@v4.2.0
-              with:
-                  registry: ghcr.io
-                  username: ${{ github.actor }}
-                  password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Docker login
+        uses: docker/login-action@v4.2.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-            # ---------------- Compute dynamic metadata ----------------
-            - name: Compute metadata
-              id: meta
-              run: |
-                  OWNER_RAW="${GITHUB_REPOSITORY_OWNER}"
-                  OWNER="$(echo "$OWNER_RAW" | tr '[:upper:]' '[:lower:]')"
+      # ---------------- Compute dynamic metadata ----------------
+      - name: Compute metadata
+        id: meta
+        run: |
+          OWNER_RAW="${GITHUB_REPOSITORY_OWNER}"
+          OWNER="$(echo "$OWNER_RAW" | tr '[:upper:]' '[:lower:]')"
 
-                  REPO_RAW="${GITHUB_REPOSITORY}"   # owner/repo
-                  REPO="$(echo "$REPO_RAW" | tr '[:upper:]' '[:lower:]')"
+          REPO_RAW="${GITHUB_REPOSITORY}"   # owner/repo
+          REPO="$(echo "$REPO_RAW" | tr '[:upper:]' '[:lower:]')"
 
-                  PROJECT="${REPO#*/}"
-                  SHA=${GITHUB_SHA::7}  
-                  if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
-                    CHANNEL="main"
-                  elif [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
-                    CHANNEL="dev"
-                  else
-                    CHANNEL="wip"
-                  fi
+          PROJECT="${REPO#*/}"
+          SHA=${GITHUB_SHA::7}  
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            CHANNEL="main"
+          elif [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
+            CHANNEL="dev"
+          else
+            CHANNEL="wip"
+          fi
 
-                  echo "owner=$OWNER" >> $GITHUB_OUTPUT
-                  echo "project=$PROJECT" >> $GITHUB_OUTPUT
-                  echo "sha=$SHA" >> $GITHUB_OUTPUT
-                  echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          echo "owner=$OWNER" >> $GITHUB_OUTPUT
+          echo "project=$PROJECT" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
 
-            # ---------------- WEB CLIENT ----------------
-            - name: Build web-client
-              uses: docker/build-push-action@v7.2.0
-              with:
-                  context: ./web-client
-                  file: ./web-client/Dockerfile
-                  push: true
-                  tags: |
-                      ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
-                      ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.channel }}
+      # ---------------- WEB CLIENT ----------------
+      - name: Build web-client
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./web-client
+          file: ./web-client/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.channel }}
 
-            # ---------------- SPRING API ----------------
-            - name: Build spring-api
-              uses: docker/build-push-action@v7.2.0
-              with:
-                  context: ./services/spring-api
-                  file: ./services/spring-api/Dockerfile
-                  push: true
-                  tags: |
-                      ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
-                      ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.channel }}
+      # ---------------- SPRING API ----------------
+      - name: Build spring-api
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring-api
+          file: ./services/spring-api/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.channel }}
 
-            # ---------------- GEN AI ----------------
-            - name: Build gen-ai
-              uses: docker/build-push-action@v7.2.0
-              with:
-                  context: ./services/gen-ai
-                  file: ./services/gen-ai/Dockerfile
-                  push: true
-                  tags: |
-                      ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
-                      ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.channel }}
+      # ---------------- GEN AI ----------------
+      - name: Build gen-ai
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/gen-ai
+          file: ./services/gen-ai/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.channel }}
 
-            # ---------------- HELM VALUES (SHA ONLY) ----------------
-            - name: Generate Helm values
-              run: |
-                  OWNER="${GITHUB_REPOSITORY_OWNER}"
-                  REPO="${GITHUB_REPOSITORY}"
-                  PROJECT="${REPO#*/}"
-                  SHA=${GITHUB_SHA::7}
+      # ---------------- HELM VALUES (SHA ONLY) ----------------
+      - name: Generate Helm values
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO="${GITHUB_REPOSITORY}"
+          PROJECT="${REPO#*/}"
+          SHA=${GITHUB_SHA::7}
 
-                  cat > helm-values.yaml <<EOF
-                  webClient:
-                    image: ghcr.io/${OWNER}/${PROJECT}/web-client:${SHA}
+          cat > helm-values.yaml <<EOF
+          webClient:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
 
-                  springApi:
-                    image: ghcr.io/${OWNER}/${PROJECT}/spring-api:${SHA}
+          springApi:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
 
-                  genAi:
-                    image: ghcr.io/${OWNER}/${PROJECT}/gen-ai:${SHA}
-                  EOF
+          genAi:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
+          EOF
 
-            - name: Upload Helm artifact
-              uses: actions/upload-artifact@v7.0.1
-              with:
-                  name: helm-values
-                  path: helm-values.yaml
+      - name: Upload Helm artifact
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: helm-values
+          path: helm-values.yaml
