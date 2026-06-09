@@ -24,12 +24,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Compute tags
+      # ---------------- Compute dynamic metadata ----------------
+      - name: Compute metadata
         id: meta
         run: |
-          OWNER="aet-devops26"
-          PROJECT="rolling-restarts"
-          SHORT_SHA=${GITHUB_SHA::7}
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO="${GITHUB_REPOSITORY}"   # owner/repo
+          PROJECT="${REPO#*/}"
+          SHA=${GITHUB_SHA::7}
 
           if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             CHANNEL="main"
@@ -41,7 +43,7 @@ jobs:
 
           echo "owner=$OWNER" >> $GITHUB_OUTPUT
           echo "project=$PROJECT" >> $GITHUB_OUTPUT
-          echo "sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
 
       # ---------------- WEB CLIENT ----------------
@@ -80,8 +82,9 @@ jobs:
       # ---------------- HELM VALUES (SHA ONLY) ----------------
       - name: Generate Helm values
         run: |
-          OWNER="aet-devops26"
-          PROJECT="rolling-restarts"
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO="${GITHUB_REPOSITORY}"
+          PROJECT="${REPO#*/}"
           SHA=${GITHUB_SHA::7}
 
           cat > helm-values.yaml <<EOF
