@@ -82,15 +82,15 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.channel }}
 
-      # ---------------- HELM VALUES (SHA ONLY) ----------------
-      - name: Generate Helm values
+      # ---------------- IMAGE VALUES (SHA ONLY) ----------------
+      - name: Generate image values
         run: |
           OWNER="${GITHUB_REPOSITORY_OWNER}"
           REPO="${GITHUB_REPOSITORY}"
           PROJECT="${REPO#*/}"
           SHA=${GITHUB_SHA::7}
 
-          cat > helm-values.yaml <<EOF
+          cat > image-values.yaml <<EOF
           webClient:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
 
@@ -101,8 +101,8 @@ jobs:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
           EOF
 
-      - name: Upload Helm artifact
+      - name: Upload image values artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: helm-values
-          path: helm-values.yaml
+          name: image-values
+          path: image-values.yaml

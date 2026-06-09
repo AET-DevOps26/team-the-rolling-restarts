@@ -1,0 +1,106 @@
+# Shared defaults used by every workload in the chart.
+global:
+  registry: ghcr.io/aet-devops26/team-the-rolling-restarts
+  tag: latest
+  pullPolicy: Always
+  replicas: 2
+  probes:
+    path: /
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  service:
+    type: ClusterIP
+    protocol: TCP
+
+imagePullSecrets: []
+
+# The workflow-generated image override file only needs to set `image` per app.
+webClient:
+  name: web-client
+  imageName: web-client
+  image: ""
+  port: 3000
+  env:
+    - name: NODE_ENV
+      value: production
+    - name: NEXT_PUBLIC_API_BASE_URL
+      value: http://spring-api:8080
+  probes:
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    liveness:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+
+# Spring API defaults mirror the handwritten Kubernetes manifest.
+springApi:
+  name: spring-api
+  imageName: spring-api
+  image: ""
+  port: 8080
+  env:
+    - name: SPRING_PROFILES_ACTIVE
+      value: production
+    - name: JAVA_TOOL_OPTIONS
+      value: -XX:MaxRAMPercentage=75
+  probes:
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 2
+    liveness:
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# GenAI defaults mirror the handwritten Kubernetes manifest.
+genAi:
+  name: gen-ai
+  imageName: gen-ai
+  image: ""
+  port: 8000
+  env:
+    - name: PYTHONUNBUFFERED
+      value: "1"
+    - name: LOG_LEVEL
+      value: INFO
+  probes:
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+    liveness:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+
+# Ingress and host values are documented here even though this task only
+# renders the workload and service resources.
+ingress:
+  enabled: true
+  className: nginx
+  tlsSecret: rolling-restarts-tls
+
+hosts:
+  web: app.rolling-restarts.stud.k8s.aet.cit.tum.de
+  api: api.rolling-restarts.stud.k8s.aet.cit.tum.de
+  ai: ai.rolling-restarts.stud.k8s.aet.cit.tum.de
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
