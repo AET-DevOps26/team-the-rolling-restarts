@@ -63,8 +63,8 @@ springApi:
       cpu: 200m
       memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 500m
+      memory: 512Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
