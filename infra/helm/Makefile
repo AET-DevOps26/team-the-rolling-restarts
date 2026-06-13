@@ -18,6 +18,8 @@ help:
 ## Lint the chart before rendering or installing.
 helm-lint:
 	$(HELM) lint $(CHART) $(VALUES_FILES)
+helm-setup:
+	cp image-values.example.yaml image-values.yaml
 
 ## Render the chart locally without touching the cluster.
 helm-template:
