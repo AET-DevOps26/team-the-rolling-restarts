@@ -78,6 +78,7 @@ genAi:
     - name: LOG_LEVEL
       value: INFO
   probes:
+    path: /health
     readiness:
       initialDelaySeconds: 5
       periodSeconds: 10
