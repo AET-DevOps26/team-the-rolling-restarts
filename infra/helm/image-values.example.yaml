@@ -12,10 +12,10 @@
 # genAi:
 #   image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
 webClient:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:1eb2b0a
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:d317d56
 
 springApi:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:1eb2b0a
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:d317d56
 
 genAi:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:1eb2b0a
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:d317d56
