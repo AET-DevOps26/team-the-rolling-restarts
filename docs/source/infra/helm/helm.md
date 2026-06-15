@@ -91,6 +91,8 @@ Use the chart-local [Makefile](Makefile) for the common Helm commands:
 
 The image upload workflow writes a values file that only contains the workload image overrides. That means the deployment chart and the CI-generated image values can be combined safely without changing the chart structure.
 
+The workflow also passes `NEXT_PUBLIC_API_BASE_URL` as a Docker build argument when building `web-client`. Next.js inlines `NEXT_PUBLIC_*` variables at build time, so the API URL must be set during the image build—not via Kubernetes deployment env vars at runtime.
+
 ## Notes
 
 - The chart uses one template for all three workloads, so changing a shared value updates all rendered manifests consistently.

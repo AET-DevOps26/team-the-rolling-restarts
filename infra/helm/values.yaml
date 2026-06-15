@@ -28,8 +28,7 @@ webClient:
   env:
     - name: NODE_ENV
       value: production
-    - name: NEXT_PUBLIC_API_BASE_URL
-      value: http://spring-api:8080
+    # NEXT_PUBLIC_API_BASE_URL is baked into the image at build time (see web-client/Dockerfile).
   probes:
     readiness:
       initialDelaySeconds: 5
@@ -63,8 +62,8 @@ springApi:
       cpu: 200m
       memory: 256Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: "1"
+      memory: 1Gi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:

@@ -47,6 +47,7 @@ jobs:
           echo "project=$PROJECT" >> $GITHUB_OUTPUT
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          echo "api_base_url=https://api.rolling-restarts.stud.k8s.aet.cit.tum.de" >> $GITHUB_OUTPUT
 
       # ---------------- WEB CLIENT ----------------
       - name: Build web-client
@@ -54,7 +55,10 @@ jobs:
         with:
           context: ./web-client
           file: ./web-client/Dockerfile
+          target: production
           push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=${{ steps.meta.outputs.api_base_url }}
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.channel }}
@@ -84,12 +88,7 @@ jobs:
       # ---------------- IMAGE VALUES (SHA ONLY) ----------------
       - name: Generate image values
         run: |
-          OWNER="${GITHUB_REPOSITORY_OWNER}"
-          REPO="${GITHUB_REPOSITORY}"
-          PROJECT="${REPO#*/}"
-          SHA=${GITHUB_SHA::7}
-
-          cat > image-values.yaml <<EOF
+          cat > infra/helm/image-values.yaml <<EOF
           webClient:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
 
@@ -104,4 +103,4 @@ jobs:
         uses: actions/upload-artifact@v7.0.1
         with:
           name: image-values
-          path: image-values.yaml
+          path: infra/helm/image-values.yaml
