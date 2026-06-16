@@ -16,6 +16,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.3
 
+      - name: Generate OpenAPI clients
+        run: |
+          pip install openapi-python-client
+          chmod +x api/scripts/gen-all.sh
+          ./api/scripts/gen-all.sh
+
       - name: Docker login
         uses: docker/login-action@v4.2.0
         with:
