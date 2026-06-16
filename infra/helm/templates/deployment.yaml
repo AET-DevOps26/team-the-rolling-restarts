@@ -1,0 +1,63 @@
+{{/* Render the three deployments from the same template to keep the chart small. */}}
+{{- $apps := list
+  (dict "key" "webClient" "cfg" .Values.webClient)
+  (dict "key" "springApi" "cfg" .Values.springApi)
+  (dict "key" "genAi" "cfg" .Values.genAi)
+-}}
+{{- range $index, $app := $apps }}
+{{- $cfg := $app.cfg -}}
+{{- if $index }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $cfg.name }}
+  labels:
+    app: {{ $cfg.name }}
+spec:
+  replicas: {{ default $.Values.global.replicas $cfg.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $cfg.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $cfg.name }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $cfg.name }}
+          image: {{ include "newsGenAI.image" (dict "global" $.Values.global "app" $cfg) }}
+          imagePullPolicy: {{ default $.Values.global.pullPolicy $cfg.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $cfg.port }}
+          env:
+{{- range $env := $cfg.env }}
+            - name: {{ $env.name }}
+              value: {{ $env.value | quote }}
+{{- end }}
+          readinessProbe:
+            httpGet:
+              path: {{ default $.Values.global.probes.path $cfg.probes.path | quote }}
+              port: {{ $cfg.port }}
+            initialDelaySeconds: {{ $cfg.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $cfg.probes.readiness.periodSeconds }}
+{{- with $cfg.probes.readiness.timeoutSeconds }}
+            timeoutSeconds: {{ . }}
+{{- end }}
+          livenessProbe:
+            httpGet:
+              path: {{ default $.Values.global.probes.path $cfg.probes.path | quote }}
+              port: {{ $cfg.port }}
+            initialDelaySeconds: {{ $cfg.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $cfg.probes.liveness.periodSeconds }}
+{{- with $cfg.probes.liveness.timeoutSeconds }}
+            timeoutSeconds: {{ . }}
+{{- end }}
+          resources:
+{{ toYaml (default $.Values.global.resources $cfg.resources) | nindent 12 }}
+{{- end }}

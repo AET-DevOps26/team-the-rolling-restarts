@@ -1,0 +1,25 @@
+{{/* Render the services alongside the deployments so ports stay in sync. */}}
+{{- $apps := list
+  (dict "key" "webClient" "cfg" .Values.webClient)
+  (dict "key" "springApi" "cfg" .Values.springApi)
+  (dict "key" "genAi" "cfg" .Values.genAi)
+-}}
+{{- range $index, $app := $apps }}
+{{- $cfg := $app.cfg -}}
+{{- $service := default dict (get $cfg "service") -}}
+{{- if $index }}
+---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $cfg.name }}
+spec:
+  type: {{ default $.Values.global.service.type (get $service "type") }}
+  selector:
+    app: {{ $cfg.name }}
+  ports:
+    - protocol: {{ default $.Values.global.service.protocol (get $service "protocol") }}
+      port: {{ $cfg.port }}
+      targetPort: {{ $cfg.port }}
+{{- end }}
