@@ -262,6 +262,7 @@ dmypy.json
 .ruff_cache/
 # macOS
 *.DS_Store
+**/generated
 
 # Terraform local artifacts
 **/.terraform/

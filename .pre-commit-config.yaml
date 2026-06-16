@@ -3,7 +3,7 @@ repos:
     hooks:
       - id: redocly-lint
         name: Lint OpenAPI spec
-        entry: npx @redocly/cli lint
+        entry: npx @redocly/cli@2.30.3 lint
         language: system
         files: ^api/openapi\.yaml$
         

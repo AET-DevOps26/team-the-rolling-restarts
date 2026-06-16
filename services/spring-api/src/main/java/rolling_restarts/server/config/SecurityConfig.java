@@ -11,16 +11,30 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .authorizeHttpRequests(authorize -> authorize
-                // allow anonymous access to the root, the hello API used for smoke testing, and health checks
-                .requestMatchers("/", "/api/hello", "/actuator/health", "/actuator/health/**", "/favicon.ico", "/css/**", "/js/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .csrf(csrf -> csrf.disable())
-            // disable interactive form login so the framework won't redirect to a login page
-            .formLogin(form -> form.disable())
-            // disable http basic as well for now
-            .httpBasic(basic -> basic.disable());
+                .authorizeHttpRequests(authorize -> authorize
+                        // allow anonymous access to the root, the hello API used for smoke testing, and
+                        // health checks
+                        .requestMatchers(
+                                "/",
+                                "/test",
+                                "/dummy",
+                                "/api/hello",
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/favicon.ico",
+                                "/css/**",
+                                "/js/**",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html")
+                        .permitAll()
+                        .anyRequest().authenticated())
+                .csrf(csrf -> csrf.disable())
+                // disable interactive form login so the framework won't redirect to a login
+                // page
+                .formLogin(form -> form.disable())
+                // disable http basic as well for now
+                .httpBasic(basic -> basic.disable());
 
         return http.build();
     }
