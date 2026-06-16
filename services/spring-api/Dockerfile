@@ -7,6 +7,7 @@ WORKDIR /app
 COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
 COPY src ./src
+COPY generated ./generated
 
 # Build the application using the project's Gradle wrapper
 RUN chmod +x ./gradlew
