@@ -17,5 +17,14 @@ webClient:
 springApi:
   image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:d317d56
 
+apiGateway:
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/api-gateway:99559b5
+
+userService:
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/user-service:99559b5
+
+contentService:
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:99559b5
+
 genAi:
   image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:d317d56

@@ -278,3 +278,4 @@ infra/ansible/group_vars/all.yml
 infra/ansible/.vault_pass.txt
 docs/site/
 infra/helm/image-values.yaml
+infra/helm/secrets-values.yaml

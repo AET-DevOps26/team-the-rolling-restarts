@@ -1,19 +1,29 @@
-.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy
+.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup
 
 HELM ?= helm
 RELEASE ?= newsgenai
 CHART ?= .
-VALUES_FILES ?= -f values.yaml -f image-values.yaml
+ENV ?= dev
+SECRETS ?=
+
+ifeq ($(ENV),prod)
+VALUES_FILES ?= -f values.yaml -f values-prod.yaml $(SECRETS) -f image-values.yaml
+else
+VALUES_FILES ?= -f values.yaml $(SECRETS) -f image-values.yaml
+endif
 
 help:
 	@printf '%s\n' \
 	  'Available Helm targets:' \
-	  '  make helm-lint      - lint the chart with the base and image values' \
-	  '  make helm-template  - render the chart locally' \
-	  '  make helm-install   - install the release' \
-	  '  make helm-upgrade   - upgrade an existing release' \
-	  '  make helm-deploy    - upgrade or install in one step' \
-	  '  make helm-destroy   - uninstall the release'
+	  '  make helm-lint                - lint the chart' \
+	  '  make helm-template            - render the chart locally' \
+	  '  make helm-install             - install the release' \
+	  '  make helm-upgrade             - upgrade an existing release' \
+	  '  make helm-deploy              - upgrade or install in one step' \
+	  '  make helm-destroy             - uninstall the release' \
+	  '' \
+	  'Set ENV=prod for production TLS (default: staging)' \
+	  'Set SECRETS=-f secrets-values.yaml to inject credentials'
 
 ## Lint the chart before rendering or installing.
 helm-lint:

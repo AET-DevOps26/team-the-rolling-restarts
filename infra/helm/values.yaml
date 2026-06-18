@@ -3,7 +3,7 @@ global:
   registry: ghcr.io/aet-devops26/team-the-rolling-restarts
   tag: latest
   pullPolicy: Always
-  replicas: 2
+  replicas: 1
   probes:
     path: /
   resources:
@@ -55,6 +55,7 @@ apiGateway:
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
   probes:
+    path: /actuator/health
     readiness:
       initialDelaySeconds: 10
       periodSeconds: 10
@@ -68,8 +69,8 @@ apiGateway:
       cpu: 200m
       memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 500m
+      memory: 512Mi
 
 # User service handles auth, login, and user settings (PostgreSQL).
 userService:
@@ -82,7 +83,17 @@ userService:
       value: production
     - name: JAVA_TOOL_OPTIONS
       value: -XX:MaxRAMPercentage=75
+    - name: SPRING_DATASOURCE_URL
+      value: jdbc:postgresql://postgres:5432/mydatabase
+  secretEnv:
+    - name: SPRING_DATASOURCE_USERNAME
+      secretName: postgres-credentials
+      secretKey: username
+    - name: SPRING_DATASOURCE_PASSWORD
+      secretName: postgres-credentials
+      secretKey: password
   probes:
+    path: /actuator/health
     readiness:
       initialDelaySeconds: 10
       periodSeconds: 10
@@ -96,8 +107,8 @@ userService:
       cpu: 200m
       memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 500m
+      memory: 512Mi
 
 # Content service manages RSS feeds and articles (MongoDB).
 contentService:
@@ -110,22 +121,29 @@ contentService:
       value: production
     - name: JAVA_TOOL_OPTIONS
       value: -XX:MaxRAMPercentage=75
+    - name: JWT_ISSUER_URI
+      value: http://user-service:8081
+  secretEnv:
+    - name: SPRING_MONGODB_URI
+      secretName: mongodb-credentials
+      secretKey: uri
   probes:
+    path: /actuator/health
     readiness:
       initialDelaySeconds: 10
       periodSeconds: 10
-      timeoutSeconds: 2
+      timeoutSeconds: 5
     liveness:
-      initialDelaySeconds: 20
+      initialDelaySeconds: 30
       periodSeconds: 20
-      timeoutSeconds: 2
+      timeoutSeconds: 5
   resources:
     requests:
       cpu: 200m
       memory: 256Mi
     limits:
-      cpu: "1"
-      memory: 1Gi
+      cpu: 500m
+      memory: 512Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -147,22 +165,46 @@ genAi:
       initialDelaySeconds: 15
       periodSeconds: 20
 
-# Ingress and host values are documented here even though this task only
-# renders the workload and service resources.
+# Database services
+postgres:
+  name: postgres
+  image: postgres:17-alpine
+  port: 5432
+  database: mydatabase
+  username: myuser
+  password: secret
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+mongodb:
+  name: mongodb
+  image: mongo:8
+  port: 27017
+  database: content
+  rootUsername: root
+  rootPassword: secret
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+
 ingress:
   enabled: true
   className: nginx
+  clusterIssuer: letsencrypt-staging
   tlsSecret: rolling-restarts-tls
 
 hosts:
   web: app.rolling-restarts.stud.k8s.aet.cit.tum.de
   api: api.rolling-restarts.stud.k8s.aet.cit.tum.de
   ai: ai.rolling-restarts.stud.k8s.aet.cit.tum.de
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi

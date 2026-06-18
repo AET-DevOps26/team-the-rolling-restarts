@@ -42,6 +42,13 @@ spec:
             - name: {{ $env.name }}
               value: {{ $env.value | quote }}
 {{- end }}
+{{- range $env := $cfg.secretEnv }}
+            - name: {{ $env.name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $env.secretName }}
+                  key: {{ $env.secretKey }}
+{{- end }}
           readinessProbe:
             httpGet:
               path: {{ default $.Values.global.probes.path $cfg.probes.path | quote }}
