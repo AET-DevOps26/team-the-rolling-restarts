@@ -55,8 +55,9 @@ jobs:
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
           echo "api_base_url=https://api.rolling-restarts.stud.k8s.aet.cit.tum.de" >> $GITHUB_OUTPUT
 
-      # ---------------- WEB CLIENT ----------------
+      # ---------------- WEB CLIENT (temporarily disabled) ----------------
       - name: Build web-client
+        if: false
         uses: docker/build-push-action@v7.2.0
         with:
           context: ./web-client
@@ -102,8 +103,9 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.sha }}
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.channel }}
 
-      # ---------------- GEN AI ----------------
+      # ---------------- GEN AI (temporarily disabled) ----------------
       - name: Build gen-ai
+        if: false
         uses: docker/build-push-action@v7.2.0
         with:
           context: ./services/gen-ai
