@@ -15,9 +15,15 @@ jobs:
     strategy:
       matrix:
         include:
-          - service: spring-api
-            working_directory: services/spring-api
-            command: ./gradlew --no-daemon test
+          - service: api-gateway
+            working_directory: services/spring
+            command: ./gradlew :api-gateway:test --no-daemon
+          - service: user-service
+            working_directory: services/spring
+            command: ./gradlew :user-service:test --no-daemon
+          - service: content-service
+            working_directory: services/spring
+            command: ./gradlew :content-service:test --no-daemon
           - service: gen-ai
             working_directory: services/gen-ai
             command: |
@@ -55,8 +61,8 @@ jobs:
           cache-dependency-path: |
             services/gen-ai/pyproject.toml
 
-      - name: Setup Java (spring-api)
-        if: matrix.service == 'spring-api'
+      - name: Setup Java
+        if: contains(fromJSON('["api-gateway","user-service","content-service"]'), matrix.service)
         uses: actions/setup-java@v5
         with:
           distribution: temurin

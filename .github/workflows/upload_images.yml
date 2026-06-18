@@ -40,7 +40,7 @@ jobs:
           REPO="$(echo "$REPO_RAW" | tr '[:upper:]' '[:lower:]')"
 
           PROJECT="${REPO#*/}"
-          SHA=${GITHUB_SHA::7}  
+          SHA=${GITHUB_SHA::7}
           if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             CHANNEL="main"
           elif [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
@@ -69,16 +69,38 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.channel }}
 
-      # ---------------- SPRING API ----------------
-      - name: Build spring-api
+      # ---------------- API GATEWAY ----------------
+      - name: Build api-gateway
         uses: docker/build-push-action@v7.2.0
         with:
-          context: ./services/spring-api
-          file: ./services/spring-api/Dockerfile
+          context: ./services/spring
+          file: ./services/spring/api-gateway/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.channel }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.channel }}
+
+      # ---------------- USER SERVICE ----------------
+      - name: Build user-service
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring
+          file: ./services/spring/user-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.channel }}
+
+      # ---------------- CONTENT SERVICE ----------------
+      - name: Build content-service
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring
+          file: ./services/spring/content-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.channel }}
 
       # ---------------- GEN AI ----------------
       - name: Build gen-ai
@@ -98,8 +120,14 @@ jobs:
           webClient:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
 
-          springApi:
-            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
+          apiGateway:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.sha }}
+
+          userService:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.sha }}
+
+          contentService:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.sha }}
 
           genAi:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
