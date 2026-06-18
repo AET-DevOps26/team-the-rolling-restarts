@@ -1,0 +1,6 @@
+rootProject.name = 'spring-services'
+
+include 'generated'
+include 'api-gateway'
+include 'user-service'
+include 'content-service'
