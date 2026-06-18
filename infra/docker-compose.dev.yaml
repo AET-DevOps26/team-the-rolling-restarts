@@ -15,21 +15,48 @@ services:
       - ../web-client:/app
       - web-client-node-modules:/app/node_modules
 
-  spring-api:
+  api-gateway:
     build: !reset null
     image: gradle:jdk-25-and-25
     working_dir: /workspace
-    command: ./gradlew bootRun --no-daemon
+    command: ./gradlew :api-gateway:bootRun --no-daemon
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      GEN_AI_BASE_URL: http://gen-ai:8000
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DATABASE:-mydatabase}?authSource=admin
+      USER_SERVICE_URL: http://user-service:8081
+      CONTENT_SERVICE_URL: http://content-service:8082
+      JWT_ISSUER_URI: http://user-service:8081
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+    volumes:
+      - ../services/spring:/workspace
+      - spring-gradle-cache:/home/gradle/.gradle
+
+  user-service:
+    build: !reset null
+    image: gradle:jdk-25-and-25
+    working_dir: /workspace
+    command: ./gradlew :user-service:bootRun --no-daemon
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
     volumes:
-      - ../services/spring-api:/workspace
+      - ../services/spring:/workspace
+      - spring-gradle-cache:/home/gradle/.gradle
+
+  content-service:
+    build: !reset null
+    image: gradle:jdk-25-and-25
+    working_dir: /workspace
+    command: ./gradlew :content-service:bootRun --no-daemon
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
+      JWT_ISSUER_URI: http://user-service:8081
+      SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+    volumes:
+      - ../services/spring:/workspace
       - spring-gradle-cache:/home/gradle/.gradle
 
   gen-ai:
