@@ -1,13 +1,12 @@
-package rolling_restarts.server;
+package rolling_restarts.gateway;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class ServerApplicationTests {
+class GatewayApplicationTests {
 
 	@Test
 	void contextLoads() {
 	}
-
 }
