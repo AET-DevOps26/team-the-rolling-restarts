@@ -37,12 +37,74 @@ webClient:
       initialDelaySeconds: 15
       periodSeconds: 20
 
-# Spring API defaults mirror the handwritten Kubernetes manifest.
-springApi:
-  name: spring-api
-  imageName: spring-api
+# API Gateway routes traffic to user-service and content-service.
+apiGateway:
+  name: api-gateway
+  imageName: api-gateway
   image: ""
   port: 8080
+  env:
+    - name: SPRING_PROFILES_ACTIVE
+      value: production
+    - name: JAVA_TOOL_OPTIONS
+      value: -XX:MaxRAMPercentage=75
+    - name: USER_SERVICE_URL
+      value: http://user-service:8081
+    - name: CONTENT_SERVICE_URL
+      value: http://content-service:8082
+    - name: JWT_ISSUER_URI
+      value: http://user-service:8081
+  probes:
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 2
+    liveness:
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# User service handles auth, login, and user settings (PostgreSQL).
+userService:
+  name: user-service
+  imageName: user-service
+  image: ""
+  port: 8081
+  env:
+    - name: SPRING_PROFILES_ACTIVE
+      value: production
+    - name: JAVA_TOOL_OPTIONS
+      value: -XX:MaxRAMPercentage=75
+  probes:
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 2
+    liveness:
+      initialDelaySeconds: 20
+      periodSeconds: 20
+      timeoutSeconds: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# Content service manages RSS feeds and articles (MongoDB).
+contentService:
+  name: content-service
+  imageName: content-service
+  image: ""
+  port: 8082
   env:
     - name: SPRING_PROFILES_ACTIVE
       value: production

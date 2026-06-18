@@ -32,9 +32,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ .Values.springApi.name }}
+                name: {{ .Values.apiGateway.name }}
                 port:
-                  number: {{ .Values.springApi.port }}
+                  number: {{ .Values.apiGateway.port }}
     - host: {{ .Values.hosts.ai }}
       http:
         paths:

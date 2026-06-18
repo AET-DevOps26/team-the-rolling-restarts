@@ -27,7 +27,7 @@ spec:
                 port:
                   number: 3000
 
-    # ---------------- SPRING API ----------------
+    # ---------------- API GATEWAY ----------------
     - host: api.rolling-restarts.stud.k8s.aet.cit.tum.de
       http:
         paths:
@@ -35,7 +35,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: spring-api
+                name: api-gateway
                 port:
                   number: 8080
 

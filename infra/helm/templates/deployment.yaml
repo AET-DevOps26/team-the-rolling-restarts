@@ -1,7 +1,9 @@
-{{/* Render the three deployments from the same template to keep the chart small. */}}
+{{/* Render the deployments from the same template to keep the chart small. */}}
 {{- $apps := list
   (dict "key" "webClient" "cfg" .Values.webClient)
-  (dict "key" "springApi" "cfg" .Values.springApi)
+  (dict "key" "apiGateway" "cfg" .Values.apiGateway)
+  (dict "key" "userService" "cfg" .Values.userService)
+  (dict "key" "contentService" "cfg" .Values.contentService)
   (dict "key" "genAi" "cfg" .Values.genAi)
 -}}
 {{- range $index, $app := $apps }}

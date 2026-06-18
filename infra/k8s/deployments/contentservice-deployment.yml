@@ -1,26 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: spring-api
+  name: content-service
   labels:
-    app: spring-api
+    app: content-service
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: spring-api
+      app: content-service
   template:
     metadata:
       labels:
-        app: spring-api
+        app: content-service
     spec:
       containers:
-        - name: spring-api
-          image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:1eb2b0a
+        - name: content-service
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:latest
           imagePullPolicy: Always
 
           ports:
-            - containerPort: 8080
+            - containerPort: 8082
 
           env:
             - name: SPRING_PROFILES_ACTIVE
@@ -31,7 +31,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: 8080
+              port: 8082
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 2
@@ -39,7 +39,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port: 8080
+              port: 8082
             initialDelaySeconds: 20
             periodSeconds: 20
             timeoutSeconds: 2
