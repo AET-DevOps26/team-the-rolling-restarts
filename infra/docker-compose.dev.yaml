@@ -52,7 +52,7 @@ services:
     command: ./gradlew :content-service:bootRun --no-daemon
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
       JWT_ISSUER_URI: http://user-service:8081
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
     volumes:

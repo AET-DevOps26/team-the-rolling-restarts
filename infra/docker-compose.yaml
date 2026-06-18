@@ -15,7 +15,7 @@ services:
       NODE_ENV: production
     depends_on:
       api-gateway:
-        condition: service_started
+        condition: service_healthy
     networks:
       - frontend
 
@@ -31,11 +31,22 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       CONTENT_SERVICE_URL: http://content-service:8082
       JWT_ISSUER_URI: http://user-service:8081
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/wget
+        - -q
+        - --spider
+        - http://localhost:8080/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       user-service:
-        condition: service_started
+        condition: service_healthy
       content-service:
-        condition: service_started
+        condition: service_healthy
     networks:
       - frontend
       - backend
@@ -52,6 +63,17 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/wget
+        - -q
+        - --spider
+        - http://localhost:8081/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,10 +89,23 @@ services:
       - "${CONTENT_SERVICE_PORT:-8082}:8082"
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
       JWT_ISSUER_URI: http://user-service:8081
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/wget
+        - -q
+        - --spider
+        - http://localhost:8082/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       mongodb:
+        condition: service_healthy
+      user-service:
         condition: service_healthy
     networks:
       - backend

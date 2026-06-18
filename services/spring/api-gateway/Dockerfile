@@ -14,6 +14,7 @@ FROM gcr.io/distroless/java25-debian13
 
 WORKDIR /app
 
+COPY --from=busybox:stable-musl /bin/busybox /usr/bin/wget
 COPY --from=build /app/api-gateway/build/libs/*.jar app.jar
 
 EXPOSE 8080

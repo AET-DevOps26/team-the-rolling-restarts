@@ -52,7 +52,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
