@@ -77,7 +77,7 @@ pre-commit run -a
 
 The repo generates three outputs from the OpenAPI definition:
 
-- Spring server/client artifacts in [`services/spring-api/generated`](../services/spring-api/generated)
+- Spring server/client artifacts in [`services/spring/generated`](../services/spring/generated)
 - Python client artifacts in [`services/gen-ai/generated`](../services/gen-ai/generated)
 - TypeScript client types in [`web-client/src/generated/api.ts`](../web-client/src/generated/api.ts)
 
@@ -95,7 +95,7 @@ pre-commit run generate-api-clients --hook-stage post-checkout --all-files
 
 ## Notes
 
-- [`services/spring-api`](../services/spring-api) is a Gradle project and uses the generated OpenAPI source root during its normal build.
+- [`services/spring`](../services/spring) is a Gradle multi-module project. The `generated` subproject is a shared `java-library` that all Spring services (`api-gateway`, `user-service`, `content-service`) depend on via `implementation project(':generated')`.
 - [`services/gen-ai`](../services/gen-ai) currently has no collected tests, so `pytest` exits with code `5` and CI treats that as a skip.
 - The OpenAPI generator version is pinned in [`openapitools.json`](../openapitools.json).
 
@@ -157,7 +157,7 @@ async def fetch_dummy_message() -> None:
 Use the generated Spring interface as the stub contract when you implement the server side:
 
 ```java
-package rolling_restarts.server.controller;
+package rolling_restarts.gateway.controller;
 
 import org.openapitools.api.DummyApi;
 import org.openapitools.model.Message;

@@ -1,0 +1,53 @@
+# Web Client Integration Notes
+
+The backend has been restructured from a single `spring-api` monolith into three
+microservices behind an API gateway. The web-client team should update the
+frontend to integrate with the new API surface.
+
+## What changed
+
+The single `spring-api` on port 8080 has been replaced by:
+
+| Service           | Port | Role                                              |
+| ----------------- | ---- | ------------------------------------------------- |
+| `api-gateway`     | 8080 | Routes traffic, JWT validation, unified Swagger UI |
+| `user-service`    | 8081 | OAuth2 Authorization Server, user profiles/settings |
+| `content-service` | 8082 | RSS feeds, articles, topics                        |
+
+The web client still talks only to port 8080 (`NEXT_PUBLIC_API_BASE_URL`).
+The gateway forwards requests based on path prefix.
+
+## New API endpoints
+
+### User service (via `/api/users/`)
+
+- `POST /api/users/auth/register` — register a new user
+- `POST /api/users/oauth2/token` — OAuth2 token endpoint (login)
+- `GET  /api/users/users/me` — current user profile
+- `PUT  /api/users/users/me` — update profile
+- `GET  /api/users/users/me/settings` — user preferences
+- `PUT  /api/users/users/me/settings` — update preferences
+
+### Content service (via `/api/content/`)
+
+- `GET    /api/content/sources` — list RSS sources
+- `POST   /api/content/sources` — submit a new RSS feed URL
+- `GET    /api/content/sources/{id}` — source details
+- `DELETE /api/content/sources/{id}` — remove a source
+- `GET    /api/content/topics` — list topics
+- `GET    /api/content/articles` — paginated articles (query params: `sourceId`, `topicId`)
+- `GET    /api/content/articles/{id}` — full article
+- `POST   /api/content/articles/saved` — batch-get articles by IDs
+
+## What should be updated in web-client
+
+- **`web-client/README.md`** — the "Backend integration" section still references
+  placeholder service names (`spring-order`, `py-recommender`). Update it to
+  document the real gateway URL and the API paths listed above.
+- **Mock data** — `src/lib/mock/` can be replaced with real API calls once the
+  services are running.
+- **Auth flow** — wire up login/signup forms to the OAuth2 token endpoint and
+  store the JWT for subsequent requests.
+- **Generated types** — once the services are live, the springdoc-generated
+  OpenAPI spec at `http://localhost:8080/v3/api-docs` can be used to regenerate
+  the TypeScript client types.
