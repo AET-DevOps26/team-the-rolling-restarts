@@ -8,6 +8,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -55,7 +58,7 @@ public class UserController {
 			})
 	public ResponseEntity<UserProfileResponse> updateProfile(
 			@AuthenticationPrincipal Jwt jwt,
-			@RequestBody UpdateProfileRequest request) {
+			@Valid @RequestBody UpdateProfileRequest request) {
 		UUID userId = UUID.fromString(jwt.getSubject());
 		User user = userService.updateProfile(userId, request.name(), request.email());
 		return ResponseEntity.ok(UserProfileResponse.from(user));
@@ -84,7 +87,7 @@ public class UserController {
 			})
 	public ResponseEntity<UserSettingsResponse> updateSettings(
 			@AuthenticationPrincipal Jwt jwt,
-			@RequestBody UserSettingsRequest request) {
+			@Valid @RequestBody UserSettingsRequest request) {
 		UUID userId = UUID.fromString(jwt.getSubject());
 		UserSettings settings = new UserSettings();
 		settings.setUserId(userId);
@@ -95,7 +98,7 @@ public class UserController {
 		return ResponseEntity.ok(UserSettingsResponse.from(updated));
 	}
 
-	public record UpdateProfileRequest(String name, String email) {}
+	public record UpdateProfileRequest(String name, @Email String email) {}
 
 	public record UserProfileResponse(String id, String username, String email, String name, String avatarInitials) {
 		static UserProfileResponse from(User user) {

@@ -7,6 +7,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -60,7 +63,7 @@ public class SourceController {
 					@ApiResponse(responseCode = "200", description = "Source already exists"),
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
-	public ResponseEntity<Source> create(@RequestBody CreateSourceRequest request) {
+	public ResponseEntity<Source> create(@Valid @RequestBody CreateSourceRequest request) {
 		return sourceRepository.findByRssUrl(request.rssUrl())
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> {
@@ -91,5 +94,5 @@ public class SourceController {
 		return ResponseEntity.noContent().build();
 	}
 
-	public record CreateSourceRequest(String name, String rssUrl) {}
+	public record CreateSourceRequest(@NotBlank String name, @NotBlank String rssUrl) {}
 }
