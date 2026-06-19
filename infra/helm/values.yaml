@@ -54,6 +54,8 @@ apiGateway:
       value: http://content-service:8082
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
+    - name: CORS_ALLOWED_ORIGINS
+      value: https://app.rolling-restarts.stud.k8s.aet.cit.tum.de
   probes:
     path: /actuator/health
     readiness:

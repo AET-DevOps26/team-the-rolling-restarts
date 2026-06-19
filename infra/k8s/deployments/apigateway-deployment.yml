@@ -33,10 +33,12 @@ spec:
               value: "http://content-service:8082"
             - name: JWT_ISSUER_URI
               value: "http://user-service:8081"
+            - name: CORS_ALLOWED_ORIGINS
+              value: "https://app.rolling-restarts.stud.k8s.aet.cit.tum.de"
 
           readinessProbe:
             httpGet:
-              path: /
+              path: /actuator/health
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -44,11 +46,18 @@ spec:
 
           livenessProbe:
             httpGet:
-              path: /
+              path: /actuator/health
               port: 8080
             initialDelaySeconds: 20
             periodSeconds: 20
             timeoutSeconds: 2
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
 
           resources:
             requests:

@@ -1,4 +1,3 @@
-{{/* Render the services alongside the deployments so ports stay in sync. */}}
 {{- $apps := list
   (dict "key" "webClient" "cfg" .Values.webClient)
   (dict "key" "apiGateway" "cfg" .Values.apiGateway)
@@ -6,24 +5,25 @@
   (dict "key" "contentService" "cfg" .Values.contentService)
   (dict "key" "genAi" "cfg" .Values.genAi)
 -}}
+{{- $first := true -}}
 {{- range $index, $app := $apps }}
 {{- $cfg := $app.cfg -}}
-{{- $service := default dict (get $cfg "service") -}}
-{{- if $index }}
+{{- $replicas := default $.Values.global.replicas $cfg.replicas -}}
+{{- if gt (int $replicas) 1 }}
+{{- if not $first }}
 ---
 {{- end }}
-apiVersion: v1
-kind: Service
+{{- $first = false }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
   name: {{ $cfg.name }}
   labels:
 {{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
 spec:
-  type: {{ default $.Values.global.service.type (get $service "type") }}
+  maxUnavailable: 1
   selector:
-    app: {{ $cfg.name }}
-  ports:
-    - protocol: {{ default $.Values.global.service.protocol (get $service "protocol") }}
-      port: {{ $cfg.port }}
-      targetPort: {{ $cfg.port }}
+    matchLabels:
+      app: {{ $cfg.name }}
+{{- end }}
 {{- end }}

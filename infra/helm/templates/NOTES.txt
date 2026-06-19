@@ -1,0 +1,14 @@
+{{ .Release.Name }} has been deployed.
+
+Services:
+  Web Client:     https://{{ .Values.hosts.web }}
+  API Gateway:    https://{{ .Values.hosts.api }}
+  AI Service:     https://{{ .Values.hosts.ai }}
+
+To check pod status:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+To view logs for a specific service:
+  kubectl logs -l app=api-gateway --tail=100 -f
+  kubectl logs -l app=user-service --tail=100 -f
+  kubectl logs -l app=content-service --tail=100 -f

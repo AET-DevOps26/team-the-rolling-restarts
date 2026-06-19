@@ -30,7 +30,7 @@ spec:
 
           readinessProbe:
             httpGet:
-              path: /
+              path: /actuator/health
               port: 8081
             initialDelaySeconds: 10
             periodSeconds: 10
@@ -38,11 +38,18 @@ spec:
 
           livenessProbe:
             httpGet:
-              path: /
+              path: /actuator/health
               port: 8081
             initialDelaySeconds: 20
             periodSeconds: 20
             timeoutSeconds: 2
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            failureThreshold: 30
+            periodSeconds: 10
 
           resources:
             requests:

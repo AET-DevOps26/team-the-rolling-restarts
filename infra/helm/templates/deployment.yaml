@@ -16,7 +16,7 @@ kind: Deployment
 metadata:
   name: {{ $cfg.name }}
   labels:
-    app: {{ $cfg.name }}
+{{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
 spec:
   replicas: {{ default $.Values.global.replicas $cfg.replicas }}
   selector:
@@ -25,8 +25,9 @@ spec:
   template:
     metadata:
       labels:
-        app: {{ $cfg.name }}
+{{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 8 }}
     spec:
+      serviceAccountName: {{ $cfg.name }}
       {{- with $.Values.imagePullSecrets }}
       imagePullSecrets:
 {{ toYaml . | nindent 8 }}
@@ -67,6 +68,12 @@ spec:
 {{- with $cfg.probes.liveness.timeoutSeconds }}
             timeoutSeconds: {{ . }}
 {{- end }}
+          startupProbe:
+            httpGet:
+              path: {{ default $.Values.global.probes.path $cfg.probes.path | quote }}
+              port: {{ $cfg.port }}
+            failureThreshold: 30
+            periodSeconds: 10
           resources:
 {{ toYaml (default $.Values.global.resources $cfg.resources) | nindent 12 }}
 {{- end }}
