@@ -10,7 +10,10 @@ import rolling_restarts.user.repository.UserSettingsRepository;
 
 @SpringBootTest
 @TestPropertySource(properties = {
-	"spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration"
+	"spring.autoconfigure.exclude=org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration",
+	"spring.datasource.url=jdbc:postgresql://localhost:5432/testdb",
+	"spring.datasource.username=test",
+	"spring.datasource.password=test"
 })
 class UserServiceApplicationTests {
 
