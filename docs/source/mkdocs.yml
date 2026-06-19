@@ -6,9 +6,17 @@ use_directory_urls: true
 theme:
   name: material
 # optional: add a nav: section to control ordering
-nav: 
+nav:
   - Home: index.md
-  - Inital Backlog: INITIAL_BACKLOG.md
+  - Initial Backlog: INITIAL_BACKLOG.md
   - Problem Statement: PROBLEM_STATEMENT.md
   - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
   - API Docs: api.html
+  - Guides:
+    - OpenAPI Workflow: openapi-workflow.md
+    - Web Client Integration: web-client-integration.md
+    - Deployment Testing: deployment-testing.md
+  - Infrastructure:
+    - Azure VM Deployment: azure-vm-deployment.md
+    - Helm Chart: infra/helm/helm.md
+    - Kubernetes: infra/k8s/kubernetes.md
