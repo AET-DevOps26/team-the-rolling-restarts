@@ -19,8 +19,9 @@ services:
     build: !reset null
     image: gradle:jdk-25-and-25
     working_dir: /workspace
-    command: ./gradlew :api-gateway:bootRun --no-daemon
+    command: ./gradlew :api-gateway:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
     environment:
+      GRADLE_USER_HOME: /gradle-cache/gateway
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       USER_SERVICE_URL: http://user-service:8081
       CONTENT_SERVICE_URL: http://content-service:8082
@@ -28,14 +29,15 @@ services:
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
     volumes:
       - ../services/spring:/workspace
-      - spring-gradle-cache:/home/gradle/.gradle
+      - spring-gradle-cache:/gradle-cache
 
   user-service:
     build: !reset null
     image: gradle:jdk-25-and-25
     working_dir: /workspace
-    command: ./gradlew :user-service:bootRun --no-daemon
+    command: ./gradlew :user-service:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
     environment:
+      GRADLE_USER_HOME: /gradle-cache/user-service
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
@@ -43,21 +45,22 @@ services:
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
     volumes:
       - ../services/spring:/workspace
-      - spring-gradle-cache:/home/gradle/.gradle
+      - spring-gradle-cache:/gradle-cache
 
   content-service:
     build: !reset null
     image: gradle:jdk-25-and-25
     working_dir: /workspace
-    command: ./gradlew :content-service:bootRun --no-daemon
+    command: ./gradlew :content-service:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
     environment:
+      GRADLE_USER_HOME: /gradle-cache/content-service
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
       JWT_ISSUER_URI: http://user-service:8081
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
     volumes:
       - ../services/spring:/workspace
-      - spring-gradle-cache:/home/gradle/.gradle
+      - spring-gradle-cache:/gradle-cache
 
   gen-ai:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude .venv

@@ -6,6 +6,7 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0755"
+  tags: [app, deploy]
 
 - name: Clone or update project repository
   ansible.builtin.git:
@@ -14,6 +15,7 @@
     version: "{{ project_repo_version }}"
     update: true
   become_user: "{{ ansible_user }}"
+  tags: [app, deploy]
 
 - name: Render deployment environment file
   ansible.builtin.template:
@@ -22,24 +24,26 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0600"
+  notify: restart rolling-restarts
+  tags: [app, deploy]
 
 - name: Render systemd unit for compose stack
   ansible.builtin.template:
     src: rolling-restarts.service.j2
-    dest: /etc/systemd/system/rolling-restarts.service
+    dest: /etc/systemd/system/{{ app_service_name }}.service
     owner: root
     group: root
     mode: "0644"
+  notify:
+    - reload systemd
+    - restart rolling-restarts
+  tags: [app, deploy]
 
-- name: Reload systemd daemon
+- name: Ensure project service is enabled
   ansible.builtin.systemd:
-    daemon_reload: true
-
-- name: Enable and start project service
-  ansible.builtin.systemd:
-    name: rolling-restarts
+    name: "{{ app_service_name }}"
     enabled: true
-    state: restarted
+  tags: [app, deploy]
 
 - name: Verify project endpoint responds
   ansible.builtin.uri:
@@ -47,6 +51,7 @@
     status_code: 200
     timeout: 30
   register: web_health
-  retries: 5
-  delay: 10
+  retries: "{{ health_check_retries }}"
+  delay: "{{ health_check_delay }}"
   until: web_health.status == 200
+  tags: [app, deploy, verify]

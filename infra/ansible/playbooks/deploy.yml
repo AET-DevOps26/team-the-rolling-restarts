@@ -8,5 +8,8 @@
 
   roles:
     - role: common
+      tags: [common]
     - role: docker
+      tags: [docker]
     - role: app
+      tags: [app, deploy]

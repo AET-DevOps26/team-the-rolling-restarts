@@ -1,0 +1,8 @@
+---
+project_root: /opt/rolling-restarts
+project_repo_version: main
+compose_file: infra/docker-compose.yaml
+compose_env_path: infra/.env
+app_service_name: rolling-restarts
+health_check_retries: 5
+health_check_delay: 10

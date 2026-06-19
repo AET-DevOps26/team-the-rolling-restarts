@@ -88,6 +88,28 @@ jobs:
           SERVICE_NAME: ${{ matrix.service }}
         run: ${{ matrix.command }}
 
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+      - name: Terraform init
+        working-directory: infra/terraform/azure-vm
+        run: terraform init -backend=false
+      - name: Terraform validate
+        working-directory: infra/terraform/azure-vm
+        run: terraform validate
+      - name: Terraform fmt check
+        working-directory: infra/terraform/azure-vm
+        run: terraform fmt -check -recursive
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Helm lint
+        run: helm lint infra/helm
+
   contract-test:
     needs: generate-and-test
     runs-on: ubuntu-latest
