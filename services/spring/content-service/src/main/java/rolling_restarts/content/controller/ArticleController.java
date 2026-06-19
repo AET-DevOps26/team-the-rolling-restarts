@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -51,12 +50,8 @@ public class ArticleController {
 					@ApiResponse(responseCode = "200", description = "Article found"),
 					@ApiResponse(responseCode = "404", description = "Article not found")
 			})
-	public ResponseEntity<Article> get(@PathVariable String id) {
-		try {
-			return ResponseEntity.ok(articleService.findById(id));
-		} catch (IllegalArgumentException e) {
-			return ResponseEntity.notFound().build();
-		}
+	public Article get(@PathVariable String id) {
+		return articleService.findById(id);
 	}
 
 	@PostMapping("/saved")

@@ -1,0 +1,81 @@
+package rolling_restarts.user.exception;
+
+import java.time.Instant;
+import java.util.List;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+	public record ApiError(
+			Instant timestamp,
+			int code,
+			String message,
+			List<String> details,
+			String path) {}
+
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, WebRequest request) {
+		List<String> details = ex.getBindingResult().getFieldErrors().stream()
+				.map(err -> err.getField() + ": " + err.getDefaultMessage())
+				.toList();
+		ApiError error = new ApiError(
+				Instant.now(),
+				HttpStatus.BAD_REQUEST.value(),
+				"Validation failed",
+				details,
+				extractPath(request));
+		return ResponseEntity.badRequest().body(error);
+	}
+
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex, WebRequest request) {
+		String msg = ex.getMessage();
+		if (msg != null && msg.contains("already")) {
+			ApiError error = new ApiError(
+					Instant.now(),
+					HttpStatus.CONFLICT.value(),
+					msg,
+					List.of(),
+					extractPath(request));
+			return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+		}
+		if (msg != null && msg.contains("not found")) {
+			ApiError error = new ApiError(
+					Instant.now(),
+					HttpStatus.NOT_FOUND.value(),
+					msg,
+					List.of(),
+					extractPath(request));
+			return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+		}
+		ApiError error = new ApiError(
+				Instant.now(),
+				HttpStatus.BAD_REQUEST.value(),
+				msg,
+				List.of(),
+				extractPath(request));
+		return ResponseEntity.badRequest().body(error);
+	}
+
+	@ExceptionHandler(Exception.class)
+	public ResponseEntity<ApiError> handleGeneric(Exception ex, WebRequest request) {
+		ApiError error = new ApiError(
+				Instant.now(),
+				HttpStatus.INTERNAL_SERVER_ERROR.value(),
+				"Internal server error",
+				List.of(),
+				extractPath(request));
+		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+	}
+
+	private static String extractPath(WebRequest request) {
+		return request.getDescription(false).replace("uri=", "");
+	}
+}
