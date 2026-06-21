@@ -4,7 +4,13 @@ HELM ?= helm
 RELEASE ?= newsgenai
 CHART ?= .
 ENV ?= dev
+
+# Auto-detect secrets-values.yaml if present, unless overridden
+ifneq ($(wildcard secrets-values.yaml),)
+SECRETS ?= -f secrets-values.yaml
+else
 SECRETS ?=
+endif
 
 ifeq ($(ENV),prod)
 VALUES_FILES ?= -f values.yaml -f values-prod.yaml $(SECRETS) -f image-values.yaml
@@ -23,7 +29,7 @@ help:
 	  '  make helm-destroy             - uninstall the release' \
 	  '' \
 	  'Set ENV=prod for production TLS (default: staging)' \
-	  'Set SECRETS=-f secrets-values.yaml to inject credentials'
+	  'secrets-values.yaml is auto-included if present (override: SECRETS=)'
 
 ## Lint the chart before rendering or installing.
 helm-lint:

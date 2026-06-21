@@ -1,9 +1,10 @@
 {{ .Release.Name }} has been deployed.
 
-Services:
-  Web Client:     https://{{ .Values.hosts.web }}
-  API Gateway:    https://{{ .Values.hosts.api }}
-  AI Service:     https://{{ .Values.hosts.ai }}
+Endpoints (https://{{ .Values.host }}):
+  Web Client:     https://{{ .Values.host }}/
+  API Gateway:    https://{{ .Values.host }}/api/
+  AI Service:     https://{{ .Values.host }}/ai/
+  Swagger UI:     https://{{ .Values.host }}/swagger-ui.html
 
 To check pod status:
   kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
