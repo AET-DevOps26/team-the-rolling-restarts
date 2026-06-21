@@ -16,6 +16,7 @@ nav:
     - OpenAPI Workflow: openapi-workflow.md
     - Web Client Integration: web-client-integration.md
     - Deployment Testing: deployment-testing.md
+    - Secrets & Environment Variables: secrets-reference.md
   - Infrastructure:
     - Azure VM Deployment: azure-vm-deployment.md
     - Helm Chart: infra/helm/helm.md

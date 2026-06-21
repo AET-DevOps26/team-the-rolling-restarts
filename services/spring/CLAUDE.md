@@ -56,12 +56,14 @@ All other routes require JWT Bearer token.
 - `GlobalExceptionHandler` with unified error schema `{timestamp, code, message, details, path}`
 - Spring profiles: `application-dev.properties`, `application-production.properties`
 
-### Phase 2: User Service (PostgreSQL)
+### Phase 2: User Service (MongoDB)
+- Migrated from PostgreSQL/JPA to MongoDB — shares the MongoDB instance with content-service using a separate `users` database
+- UserSettings embedded in User document (single-document atomic writes, no `@Transactional` needed)
 - Input validation: `@NotBlank`, `@Email`, `@Size` on `RegisterRequest`, `@Valid` on all request bodies
 - `GlobalExceptionHandler`: validation → 400, duplicate → 409, not-found → 404
-- Spring profiles: dev (local creds, ddl-auto=update) + production (ddl-auto=validate, graceful shutdown)
+- Spring profiles: dev (local MongoDB URI) + production (graceful shutdown)
 - RSA key persistence: loads from `jwt.rsa.public-key`/`jwt.rsa.private-key` when set, falls back to generated
-- Tests: `AuthControllerTest` (5 tests), `UserServiceTest` (6 tests)
+- Tests: `AuthControllerTest` (5 tests), `UserServiceTest` (7 tests)
 
 ### Phase 3: Content Service (MongoDB)
 - Input validation: `@NotBlank` on `CreateSourceRequest`, pagination limits (max 100, default 20)

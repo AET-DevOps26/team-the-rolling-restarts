@@ -1,35 +1,26 @@
 # Deployment Testing Guide
 
 How to verify that changes aren't breaking anything across all deployment targets.
+All commands run from the **project root**. Run `make help` to list every target.
 
 ---
 
 ## 1. Local Pre-flight (always run first)
 
 ```bash
-# From project root — install OpenAPI tooling and generate clients (same as CI)
-npm ci
-python -m pip install --upgrade pip
-python -m pip install openapi-python-client
-
-# Lint the spec, then generate all clients (Spring, Python, TypeScript)
-npx @redocly/cli@2.30.3 lint api/openapi.yaml
-./api/scripts/gen-all.sh              # generates services/spring/generated/, services/gen-ai/generated/, web-client/src/generated/
-
-# From services/spring/
-cd services/spring
-./gradlew build                       # must pass: compiles all modules, runs all tests
-cd ../..
-
-# Helm chart
-helm lint infra/helm                  # must pass: no chart errors
-
-# Terraform (if infra changes)
-cd infra/terraform/azure-vm
-terraform init -backend=false
-terraform validate                    # must pass: valid HCL
-terraform fmt -check                  # must pass: consistent formatting
+make preflight
 ```
+
+This runs, in order:
+
+| Step | Target | What it does |
+| ---- | ------ | ------------ |
+| 1 | `make generate` | Install OpenAPI tooling, lint the spec, generate Spring/Python/TypeScript clients |
+| 2 | `make spring-build` | Compile and test all Spring modules (`./gradlew build`) |
+| 3 | `make helm-lint` | Lint the Helm chart |
+| 4 | `make terraform-validate` | `terraform init` + `validate` + `fmt -check` |
+
+Each step can also be run individually.
 
 ---
 
@@ -38,22 +29,34 @@ terraform fmt -check                  # must pass: consistent formatting
 ### Start the stack
 
 ```bash
-# From project root
-cp infra/.env.example infra/.env    # fill in required values
-docker compose --env-file infra/.env \
-  -f infra/docker-compose.yaml \
-  -f infra/docker-compose.dev.yaml \
-  up --build
+cp infra/.env.example infra/.env    # first time only — fill in required values
+make compose-up                     # builds and starts all services (detached)
 ```
 
-### Verify endpoints
+### Connect to MongoDB locally
 
-Wait for all health checks to pass (`docker compose ps` — all services should be `healthy`).
+Use this URI in MongoDB Compass or `mongosh` (requires the stack to be running):
+
+```text
+mongodb://root:secret@localhost:27017/?authSource=admin
+```
+
+The `?authSource=admin` is required — the root user is created in the `admin` database.
+The services use separate databases: `users` (user-service) and `content` (content-service).
+
+### Verify services are healthy
+
+```bash
+make compose-ps                     # all services should show "healthy"
+make compose-logs                   # follow logs (Ctrl-C to stop)
+```
+
+### Endpoint checklist
 
 | Endpoint | Expected | What it tests |
 |----------|----------|---------------|
 | `GET http://localhost:8080/actuator/health` | `200 {"status":"UP"}` | API gateway is running |
-| `GET http://localhost:8081/actuator/health` | `200 {"status":"UP"}` | User service + PostgreSQL connection |
+| `GET http://localhost:8081/actuator/health` | `200 {"status":"UP"}` | User service + MongoDB connection |
 | `GET http://localhost:8082/actuator/health` | `200 {"status":"UP"}` | Content service + MongoDB connection |
 | `GET http://localhost:8080/` | `200 {"message":"Hello, World!"}` | Gateway routing works |
 | `GET http://localhost:8080/swagger-ui.html` | `302` redirect to Swagger UI | OpenAPI docs accessible |
@@ -64,51 +67,24 @@ Wait for all health checks to pass (`docker compose ps` — all services should 
 | `GET http://localhost:3000` | `200` HTML page | Web client serving |
 | `GET http://localhost:8000/health` | `200` | GenAI service |
 
-### Quick smoke test script
+### Smoke test
 
 ```bash
-echo "=== API Gateway ==="
-curl -s http://localhost:8080/actuator/health | jq .status
-curl -s http://localhost:8080/ | jq .message
-
-echo "=== User Service ==="
-curl -s http://localhost:8081/actuator/health | jq .status
-
-echo "=== Content Service ==="
-curl -s http://localhost:8082/actuator/health | jq .status
-curl -s http://localhost:8080/api/content/sources | jq length
-curl -s http://localhost:8080/api/content/articles | jq .totalElements
-
-echo "=== Registration (validation test) ==="
-# Should return 400 with validation errors
-curl -s -X POST http://localhost:8080/api/users/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"","email":"bad","password":"short"}' | jq .code
-
-# Should return 201
-curl -s -X POST http://localhost:8080/api/users/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser","email":"test@example.com","password":"password123","name":"Test User"}' | jq .username
-
-echo "=== CORS (should return Access-Control-Allow-Origin) ==="
-curl -s -I -X OPTIONS http://localhost:8080/api/content/articles \
-  -H "Origin: http://localhost:3000" \
-  -H "Access-Control-Request-Method: GET" | grep -i access-control
+make smoke-test
 ```
 
-### Run integration tests
+Hits all health endpoints, tests content retrieval, registration (valid + invalid), and CORS headers. Safe to run repeatedly — uses a unique username per run.
+
+### Integration tests
 
 ```bash
-docker compose --env-file infra/.env \
-  -f infra/docker-compose.yaml \
-  -f infra/docker-compose.test.yaml \
-  --profile test run --rm spring-test
+make compose-test
 ```
 
 ### Tear down
 
 ```bash
-docker compose --env-file infra/.env -f infra/docker-compose.yaml down -v
+make compose-down                   # stops containers and removes volumes
 ```
 
 ---
@@ -118,21 +94,40 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml down -v
 ### Deploy
 
 ```bash
-# From project root (or use the Makefile targets)
-cd infra/terraform/azure-vm
-terraform apply
-
-# Generate Ansible inventory from Terraform outputs
-cd ../../..
-./infra/scripts/generate-ansible-inventory.sh
-
-# Configure group_vars
 cp infra/ansible/group_vars/all.yml.example infra/ansible/group_vars/all.yml
 # Edit all.yml with real values
 
-# Run playbook
-cd infra/ansible
-ansible-playbook playbooks/deploy.yml
+make deploy-azure                   # terraform apply → generate inventory → ansible playbook
+```
+
+Or run each step individually:
+
+```bash
+make terraform-apply                # provision the VM
+make ansible-inventory              # generate inventory from Terraform outputs
+make ansible-deploy                 # run the Ansible playbook
+```
+
+### Troubleshooting
+
+**SSH "Host key verification failed"** — the new VM's host key isn't in your `known_hosts` yet:
+
+```bash
+VM_IP=$(cd infra/terraform/azure-vm && terraform output -raw vm_public_ip)
+ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts
+```
+
+**Azure CLI token expired** — re-authenticate before `terraform apply`:
+
+```bash
+az logout
+az login
+```
+
+**Health check times out** — the first deploy builds all Docker images from scratch on the VM, which can take 10-20 minutes on a `Standard_B2s_v2`. The playbook retries for up to 20 minutes. If it still fails, SSH in and check progress:
+
+```bash
+ssh azureuser@$VM_IP "sudo docker compose -f /opt/rolling-restarts/infra/docker-compose.yaml logs --tail=20"
 ```
 
 ### Verify
@@ -144,7 +139,7 @@ VM_IP=$(cd infra/terraform/azure-vm && terraform output -raw vm_public_ip)
 ssh azureuser@$VM_IP "sudo systemctl status rolling-restarts"
 ssh azureuser@$VM_IP "sudo docker ps"
 
-# Test endpoints (replace 3000 with your app port)
+# Test endpoints
 curl -s http://$VM_IP:3000                          # web client
 curl -s http://$VM_IP:8080/actuator/health          # gateway health
 curl -s http://$VM_IP:8080/                         # hello world
@@ -160,8 +155,7 @@ curl -s -X POST http://$VM_IP:8080/api/users/auth/register \
 ### Tear down (to save credits)
 
 ```bash
-cd infra/terraform/azure-vm
-terraform destroy
+make terraform-destroy
 ```
 
 ---
@@ -171,14 +165,10 @@ terraform destroy
 ### Deploy
 
 ```bash
-cd infra/helm
+cp infra/helm/secrets-values.example.yaml infra/helm/secrets-values.yaml
+# Edit with real database credentials (auto-detected by Makefile when present)
 
-# Create secrets values file
-cp secrets-values.example.yaml secrets-values.yaml
-# Edit with real database credentials
-
-# Install or upgrade
-make helm-deploy          # or: helm upgrade --install newsgenai . -f values.yaml -f secrets-values.yaml
+make helm-deploy                    # install or upgrade
 
 # For production (2 replicas, letsencrypt-prod):
 make helm-deploy ENV=prod
@@ -201,17 +191,15 @@ kubectl port-forward svc/api-gateway 8080:8080 &
 kubectl port-forward svc/web-client 3000:3000 &
 
 # Test endpoints via ingress (if configured)
-API_HOST="api.rolling-restarts.stud.k8s.aet.cit.tum.de"
-WEB_HOST="app.rolling-restarts.stud.k8s.aet.cit.tum.de"
+HOST="rolling-restarts.stud.k8s.aet.cit.tum.de"
 
-curl -s https://$API_HOST/actuator/health | jq .status
-curl -s https://$API_HOST/ | jq .message
-curl -s https://$API_HOST/api/content/sources | jq length
-curl -s https://$API_HOST/api/content/articles | jq .totalElements
-curl -s https://$WEB_HOST -o /dev/null -w "%{http_code}"
+curl -s https://$HOST/actuator/health | jq .status
+curl -s https://$HOST/api/content/sources | jq length
+curl -s https://$HOST/api/content/articles | jq .totalElements
+curl -s https://$HOST -o /dev/null -w "%{http_code}"
 
 # Registration test
-curl -s -X POST https://$API_HOST/api/users/auth/register \
+curl -s -X POST https://$HOST/api/users/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"k8stest","email":"k8s@test.com","password":"password123","name":"K8s Test"}'
 
@@ -237,7 +225,7 @@ kubectl describe pod -l app=api-gateway | grep -A3 "Startup:"
 ### Tear down
 
 ```bash
-make helm-destroy         # or: helm uninstall newsgenai
+make helm-destroy
 ```
 
 ---

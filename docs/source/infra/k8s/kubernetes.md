@@ -98,7 +98,7 @@ kubectl get ingress
 - `user-service` listens on port `8081`.
 - `content-service` listens on port `8082`.
 - `gen-ai` listens on port `8000`.
-- The ingress routes `app.rolling-restarts.stud.k8s.aet.cit.tum.de` to the web client, `api.rolling-restarts.stud.k8s.aet.cit.tum.de` to the API gateway, and `ai.rolling-restarts.stud.k8s.aet.cit.tum.de` to the GenAI service.
+- The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator` → API gateway, `/ai/` → GenAI service, `/` → web client.
 - The ingress secret is `rolling-restarts-tls`.
 
 ## Relationship To Helm
