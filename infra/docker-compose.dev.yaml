@@ -18,6 +18,7 @@ services:
   api-gateway:
     build: !reset null
     image: gradle:jdk-25-and-25
+
     working_dir: /workspace
     command: ./gradlew :api-gateway:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
     environment:
@@ -34,14 +35,13 @@ services:
   user-service:
     build: !reset null
     image: gradle:jdk-25-and-25
+
     working_dir: /workspace
     command: ./gradlew :user-service:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
     environment:
       GRADLE_USER_HOME: /gradle-cache/user-service
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/users?authSource=admin
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
     volumes:
       - ../services/spring:/workspace
@@ -50,6 +50,7 @@ services:
   content-service:
     build: !reset null
     image: gradle:jdk-25-and-25
+
     working_dir: /workspace
     command: ./gradlew :content-service:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
     environment:

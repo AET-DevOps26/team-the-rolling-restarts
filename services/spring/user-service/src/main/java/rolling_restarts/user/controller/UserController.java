@@ -1,7 +1,6 @@
 package rolling_restarts.user.controller;
 
 import java.util.List;
-import java.util.UUID;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -44,7 +43,7 @@ public class UserController {
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
 	public ResponseEntity<UserProfileResponse> me(@AuthenticationPrincipal Jwt jwt) {
-		UUID userId = UUID.fromString(jwt.getSubject());
+		String userId = jwt.getSubject();
 		User user = userService.findById(userId);
 		return ResponseEntity.ok(UserProfileResponse.from(user));
 	}
@@ -59,7 +58,7 @@ public class UserController {
 	public ResponseEntity<UserProfileResponse> updateProfile(
 			@AuthenticationPrincipal Jwt jwt,
 			@Valid @RequestBody UpdateProfileRequest request) {
-		UUID userId = UUID.fromString(jwt.getSubject());
+		String userId = jwt.getSubject();
 		User user = userService.updateProfile(userId, request.name(), request.email());
 		return ResponseEntity.ok(UserProfileResponse.from(user));
 	}
@@ -73,7 +72,7 @@ public class UserController {
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
 	public ResponseEntity<UserSettingsResponse> getSettings(@AuthenticationPrincipal Jwt jwt) {
-		UUID userId = UUID.fromString(jwt.getSubject());
+		String userId = jwt.getSubject();
 		UserSettings settings = userService.getSettings(userId);
 		return ResponseEntity.ok(UserSettingsResponse.from(settings));
 	}
@@ -88,9 +87,8 @@ public class UserController {
 	public ResponseEntity<UserSettingsResponse> updateSettings(
 			@AuthenticationPrincipal Jwt jwt,
 			@Valid @RequestBody UserSettingsRequest request) {
-		UUID userId = UUID.fromString(jwt.getSubject());
+		String userId = jwt.getSubject();
 		UserSettings settings = new UserSettings();
-		settings.setUserId(userId);
 		settings.setSelectedTopicIds(request.selectedTopicIds());
 		settings.setEnabledSourceIds(request.enabledSourceIds());
 		settings.setSavedArticleIds(request.savedArticleIds());
@@ -103,7 +101,7 @@ public class UserController {
 	public record UserProfileResponse(String id, String username, String email, String name, String avatarInitials) {
 		static UserProfileResponse from(User user) {
 			return new UserProfileResponse(
-					user.getId().toString(),
+					user.getId(),
 					user.getUsername(),
 					user.getEmail(),
 					user.getName(),

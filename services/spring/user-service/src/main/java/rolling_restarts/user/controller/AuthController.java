@@ -56,7 +56,7 @@ public class AuthController {
 	public record UserResponse(String id, String username, String email, String name, String avatarInitials) {
 		static UserResponse from(User user) {
 			return new UserResponse(
-					user.getId().toString(),
+					user.getId(),
 					user.getUsername(),
 					user.getEmail(),
 					user.getName(),

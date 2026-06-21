@@ -7,8 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.UUID;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -33,7 +31,7 @@ class AuthControllerTest {
 	@Test
 	void register_validInput_returns201() throws Exception {
 		User user = new User();
-		user.setId(UUID.randomUUID());
+		user.setId("507f1f77bcf86cd799439011");
 		user.setUsername("testuser");
 		user.setEmail("test@example.com");
 		user.setName("Test User");

@@ -60,9 +60,7 @@ services:
       - "${USER_SERVICE_PORT:-8081}:8081"
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/users?authSource=admin
     healthcheck:
       test:
         - CMD
@@ -75,7 +73,7 @@ services:
       retries: 10
       start_period: 30s
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
     networks:
       - backend
@@ -157,28 +155,6 @@ services:
     networks:
       - backend
 
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}
-      POSTGRES_USER: ${POSTGRES_USER:-myuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-mydatabase}
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - backend
-
   grafana-lgtm:
     image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
     restart: unless-stopped
@@ -191,7 +167,6 @@ services:
 
 volumes:
   mongodb-data:
-  postgres-data:
 
 networks:
   frontend:

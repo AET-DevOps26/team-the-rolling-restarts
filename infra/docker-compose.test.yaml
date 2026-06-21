@@ -21,9 +21,6 @@ services:
   mongodb:
     ports: !reset []
 
-  postgres:
-    ports: !reset []
-
   grafana-lgtm:
     profiles: !reset ["manual"]
     ports: !reset []
@@ -44,18 +41,17 @@ services:
     profiles: ["test"]
     image: gradle:jdk-25-and-25
     working_dir: /workspace
-    command: ./gradlew test --no-daemon
+    command: >-
+      sh -c "./gradlew test --no-daemon -PexcludeTags=smoke;
+      rc=$$?;
+      find /workspace -maxdepth 3 -name build -type d -exec chown -R ${COMPOSE_UID:-1000}:${COMPOSE_GID:-1000} {} + 2>/dev/null;
+      exit $$rc"
     depends_on:
       mongodb:
-        condition: service_healthy
-      postgres:
         condition: service_healthy
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
     volumes:
       - ../services/spring:/workspace
       - spring-gradle-cache:/home/gradle/.gradle

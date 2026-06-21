@@ -11,7 +11,7 @@ dependencies {
 	implementation project(':generated')
 
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 	implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server'
@@ -20,12 +20,13 @@ dependencies {
 
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
-	runtimeOnly 'org.postgresql:postgresql'
-
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
+	testImplementation 'org.springframework.boot:spring-boot-restclient'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:testcontainers-mongodb'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +20,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import rolling_restarts.user.model.User;
 import rolling_restarts.user.model.UserSettings;
 import rolling_restarts.user.repository.UserRepository;
-import rolling_restarts.user.repository.UserSettingsRepository;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
@@ -30,32 +28,30 @@ class UserServiceTest {
 	private UserRepository userRepository;
 
 	@Mock
-	private UserSettingsRepository settingsRepository;
-
-	@Mock
 	private PasswordEncoder passwordEncoder;
 
 	@InjectMocks
 	private UserService userService;
 
 	@Test
-	void register_createsUserAndSettings() {
+	void register_createsUserWithEmbeddedSettings() {
 		when(userRepository.existsByUsername("alice")).thenReturn(false);
 		when(userRepository.existsByEmail("alice@example.com")).thenReturn(false);
 		when(passwordEncoder.encode("password123")).thenReturn("encoded");
 		when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
 			User u = invocation.getArgument(0);
-			u.setId(UUID.randomUUID());
+			u.setId("507f1f77bcf86cd799439011");
 			return u;
 		});
-		when(settingsRepository.save(any(UserSettings.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		User result = userService.register("alice", "alice@example.com", "password123", "Alice Smith");
 
 		assertEquals("alice", result.getUsername());
 		assertEquals("alice@example.com", result.getEmail());
 		assertEquals("AS", result.getAvatarInitials());
-		verify(settingsRepository).save(any(UserSettings.class));
+		assertNotNull(result.getSettings());
+		assertEquals(List.of(), result.getSettings().getSelectedTopicIds());
+		verify(userRepository).save(any(User.class));
 	}
 
 	@Test
@@ -79,7 +75,7 @@ class UserServiceTest {
 
 	@Test
 	void findById_existingUser_returnsUser() {
-		UUID id = UUID.randomUUID();
+		String id = "507f1f77bcf86cd799439011";
 		User user = new User();
 		user.setId(id);
 		user.setUsername("alice");
@@ -91,7 +87,7 @@ class UserServiceTest {
 
 	@Test
 	void findById_missingUser_throws() {
-		UUID id = UUID.randomUUID();
+		String id = "507f1f77bcf86cd799439011";
 		when(userRepository.findById(id)).thenReturn(Optional.empty());
 
 		assertThrows(IllegalArgumentException.class, () -> userService.findById(id));
@@ -99,7 +95,7 @@ class UserServiceTest {
 
 	@Test
 	void updateProfile_updatesNameAndEmail() {
-		UUID id = UUID.randomUUID();
+		String id = "507f1f77bcf86cd799439011";
 		User user = new User();
 		user.setId(id);
 		user.setUsername("alice");
@@ -115,8 +111,10 @@ class UserServiceTest {
 
 	@Test
 	void getSettings_noExisting_returnsEmpty() {
-		UUID id = UUID.randomUUID();
-		when(settingsRepository.findById(id)).thenReturn(Optional.empty());
+		String id = "507f1f77bcf86cd799439011";
+		User user = new User();
+		user.setId(id);
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
 
 		UserSettings result = userService.getSettings(id);
 		assertNotNull(result);

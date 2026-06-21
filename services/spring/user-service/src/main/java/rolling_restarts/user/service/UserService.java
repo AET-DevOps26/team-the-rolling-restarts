@@ -1,33 +1,26 @@
 package rolling_restarts.user.service;
 
 import java.util.List;
-import java.util.UUID;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import rolling_restarts.user.model.User;
 import rolling_restarts.user.model.UserSettings;
 import rolling_restarts.user.repository.UserRepository;
-import rolling_restarts.user.repository.UserSettingsRepository;
 
 @Service
 public class UserService {
 
 	private final UserRepository userRepository;
-	private final UserSettingsRepository settingsRepository;
 	private final PasswordEncoder passwordEncoder;
 
 	public UserService(UserRepository userRepository,
-			UserSettingsRepository settingsRepository,
 			PasswordEncoder passwordEncoder) {
 		this.userRepository = userRepository;
-		this.settingsRepository = settingsRepository;
 		this.passwordEncoder = passwordEncoder;
 	}
 
-	@Transactional
 	public User register(String username, String email, String password, String name) {
 		if (userRepository.existsByUsername(username)) {
 			throw new IllegalArgumentException("Username already taken");
@@ -48,19 +41,17 @@ public class UserService {
 					: name.substring(0, 2).toUpperCase();
 			user.setAvatarInitials(initials);
 		}
-		user = userRepository.save(user);
 
 		UserSettings settings = new UserSettings();
-		settings.setUserId(user.getId());
 		settings.setSelectedTopicIds(List.of());
 		settings.setEnabledSourceIds(List.of());
 		settings.setSavedArticleIds(List.of());
-		settingsRepository.save(settings);
+		user.setSettings(settings);
 
-		return user;
+		return userRepository.save(user);
 	}
 
-	public User findById(UUID id) {
+	public User findById(String id) {
 		return userRepository.findById(id).orElseThrow(() ->
 				new IllegalArgumentException("User not found"));
 	}
@@ -70,8 +61,7 @@ public class UserService {
 				new IllegalArgumentException("User not found"));
 	}
 
-	@Transactional
-	public User updateProfile(UUID userId, String name, String email) {
+	public User updateProfile(String userId, String name, String email) {
 		User user = findById(userId);
 		if (name != null) {
 			user.setName(name);
@@ -82,27 +72,29 @@ public class UserService {
 		return userRepository.save(user);
 	}
 
-	public UserSettings getSettings(UUID userId) {
-		return settingsRepository.findById(userId).orElseGet(() -> {
-			UserSettings settings = new UserSettings();
-			settings.setUserId(userId);
+	public UserSettings getSettings(String userId) {
+		User user = findById(userId);
+		UserSettings settings = user.getSettings();
+		if (settings == null) {
+			settings = new UserSettings();
 			settings.setSelectedTopicIds(List.of());
 			settings.setEnabledSourceIds(List.of());
 			settings.setSavedArticleIds(List.of());
-			return settings;
-		});
+		}
+		return settings;
 	}
 
-	@Transactional
-	public UserSettings updateSettings(UUID userId, UserSettings updated) {
-		UserSettings settings = settingsRepository.findById(userId).orElseGet(() -> {
-			UserSettings s = new UserSettings();
-			s.setUserId(userId);
-			return s;
-		});
+	public UserSettings updateSettings(String userId, UserSettings updated) {
+		User user = findById(userId);
+		UserSettings settings = user.getSettings();
+		if (settings == null) {
+			settings = new UserSettings();
+		}
 		settings.setSelectedTopicIds(updated.getSelectedTopicIds());
 		settings.setEnabledSourceIds(updated.getEnabledSourceIds());
 		settings.setSavedArticleIds(updated.getSavedArticleIds());
-		return settingsRepository.save(settings);
+		user.setSettings(settings);
+		userRepository.save(user);
+		return settings;
 	}
 }

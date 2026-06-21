@@ -1,41 +1,35 @@
 package rolling_restarts.user.model;
 
 import java.time.Instant;
-import java.util.UUID;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "users")
+@Document(collection = "users")
 public class User {
 
 	@Id
-	@GeneratedValue(strategy = GenerationType.UUID)
-	private UUID id;
+	private String id;
 
-	@Column(nullable = false, unique = true)
+	@Indexed(unique = true)
 	private String username;
 
-	@Column(nullable = false, unique = true)
+	@Indexed(unique = true)
 	private String email;
 
-	@Column(nullable = false)
 	private String passwordHash;
 
 	private String name;
 
 	private String avatarInitials;
 
-	@Column(nullable = false, updatable = false)
 	private Instant createdAt = Instant.now();
 
-	public UUID getId() { return id; }
-	public void setId(UUID id) { this.id = id; }
+	private UserSettings settings;
+
+	public String getId() { return id; }
+	public void setId(String id) { this.id = id; }
 
 	public String getUsername() { return username; }
 	public void setUsername(String username) { this.username = username; }
@@ -54,4 +48,7 @@ public class User {
 
 	public Instant getCreatedAt() { return createdAt; }
 	public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+	public UserSettings getSettings() { return settings; }
+	public void setSettings(UserSettings settings) { this.settings = settings; }
 }
