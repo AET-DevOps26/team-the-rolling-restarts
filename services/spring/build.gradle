@@ -25,6 +25,10 @@ subprojects {
 	}
 
 	tasks.named('test') {
-		useJUnitPlatform()
+		useJUnitPlatform {
+			if (project.hasProperty('excludeTags')) {
+				excludeTags project.property('excludeTags').split(',')
+			}
+		}
 	}
 }
