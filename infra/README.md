@@ -27,19 +27,19 @@ This section describes the multi-service Docker setup for local development and 
 
 ## Services in the stack
 
+- `reverse-proxy` (nginx) on `8080` — single entry point; routes `/api`, `/actuator`, swagger to the gateway and everything else to the web client
 - `web-client` (Next.js) on `3000`
-- `api-gateway` (Spring Boot, Spring Cloud Gateway) on `8080`
-- `user-service` (Spring Boot, OAuth2 Authorization Server, PostgreSQL) on `8081`
+- `api-gateway` (Spring Boot, Spring Cloud Gateway) — internal `8080`
+- `user-service` (Spring Boot, OAuth2 Authorization Server, MongoDB) on `8081`
 - `content-service` (Spring Boot, MongoDB) on `8082`
 - `gen-ai` (FastAPI) on `8000`
-- `mongodb` on `27017`
-- `postgres` on `5432`
+- `mongodb` on `27017` — shared instance, separate databases (`users`, `content`)
 - `grafana-lgtm` (Grafana + OTEL collector) on `3001`, `4317`, `4318`
 
 All services run on one project with two Docker networks:
 
-- `frontend` network: `web-client` <-> `api-gateway`
-- `backend` network: `api-gateway` <-> `user-service` <-> `content-service` <-> `gen-ai` <-> databases <-> observability
+- `frontend` network: `reverse-proxy` <-> `web-client` <-> `api-gateway`
+- `backend` network: `api-gateway` <-> `user-service` <-> `content-service` <-> `gen-ai` <-> `mongodb` <-> observability
 
 ## Compose files
 
@@ -58,8 +58,9 @@ cp infra/.env.example infra/.env
 Main variables:
 
 - `NEXT_PUBLIC_API_BASE_URL` - API base URL for the web client (defaults to `http://localhost:8080`)
+- `APP_PORT` - host port for the nginx reverse proxy / single entry point (defaults to `8080`)
 - `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LOG_LEVEL` - GenAI service settings
-- `MONGO_*` and `POSTGRES_*` - database credentials and ports
+- `MONGO_*` - MongoDB credentials and port
 - `WATCHPACK_POLLING` - optional file-watch compatibility flag for local Linux/VM setups
 
 ## Start all major components (single command)
@@ -77,7 +78,7 @@ This command starts and connects client, gateway, user-service, content-service,
 Run dependencies once, then execute test containers sequentially:
 
 ```bash
-docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml up -d mongodb postgres gen-ai
+docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml up -d mongodb gen-ai
 docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml run --rm spring-test
 docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml run --rm gen-ai-test
 docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docker-compose.test.yaml run --rm web-client-test
@@ -97,9 +98,9 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 
 ## Service dependencies
 
+- `reverse-proxy` depends on healthy `api-gateway` and a started `web-client`
 - `api-gateway` depends on `user-service` and `content-service`
-- `user-service` depends on healthy `postgres`
-- `content-service` depends on healthy `mongodb`
+- `user-service` and `content-service` each depend on healthy `mongodb`
 - `web-client` waits for `api-gateway` to start
 - test containers depend on the same base services to ensure integration-like behavior
 

@@ -33,9 +33,9 @@ cp infra/.env.example infra/.env    # first time only — fill in required value
 make compose-up                     # builds and starts all services (detached)
 ```
 
-### Connect to MongoDB locally
+### Connect MongoDB Compass (local)
 
-Use this URI in MongoDB Compass or `mongosh` (requires the stack to be running):
+The Docker Compose stack exposes MongoDB on port 27017. Use this URI in MongoDB Compass or `mongosh` (requires the stack to be running):
 
 ```text
 mongodb://root:secret@localhost:27017/?authSource=admin
@@ -61,6 +61,7 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 | `GET http://localhost:8080/` | `200 {"message":"Hello, World!"}` | Gateway routing works |
 | `GET http://localhost:8080/swagger-ui.html` | `302` redirect to Swagger UI | OpenAPI docs accessible |
 | `POST http://localhost:8080/api/users/auth/register` | `201` with valid body, `400` with empty body | User registration + validation |
+| `POST http://localhost:8080/api/users/auth/login` | `200 {"token":"..."}` with valid creds, `401` with wrong password | Login + JWT issuance |
 | `GET http://localhost:8080/api/content/sources` | `200 [...]` | Content service accessible through gateway |
 | `GET http://localhost:8080/api/content/topics` | `200 [...]` | Topics endpoint |
 | `GET http://localhost:8080/api/content/articles` | `200 {"content":[...]}` | Paginated articles |
@@ -73,7 +74,7 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 make smoke-test
 ```
 
-Hits all health endpoints, tests content retrieval, registration (valid + invalid), and CORS headers. Safe to run repeatedly — uses a unique username per run.
+Hits health endpoints, content retrieval, registration (valid + invalid), and login (valid credentials + wrong password). Safe to run repeatedly — uses a unique username per run.
 
 ### Integration tests
 
@@ -91,13 +92,68 @@ make compose-down                   # stops containers and removes volumes
 
 ## 3. Azure VM Deployment
 
+The VM deploys pre-built container images — no compilation happens on the VM.
+
+### GHCR setup
+
+Images are stored in GitHub Container Registry (GHCR). To allow the VM to pull them without credentials, make the packages public:
+
+1. Go to **github.com/orgs/\<org\>/packages** (or **github.com/\<user\>?tab=packages** for personal repos).
+2. Click each package → **Package settings** → **Danger Zone** → **Change visibility** → **Public**.
+
+Once public, `docker pull` works without authentication and no `registry_token` is needed in the Ansible vars.
+
+For **pushing** images (CI or manual), you need a GitHub token. The safest way to manage it locally is via the GitHub CLI (`gh`), which stores credentials securely in `~/.config/gh/` with restricted file permissions — no plaintext tokens in dotfiles.
+
+1. Install the GitHub CLI if you don't have it: <https://cli.github.com/>
+2. Authenticate with the required `write:packages` scope (the default login does **not** include it):
+
+   ```bash
+   gh auth login --scopes write:packages,read:packages
+   ```
+
+   If you already have `gh` authenticated but get `permission_denied: The token provided does not match expected scopes`, re-authenticate:
+
+   ```bash
+   gh auth logout
+   gh auth login --scopes write:packages,read:packages
+   ```
+
+3. Log in to GHCR (stores credentials in `~/.docker/config.json` — only needed once):
+
+   ```bash
+   gh auth token | docker login ghcr.io -u <github-username> --password-stdin
+   ```
+
+CI handles this automatically via the built-in `GITHUB_TOKEN` secret — no manual token needed for CI pushes.
+
+### Push images
+
+Images are built and pushed automatically by CI on every push (`build-and-package` workflow in `.github/workflows/upload_images.yml`). Each push produces images tagged with the short commit SHA and a channel tag (`main`, `dev`, or `wip`). For most deployments, you can skip the manual steps below and just use the SHA or channel tag that CI already pushed.
+
+**Manual push (needed for local dev, testing feature branches before merging, or if CI is unavailable):**
+
+```bash
+# Push to the org registry (requires write:packages permission)
+make push-images IMAGE_TAG=<tag-name>
+
+# Or push to your personal registry (no extra permissions needed)
+make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling-restarts
+```
+
+`IMAGE_TAG` defaults to the current commit SHA if not specified.
+
 ### Deploy
 
 ```bash
 cp infra/ansible/group_vars/all.yml.example infra/ansible/group_vars/all.yml
 # Edit all.yml with real values
 
-make deploy-azure                   # terraform apply → generate inventory → ansible playbook
+# Deploy with the same tag you pushed
+make deploy-azure IMAGE_TAG=<tag-name>
+
+# Or with a personal registry
+make deploy-azure IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling-restarts
 ```
 
 Or run each step individually:
@@ -105,16 +161,17 @@ Or run each step individually:
 ```bash
 make terraform-apply                # provision the VM
 make ansible-inventory              # generate inventory from Terraform outputs
-make ansible-deploy                 # run the Ansible playbook
+make ansible-deploy IMAGE_TAG=<tag-name>  # deploy images to the VM
 ```
 
 ### Troubleshooting
 
-**SSH "Host key verification failed"** — the new VM's host key isn't in your `known_hosts` yet:
+**SSH "Host key verification failed"** — `make ansible-inventory` automatically adds the VM's host key to `~/.ssh/known_hosts`, so this should not happen in the normal `make deploy-azure` flow. If it does (e.g. the VM was re-provisioned with the same IP), clear the stale key and re-run:
 
 ```bash
 VM_IP=$(cd infra/terraform/azure-vm && terraform output -raw vm_public_ip)
-ssh-keyscan -H $VM_IP >> ~/.ssh/known_hosts
+ssh-keygen -R $VM_IP
+make ansible-inventory
 ```
 
 **Azure CLI token expired** — re-authenticate before `terraform apply`:
@@ -124,13 +181,27 @@ az logout
 az login
 ```
 
-**Health check times out** — the first deploy builds all Docker images from scratch on the VM, which can take 10-20 minutes on a `Standard_B2s_v2`. The playbook retries for up to 20 minutes. If it still fails, SSH in and check progress:
+**Health check times out** — the VM pulls pre-built images, so startup should be fast. If the health check still fails, SSH in and check:
 
 ```bash
-ssh azureuser@$VM_IP "sudo docker compose -f /opt/rolling-restarts/infra/docker-compose.yaml logs --tail=20"
+ssh azureuser@$VM_IP "sudo docker compose -f /opt/rolling-restarts/docker-compose.yaml -f /opt/rolling-restarts/docker-compose.prod.yaml logs --tail=20"
 ```
 
-### Verify
+**Images not found** — make sure you ran `make push-images` with the same `IMAGE_TAG` and `REGISTRY` before deploying. If using a private registry, set `registry_token` in `group_vars/all.yml`.
+
+### Verify VM deployment
+
+#### VM smoke test
+
+```bash
+make smoke-test-vm
+```
+
+Runs the same checks as `make smoke-test` (health, routing, registration, login) against the VM. The VM IP is read automatically from Terraform output.
+
+#### VM manual checks
+
+For deeper debugging or one-off verification:
 
 ```bash
 VM_IP=$(cd infra/terraform/azure-vm && terraform output -raw vm_public_ip)
@@ -146,11 +217,35 @@ curl -s http://$VM_IP:8080/                         # hello world
 curl -s http://$VM_IP:8080/api/content/sources      # content routing
 curl -s http://$VM_IP:8080/api/content/articles     # articles
 
-# Registration test
+# Registration + login
 curl -s -X POST http://$VM_IP:8080/api/users/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"vmtest","email":"vm@test.com","password":"password123","name":"VM Test"}'
+
+curl -s -X POST http://$VM_IP:8080/api/users/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"vmtest","password":"password123"}'
 ```
+
+#### Connect MongoDB Compass (VM)
+
+MongoDB's port (27017) is not exposed to the internet — connect via SSH tunnel instead. MongoDB Compass has built-in support for this:
+
+1. Open Compass → **New Connection** → **Advanced Connection Options** → **Proxy/SSH** tab.
+2. Select **SSH with Identity File** and fill in:
+   - **SSH Hostname**: `<VM_IP>`
+   - **SSH Port**: `22`
+   - **SSH Username**: `azureuser`
+   - **SSH Identity File**: `~/.ssh/id_ed25519`
+3. Use this connection string:
+
+   ```text
+   mongodb://root:<MONGO_ROOT_PASSWORD>@localhost:27017/?authSource=admin
+   ```
+
+   Replace `<MONGO_ROOT_PASSWORD>` with the value from `infra/ansible/group_vars/all.yml`.
+
+The two databases are `users` (user-service) and `content` (content-service).
 
 ### Tear down (to save credits)
 
@@ -174,7 +269,17 @@ make helm-deploy                    # install or upgrade
 make helm-deploy ENV=prod
 ```
 
-### Verify
+### Verify K8s deployment
+
+#### K8s smoke test
+
+```bash
+make smoke-test-k8s
+```
+
+Runs the same checks as `make smoke-test` (health, routing, registration, login) against the K8s ingress. Override the host with `make smoke-test-k8s K8S_HOST=your-host.example.com`.
+
+#### K8s manual checks
 
 ```bash
 # Check pods are running
@@ -190,24 +295,28 @@ kubectl get svc
 kubectl port-forward svc/api-gateway 8080:8080 &
 kubectl port-forward svc/web-client 3000:3000 &
 
-# Test endpoints via ingress (if configured)
-HOST="rolling-restarts.stud.k8s.aet.cit.tum.de"
-
-curl -s https://$HOST/actuator/health | jq .status
-curl -s https://$HOST/api/content/sources | jq length
-curl -s https://$HOST/api/content/articles | jq .totalElements
-curl -s https://$HOST -o /dev/null -w "%{http_code}"
-
-# Registration test
-curl -s -X POST https://$HOST/api/users/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"k8stest","email":"k8s@test.com","password":"password123","name":"K8s Test"}'
-
 # Check logs if something fails
 kubectl logs -l app=api-gateway --tail=50
 kubectl logs -l app=user-service --tail=50
 kubectl logs -l app=content-service --tail=50
 ```
+
+#### Connect MongoDB Compass (K8s)
+
+MongoDB is only accessible inside the cluster. Use `kubectl port-forward` to tunnel the connection to your machine:
+
+```bash
+kubectl port-forward svc/mongodb 27017:27017
+```
+
+Then connect Compass with:
+
+```text
+mongodb://root:<MONGO_ROOT_PASSWORD>@localhost:27017/?authSource=admin
+```
+
+Replace `<MONGO_ROOT_PASSWORD>` with the value from `infra/helm/secrets-values.yaml`. Keep the port-forward running while using Compass.
+The services use separate databases: `users` (user-service) and `content` (content-service).
 
 ### Verify Helm-specific resources
 
@@ -247,6 +356,7 @@ All endpoints accessible through the API gateway (port 8080 locally, or via ingr
 | GET | `/api/content/articles` | Paginated articles |
 | GET | `/api/content/articles/{id}` | Single article |
 | POST | `/api/users/auth/register` | Register new user |
+| POST | `/api/users/auth/login` | Authenticate and obtain JWT |
 
 ### Protected Endpoints (require JWT Bearer token)
 

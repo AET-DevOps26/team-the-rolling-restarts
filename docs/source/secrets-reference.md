@@ -8,7 +8,7 @@ Every secret and configurable variable across all deployment targets, with examp
 
 ## Docker Compose (Local Dev)
 
-**File:** `infra/.env` (copy from `infra/.env.example`)
+**File:** `infra/.env` (copy from `infra/.env.example`) — the Makefile reads from it automatically for all commands.
 
 ### Secrets
 
@@ -26,9 +26,11 @@ Safe to leave at defaults for local dev. Override as needed.
 
 | Variable | Dev default | Description |
 | -------- | ----------- | ----------- |
+| `REGISTRY` | `ghcr.io/aet-devops26/team-the-rolling-restarts` | Container image registry. Use `ghcr.io/<github-username>/rolling-restarts` for personal dev |
+| `IMAGE_TAG` | `latest` | Image tag. Makefile defaults to current commit SHA |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | API base URL baked into web client at build time |
 | `WEB_CLIENT_PORT` | `3000` | Host port for web client |
-| `SPRING_API_PORT` | `8080` | Host port for API gateway |
+| `APP_PORT` | `8080` | Host port for the nginx reverse proxy (single entry point) |
 | `GEN_AI_PORT` | `8000` | Host port for GenAI service |
 | `LLM_PROVIDER` | `openai` | LLM provider (`openai`, etc.) |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name |
@@ -46,7 +48,7 @@ Safe to leave at defaults for local dev. Override as needed.
 # Works out of the box for local development
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 WEB_CLIENT_PORT=3000
-SPRING_API_PORT=8080
+APP_PORT=8080
 GEN_AI_PORT=8000
 
 LLM_PROVIDER=openai
@@ -78,26 +80,24 @@ All the same variables as Docker Compose, passed via `app_env`. The Ansible play
 | Variable | Example | Description |
 | -------- | ------- | ----------- |
 | `project_root` | `/opt/rolling-restarts` | App install directory on the VM |
-| `project_repo_url` | `https://github.com/org/repo.git` | Git repo to clone |
-| `project_repo_version` | `main` | Branch/tag to deploy |
-| `compose_file` | `infra/docker-compose.yaml` | Compose file path relative to repo root |
-| `compose_env_path` | `infra/.env` | Env file path relative to repo root |
+| `registry` | `ghcr.io/aet-devops26/team-the-rolling-restarts` | Container image registry. Use `ghcr.io/<github-username>/rolling-restarts` for personal dev |
+| `image_tag` | `latest` | Image tag (overridden by `make ansible-deploy IMAGE_TAG=...`) |
+| `registry_user` | `""` | GHCR username (for private registries) |
+| `registry_token` | `""` | GHCR PAT with `read:packages` (for private registries) |
 
 ### Example `infra/ansible/group_vars/all.yml` (prod)
 
 ```yaml
 ---
 project_root: /opt/rolling-restarts
-project_repo_url: https://github.com/your-org/team-the-rolling-restarts.git
-project_repo_version: main
 
-compose_file: infra/docker-compose.yaml
-compose_env_path: infra/.env
+registry: ghcr.io/aet-devops26/team-the-rolling-restarts
+image_tag: latest
 
 app_env:
   NEXT_PUBLIC_API_BASE_URL: "https://your-domain.com"
   WEB_CLIENT_PORT: "3000"
-  SPRING_API_PORT: "8080"
+  APP_PORT: "8080"
   GEN_AI_PORT: "8000"
 
   LLM_PROVIDER: "openai"
@@ -189,9 +189,11 @@ The Spring services use profiles to switch between dev and production configurat
 | Service | Required env vars |
 | ------- | ----------------- |
 | **api-gateway** | `CORS_ALLOWED_ORIGINS`, `JWT_ISSUER_URI`, `USER_SERVICE_URL`, `CONTENT_SERVICE_URL` |
-| **user-service** | `SPRING_MONGODB_URI` |
+| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER` |
 | **content-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER_URI` |
 | **gen-ai** | `LLM_API_KEY` (optional — service starts without it but LLM calls fail) |
+
+> **JWT issuer must match across services.** user-service stamps the `iss` claim on tokens from `JWT_ISSUER` and serves OIDC discovery at that URL. api-gateway and content-service validate tokens via `JWT_ISSUER_URI`, which must resolve to the same user-service URL (default `http://user-service:8081` in Compose/Helm). A mismatch causes resource servers to reject every token with 401.
 
 ---
 

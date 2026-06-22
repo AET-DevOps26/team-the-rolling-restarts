@@ -7,7 +7,7 @@ Multi-module Gradle project containing three Spring Boot 4.x microservices.
 | Module | Port | Description | Database |
 |--------|------|-------------|----------|
 | `api-gateway` | 8080 | Spring Cloud Gateway MVC — routes, CORS, JWT validation | — |
-| `user-service` | 8081 | OAuth2 Authorization Server, user profiles, settings | PostgreSQL |
+| `user-service` | 8081 | OAuth2 Authorization Server, user profiles, settings | MongoDB |
 | `content-service` | 8082 | RSS feed management, articles, topics | MongoDB |
 | `generated` | — | Shared OpenAPI-generated models (library only) | — |
 
@@ -22,7 +22,7 @@ Multi-module Gradle project containing three Spring Boot 4.x microservices.
 
 1. Start databases (from project root):
    ```bash
-   docker compose -f infra/docker-compose.yaml up postgres mongodb -d
+   docker compose -f infra/docker-compose.yaml up mongodb -d
    ```
 
 2. Run each service with the `dev` profile:
@@ -48,11 +48,9 @@ Base `application.properties` contains no default credentials — they must come
 | Variable | Service | Description |
 |----------|---------|-------------|
 | `SPRING_PROFILES_ACTIVE` | all | Active Spring profile (`dev`, `production`) |
-| `SPRING_DATASOURCE_URL` | user-service | PostgreSQL JDBC URL |
-| `SPRING_DATASOURCE_USERNAME` | user-service | PostgreSQL username |
-| `SPRING_DATASOURCE_PASSWORD` | user-service | PostgreSQL password |
-| `SPRING_MONGODB_URI` | content-service | MongoDB connection URI |
-| `JWT_ISSUER_URI` | api-gateway, content-service | OAuth2 token issuer (user-service URL) |
+| `SPRING_MONGODB_URI` | user-service, content-service | MongoDB connection URI (each service uses a separate database) |
+| `JWT_ISSUER` | user-service | Issuer (`iss`) claim stamped on minted JWTs and advertised via OIDC discovery; must equal the resource servers' `JWT_ISSUER_URI` |
+| `JWT_ISSUER_URI` | api-gateway, content-service | OAuth2 token issuer used to validate JWTs (user-service URL) |
 | `USER_SERVICE_URL` | api-gateway | Upstream user-service URL |
 | `CONTENT_SERVICE_URL` | api-gateway | Upstream content-service URL |
 | `CORS_ALLOWED_ORIGINS` | api-gateway | Comma-separated allowed CORS origins |
@@ -75,4 +73,4 @@ Or use the helper script: `./api/scripts/gen-all.sh`
 ./gradlew :user-service:test         # single module
 ```
 
-Tests use `@WebMvcTest` with `@Import(SecurityConfig.class)` for controller-level tests and `@ExtendWith(MockitoExtension.class)` for service-layer unit tests.
+Tests use `@WebMvcTest` for controller-level tests, `@ExtendWith(MockitoExtension.class)` for service-layer unit tests, and `@SpringBootTest` with Testcontainers for integration smoke tests (health, registration, login).

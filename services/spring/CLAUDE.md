@@ -41,7 +41,7 @@ The gateway uses `StripPrefix` filters:
 ### SecurityConfig public endpoints
 
 The gateway SecurityConfig permits these public paths (no JWT required):
-- `/api/users/auth/**` — registration
+- `/api/users/auth/**` — registration and login
 - GET `/api/content/sources`, `/api/content/topics`, `/api/content/articles` — public reads
 - Swagger UI, actuator health, root endpoints
 

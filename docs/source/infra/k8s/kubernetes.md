@@ -21,9 +21,10 @@ kubectl delete -R -f .
 
 ## What is here
 
-- [deployments/](deployments) contains one deployment manifest per workload.
-- [services/](services) contains one service manifest per workload.
-- [ingress.yml](ingress.yml) defines the external routing rules for the three hosts.
+- [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim).
+- [services/](services) contains one service manifest per workload, including `mongodb-service.yml`.
+- [secrets.yml](secrets.yml) defines the `mongodb-credentials` and `mongodb-user-credentials` Secrets consumed by MongoDB and the Spring services. Ships with dev defaults — change them (or swap in a real secret store) before any non-local deployment.
+- [ingress.yml](ingress.yml) defines the external routing rules.
 
 ## Stack Setup Notes
 
@@ -98,6 +99,7 @@ kubectl get ingress
 - `user-service` listens on port `8081`.
 - `content-service` listens on port `8082`.
 - `gen-ai` listens on port `8000`.
+- `mongodb` listens on port `27017` (ClusterIP only — not exposed via ingress). user-service uses database `users`, content-service uses database `content`, both via the `*-credentials` Secrets.
 - The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator` → API gateway, `/ai/` → GenAI service, `/` → web client.
 - The ingress secret is `rolling-restarts-tls`.
 
