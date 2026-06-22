@@ -17,20 +17,26 @@ It is intentionally separate from:
 push to main / manual dispatch
         │
         ▼
-┌──────────────────────┐     ┌───────────────────────────────┐
-│  build-and-push      │     │  deploy                        │
-│  • gen OpenAPI code  │     │  • azure login                 │
-│  • azure login       │ ──▶ │  • mint short-lived ACR token  │
-│  • az acr login      │     │  • render .env from secrets    │
-│  • build & push:     │     │  • scp compose + .env to VM    │
-│    web-client        │     │  • ssh: docker login + compose │
-│    spring-api        │     │    pull + up -d                │
-│    gen-ai            │     │  • HTTP health check           │
-└──────────────────────┘     └───────────────────────────────┘
+┌──────────────────────┐     ┌────────────────────────────────────┐
+│  build-and-push      │     │  deploy                             │
+│  • gen OpenAPI code  │     │  • azure login                      │
+│  • azure login       │ ──▶ │  • mint short-lived ACR token       │
+│  • az acr login      │     │  • render .env from secrets         │
+│  • build & push:     │     │  • az vm run-command (no SSH):      │
+│    web-client        │     │    write compose+.env, docker login │
+│    spring-api        │     │    compose pull + up -d             │
+│    gen-ai            │     │  • HTTP health check (in-VM curl)    │
+└──────────────────────┘     └────────────────────────────────────┘
 ```
 
 Images are tagged with both the short commit SHA (immutable, what gets
 deployed) and `latest` (moving pointer).
+
+The deploy job never opens an SSH connection to the VM. It drives the VM through
+the **Azure control plane** with `az vm run-command`: the compose files and the
+rendered `.env` are base64-embedded into a script that the VM's guest agent runs
+as root. This means **port 22 can stay locked to your own IP** — GitHub-hosted
+runner IPs never need to be allowed.
 
 On the VM the stack is started from images instead of source by layering
 `infra/docker-compose.azure.yaml` over `infra/docker-compose.yaml`. The override
@@ -62,25 +68,33 @@ removes the `build:` blocks and points the app services at
    terraform output acr_name           # -> ACR_NAME variable
    ```
 
-2. **The VM configured** via `infra/ansible`, with Docker and the Docker Compose
-   plugin installed (the Ansible `docker` role handles this).
-3. **A service principal** with `AcrPush` (build job) + pull (token used on the
-   VM) on the registry:
+2. **Docker on the VM.** The Ansible `docker` role installs Docker + the Compose
+   plugin; alternatively `curl -fsSL https://get.docker.com | sudo sh`. The
+   deploy `DEPLOY_DIR` (e.g. `/opt/rolling-restarts`) must be writable by the
+   process that runs the deploy (the run-command agent runs as root, so this is
+   automatic).
+3. **A service principal** with two scoped roles:
+   - `AcrPush` on the registry — lets the build job push and lets the deploy job
+     mint a pull token (`AcrPush` includes pull).
+   - `Virtual Machine Contributor` on the resource group — lets the deploy job
+     run `az vm run-command` against the VM.
 
    ```bash
-   az ad sp create-for-rbac \
-     --name "rolling-restarts-deploy" \
-     --role AcrPush \
-     --scopes $(az acr show --name <ACR_NAME> --query id -o tsv) \
-     --sdk-auth
+   ACR_ID=$(az acr show --name <ACR_NAME> --query id -o tsv)
+   RG_ID=$(az group show --name <RESOURCE_GROUP> --query id -o tsv)
+   az ad sp create-for-rbac --name "rolling-restarts-deploy" \
+     --role AcrPush --scopes "$ACR_ID"
+   az role assignment create --assignee <appId> \
+     --role "Virtual Machine Contributor" --scope "$RG_ID"
    ```
 
-   The JSON printed by `--sdk-auth` is the value of the `AZURE_CREDENTIALS`
-   secret. Alternatively, set `deploy_principal_id` in `terraform.tfvars` to the
-   service principal's object ID and Terraform will create the role assignment
-   for you.
-4. **An SSH key pair** whose public key is an authorized key for the VM admin
-   user. The private key becomes `AZURE_VM_SSH_PRIVATE_KEY`.
+   Build the `AZURE_CREDENTIALS` secret from the output as JSON:
+   `{"clientId","clientSecret","subscriptionId","tenantId"}`. (You can set
+   `deploy_principal_id` in `terraform.tfvars` to have Terraform create the
+   `AcrPush` assignment for you.)
+
+No SSH key is required for CI — the deploy job uses the Azure control plane, not
+SSH.
 
 ## Required GitHub secrets
 
@@ -89,15 +103,15 @@ They are sensitive and are masked in logs.
 
 | Secret | Description |
 | --- | --- |
-| `AZURE_CREDENTIALS` | Service-principal JSON (`az ad sp create-for-rbac --sdk-auth`) used by `azure/login`. |
-| `AZURE_VM_HOST` | Public IP or DNS name of the Azure VM (`terraform output vm_public_ip`). |
-| `AZURE_VM_USER` | VM admin username (`terraform output admin_username`). |
-| `AZURE_VM_SSH_PRIVATE_KEY` | Private SSH key (PEM) authorized on the VM. |
+| `AZURE_CREDENTIALS` | Service-principal JSON (`clientId`/`clientSecret`/`subscriptionId`/`tenantId`) used by `azure/login`. |
 | `LLM_API_KEY` | API key for the GenAI provider. |
 | `MONGO_ROOT_USERNAME` | MongoDB root username. |
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
 | `POSTGRES_USER` | PostgreSQL username. |
 | `POSTGRES_PASSWORD` | PostgreSQL password. |
+
+The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
+Azure control plane, so no host/user/SSH-key secrets are needed.
 
 ## Required GitHub variables
 
@@ -109,7 +123,7 @@ They are non-sensitive configuration.
 | `ACR_NAME` | `myregistry` | ACR resource name (`terraform output acr_name`). |
 | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). |
 | `DEPLOY_DIR` | `/opt/rolling-restarts` | Directory on the VM the stack is deployed to. |
-| `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group deleted by the `Destroy Azure resources` workflow. |
+| `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group of the VM (deploy looks up the VM here; also used by the teardown workflow). |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://<vm-host>:8080` | Public API URL baked into the web-client at build time. |
 | `LLM_PROVIDER` | `openai` | GenAI provider. |
 | `LLM_MODEL` | `gpt-4o-mini` | GenAI model. |
@@ -118,16 +132,19 @@ They are non-sensitive configuration.
 
 ## Security notes
 
+- **No inbound SSH from CI.** Deployment runs over the Azure control plane
+  (`az vm run-command`), so the VM's NSG can keep SSH (port 22) restricted to
+  your own IP — GitHub-hosted runner IP ranges never need to be allowed.
 - **No long-lived registry password is stored.** The build job authenticates to
   ACR through the service principal; the deploy job mints a short-lived ACR
-  access token (`az acr login --expose-token`) and pipes it to `docker login`
-  on the VM via stdin. The token is masked in logs and the VM logs out of the
-  registry at the end of the run.
+  access token (`az acr login --expose-token`) that the in-VM script pipes to
+  `docker login` via stdin, then logs out at the end. The token is masked in
+  logs.
 - **Secrets never enter the repository.** The runtime `.env` is generated on the
-  runner from GitHub secrets/variables with `umask 077`, copied to the VM, and
-  is never committed.
-- **Host key verification** uses `ssh-keyscan` on each run (trust-on-first-use).
-  For stronger guarantees, pin the VM host key in a known-hosts secret instead.
+  runner from GitHub secrets/variables with `umask 077`, base64-embedded into
+  the run-command script (sent over TLS, not echoed), and is never committed.
+- **Least-privilege service principal.** Scoped to `AcrPush` on the registry and
+  `Virtual Machine Contributor` on the single resource group — nothing wider.
 - **Environment protection:** the `deploy` job runs in the `production`
   GitHub Environment, so you can add required reviewers or branch restrictions
   in the repository settings.
@@ -181,21 +198,33 @@ resource group for this workflow to succeed.
 > keeps the spend to a few minutes of B-series VM time plus a tiny amount of
 > Basic ACR storage.
 
-## Verifying / troubleshooting on the VM
+## Verifying / troubleshooting
+
+Inspect the stack without SSH using the same control-plane mechanism:
 
 ```bash
-ssh <AZURE_VM_USER>@<AZURE_VM_HOST>
-cd /opt/rolling-restarts            # or your DEPLOY_DIR
-docker compose --env-file .env \
-  -f docker-compose.yaml -f docker-compose.azure.yaml ps
-docker compose --env-file .env \
-  -f docker-compose.yaml -f docker-compose.azure.yaml logs -f web-client
+VM=$(az vm list -g <RESOURCE_GROUP> --query "[0].name" -o tsv)
+az vm run-command invoke -g <RESOURCE_GROUP> -n "$VM" \
+  --command-id RunShellScript \
+  --scripts 'cd /opt/rolling-restarts && docker compose --env-file .env -f docker-compose.yaml -f docker-compose.azure.yaml ps'
 ```
 
-- **Image pull denied:** confirm the service principal has `AcrPull` and the
-  `ACR_LOGIN_SERVER` / `ACR_NAME` values match the registry.
-- **SSH failures:** confirm `AZURE_VM_SSH_PRIVATE_KEY` matches an authorized key
-  and that the VM's network security group allows SSH from GitHub-hosted runners
-  (or use a self-hosted runner inside the VNet).
-- **Health check timeout:** inspect `web-client` and `spring-api` logs; the API
-  depends on healthy MongoDB/PostgreSQL/gen-ai containers before it starts.
+Or, if your IP is allowed by the NSG, SSH in directly:
+
+```bash
+ssh <admin_user>@<vm_public_ip>
+cd /opt/rolling-restarts
+docker compose --env-file .env -f docker-compose.yaml -f docker-compose.azure.yaml ps
+cat /var/log/rr-deploy.log         # pull/up output from the last deploy
+```
+
+- **`AuthorizationFailed` on run-command:** the service principal is missing
+  `Virtual Machine Contributor` on the resource group.
+- **Image pull denied:** confirm the SP has `AcrPush` on the registry and the
+  `ACR_LOGIN_SERVER` / `ACR_NAME` values match.
+- **Deploy reports `HEALTH_FAILED`:** check `/var/log/rr-deploy.log` and the
+  `web-client`/`spring-api` logs; the API waits on healthy
+  MongoDB/PostgreSQL/gen-ai containers before it starts.
+- **Note:** the in-browser app calls `NEXT_PUBLIC_API_BASE_URL` (port 8080). The
+  default NSG only opens 3000; add `8080` to `application_ports` and re-apply if
+  you need the UI's API calls to work from outside the VM.

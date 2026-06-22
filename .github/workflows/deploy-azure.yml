@@ -176,70 +176,75 @@ jobs:
           POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
           EOF
 
-      - name: Configure SSH
+      # The stack is deployed through the Azure control plane (az vm run-command)
+      # instead of SSH, so the VM needs no inbound SSH access from the runner.
+      # Compose files + the rendered .env are base64-embedded into a script that
+      # the VM agent executes as root. base64 values contain only [A-Za-z0-9+/=]
+      # and the ACR token is a JWT, so they embed safely into shell assignments.
+      - name: Build remote deployment script
         env:
-          SSH_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
-          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Copy deployment files to VM
-        env:
-          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
-          VM_USER: ${{ secrets.AZURE_VM_USER }}
-        run: |
-          REMOTE="${VM_USER}@${VM_HOST}"
-          ssh -i ~/.ssh/deploy_key "$REMOTE" "mkdir -p '${DEPLOY_DIR}'"
-          scp -i ~/.ssh/deploy_key \
-            infra/docker-compose.yaml \
-            infra/docker-compose.azure.yaml \
-            "$REMOTE:${DEPLOY_DIR}/"
-          scp -i ~/.ssh/deploy_key deploy.env "$REMOTE:${DEPLOY_DIR}/.env"
-
-      - name: Deploy stack on VM
-        env:
-          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
-          VM_USER: ${{ secrets.AZURE_VM_USER }}
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
           ACR_TOKEN: ${{ steps.acr.outputs.token }}
         run: |
-          REMOTE="${VM_USER}@${VM_HOST}"
-          ssh -i ~/.ssh/deploy_key "$REMOTE" \
-            ACR_LOGIN_SERVER="$ACR_LOGIN_SERVER" \
-            ACR_TOKEN="$ACR_TOKEN" \
-            DEPLOY_DIR="$DEPLOY_DIR" \
-            'bash -s' <<'REMOTE_SCRIPT'
+          umask 077
+          COMPOSE_B64="$(base64 -w0 infra/docker-compose.yaml)"
+          OVERRIDE_B64="$(base64 -w0 infra/docker-compose.azure.yaml)"
+          ENV_B64="$(base64 -w0 deploy.env)"
+
+          # Header: inject values (expanded) as quoted shell assignments.
+          cat > remote-deploy.sh <<EOF
+          #!/bin/bash
           set -euo pipefail
-          echo "$ACR_TOKEN" | docker login "$ACR_LOGIN_SERVER" \
+          DEPLOY_DIR="${DEPLOY_DIR}"
+          ACR_LOGIN_SERVER="${ACR_LOGIN_SERVER}"
+          ACR_TOKEN="${ACR_TOKEN}"
+          COMPOSE_B64="${COMPOSE_B64}"
+          OVERRIDE_B64="${OVERRIDE_B64}"
+          ENV_B64="${ENV_B64}"
+          EOF
+
+          # Body: static logic (quoted heredoc, nothing expanded here).
+          cat >> remote-deploy.sh <<'EOF'
+          mkdir -p "$DEPLOY_DIR"
+          printf '%s' "$COMPOSE_B64"  | base64 -d > "$DEPLOY_DIR/docker-compose.yaml"
+          printf '%s' "$OVERRIDE_B64" | base64 -d > "$DEPLOY_DIR/docker-compose.azure.yaml"
+          umask 077
+          printf '%s' "$ENV_B64" | base64 -d > "$DEPLOY_DIR/.env"
+          printf '%s' "$ACR_TOKEN" | docker login "$ACR_LOGIN_SERVER" \
             --username 00000000-0000-0000-0000-000000000000 --password-stdin
           cd "$DEPLOY_DIR"
-          docker compose --env-file .env \
-            -f docker-compose.yaml -f docker-compose.azure.yaml pull
-          docker compose --env-file .env \
-            -f docker-compose.yaml -f docker-compose.azure.yaml up -d --remove-orphans
-          docker logout "$ACR_LOGIN_SERVER"
-          docker image prune -f
-          REMOTE_SCRIPT
-
-      - name: Health check
-        env:
-          VM_HOST: ${{ secrets.AZURE_VM_HOST }}
-          VM_USER: ${{ secrets.AZURE_VM_USER }}
-        run: |
-          REMOTE="${VM_USER}@${VM_HOST}"
-          ssh -i ~/.ssh/deploy_key "$REMOTE" 'bash -s' <<'REMOTE_SCRIPT'
-          set -euo pipefail
+          LOG=/var/log/rr-deploy.log
+          compose() { docker compose --env-file .env -f docker-compose.yaml -f docker-compose.azure.yaml "$@"; }
+          compose pull > "$LOG" 2>&1 || { echo "PULL_FAILED"; tail -n 40 "$LOG"; exit 1; }
+          compose up -d --remove-orphans >> "$LOG" 2>&1 || { echo "UP_FAILED"; tail -n 40 "$LOG"; exit 1; }
+          docker logout "$ACR_LOGIN_SERVER" >/dev/null 2>&1 || true
+          docker image prune -f >/dev/null 2>&1 || true
           for i in $(seq 1 12); do
-            if curl -fsS "http://127.0.0.1:3000/" >/dev/null; then
-              echo "web-client is healthy"
+            if curl -fsS "http://127.0.0.1:3000/" >/dev/null 2>&1; then
+              echo "DEPLOY_OK web-client healthy"
               exit 0
             fi
-            echo "Waiting for web-client to become healthy ($i/12)..."
+            echo "waiting for web-client ($i/12)..."
             sleep 10
           done
-          echo "Health check failed: web-client did not respond in time" >&2
-          exit 1
-          REMOTE_SCRIPT
+          echo "HEALTH_FAILED"; compose ps; exit 1
+          EOF
+
+      - name: Deploy via az vm run-command
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          VM_NAME="$(az vm list -g "$RG" --query "[0].name" -o tsv)"
+          echo "Deploying to VM: $VM_NAME (resource group: $RG)"
+          az vm run-command invoke \
+            --resource-group "$RG" \
+            --name "$VM_NAME" \
+            --command-id RunShellScript \
+            --scripts "@remote-deploy.sh" \
+            --query "value[0].message" -o tsv | tee run-output.txt
+          if ! grep -q "DEPLOY_OK" run-output.txt; then
+            echo "::error::Deployment did not report success (no DEPLOY_OK marker)"
+            exit 1
+          fi
+          echo "Deployment reported success."
