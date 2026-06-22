@@ -1,3 +1,13 @@
+output "acr_login_server" {
+  description = "Login server (host) of the Azure Container Registry"
+  value       = azurerm_container_registry.main.login_server
+}
+
+output "acr_name" {
+  description = "Name of the Azure Container Registry"
+  value       = azurerm_container_registry.main.name
+}
+
 output "admin_username" {
   description = "Admin username configured on the VM"
   value       = var.admin_username

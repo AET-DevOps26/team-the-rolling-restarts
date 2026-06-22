@@ -9,6 +9,15 @@ This directory provisions Azure infrastructure for deploying the team project.
 - Network security group with SSH + app port rules
 - Public IP and network interface
 - Ubuntu Linux VM (default size: `Standard_B2s`)
+- Azure Container Registry (default SKU: `Basic`) used by the deploy-azure CI/CD
+  workflow — kept in the same resource group so teardown removes it too
+
+Because `providers.tf` disables automatic provider registration, register the
+container-registry provider once per subscription before the first apply:
+
+```bash
+az provider register --namespace Microsoft.ContainerRegistry
+```
 
 Default app ingress policy is least-privilege (`application_ports = [3000]`).
 Only add extra ports (for example `8080`) when needed.
@@ -67,8 +76,24 @@ terraform output ssh_command
 - Treat Terraform state as sensitive operational data
 - Stop/deallocate the VM when not in use to preserve student credits
 
-## Destroy
+## Cost control & destroy
+
+For student subscriptions, minimise spend:
 
 ```bash
-terraform destroy
+# From the repository root - pause/resume the VM (compute billing stops):
+make azure-stop
+make azure-start
 ```
+
+Tear down everything (VM + ACR + networking + resource group):
+
+```bash
+terraform destroy            # clean teardown, keeps state in sync
+# or, from the repository root, a state-independent nuke:
+make azure-nuke              # az group delete (override AZURE_RG=... if needed)
+```
+
+A one-click teardown is also available via the
+`Destroy Azure resources` GitHub Actions workflow (see
+`docs/cicd-azure-deploy.md`).

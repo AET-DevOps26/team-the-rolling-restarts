@@ -1,0 +1,57 @@
+name: Destroy Azure resources
+
+# One-click teardown: deletes the entire Azure resource group (VM + ACR +
+# networking) so a test deployment leaves nothing billable behind.
+#
+# This is the "nuke" path - it bypasses Terraform state. After running it,
+# clear local Terraform state (e.g. delete the local state file or run
+# `terraform state rm`) before the next `terraform apply`.
+#
+# Requirements:
+#   - The AZURE_CREDENTIALS service principal must have permission to delete the
+#     resource group (e.g. Contributor on the subscription or resource group).
+#   - Repository variable AZURE_RESOURCE_GROUP must name the group to delete.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm deleting the entire resource group.'
+        required: true
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: destroy-azure
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    name: Delete resource group
+    if: ${{ github.event.inputs.confirm == 'destroy' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete resource group
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RESOURCE_GROUP}" ]; then
+            echo "AZURE_RESOURCE_GROUP variable is not set" >&2
+            exit 1
+          fi
+          if ! az group exists --name "${RESOURCE_GROUP}" | grep -q true; then
+            echo "Resource group '${RESOURCE_GROUP}' does not exist; nothing to do."
+            exit 0
+          fi
+          echo "Deleting resource group: ${RESOURCE_GROUP}"
+          az group delete --name "${RESOURCE_GROUP}" --yes
+          echo "Resource group '${RESOURCE_GROUP}' deleted."

@@ -20,3 +20,11 @@ subnet_cidr = "10.42.1.0/24"
 # Least-privilege default opens only the web client.
 # Add ports (for example 8080) only if you explicitly need direct access.
 application_ports = [3000]
+
+# Container registry used by the deploy-azure CI/CD workflow.
+# Basic is the cheapest tier and is plenty for testing.
+acr_sku = "Basic"
+# Optional: object ID of the CI/CD service principal to auto-grant AcrPush.
+# Get it with: az ad sp show --id <appId> --query id -o tsv
+# Leave empty ("") to assign the role manually.
+deploy_principal_id = ""

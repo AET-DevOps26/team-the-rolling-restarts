@@ -1,7 +1,19 @@
+variable "acr_sku" {
+  description = "SKU for the Azure Container Registry (Basic is cheapest)"
+  type        = string
+  default     = "Basic"
+}
+
 variable "admin_username" {
   description = "Admin username used for SSH access on the Azure VM"
   type        = string
   default     = "azureuser"
+}
+
+variable "deploy_principal_id" {
+  description = "Object ID of the CI/CD service principal to grant AcrPush on the registry. Leave empty to manage the role assignment manually."
+  type        = string
+  default     = ""
 }
 
 variable "allowed_ssh_cidr" {
