@@ -1,12 +1,20 @@
 .PHONY: help clean generate spring-build preflight \
-       compose-up compose-down compose-ps compose-logs compose-test smoke-test \
+       compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s push-images \
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure \
        helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy
 
 HELM_DIR    ?= infra/helm
-COMPOSE_ENV ?= infra/.env
+COMPOSE_ENV  ?= infra/.env
 COMPOSE_FILES = -f infra/docker-compose.yaml -f infra/docker-compose.dev.yaml
+TF_DIR       = infra/terraform/azure-vm
+
+# Read defaults from infra/.env (single source of truth).
+# Command-line overrides (e.g. make push-images IMAGE_TAG=foo) take priority.
+-include $(COMPOSE_ENV)
+
+# Fall back to commit SHA if IMAGE_TAG is not set in .env
+IMAGE_TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo latest)
 
 export COMPOSE_UID ?= $(shell id -u)
 export COMPOSE_GID ?= $(shell id -g)
@@ -26,8 +34,10 @@ help:
 	  '  make compose-logs      - follow container logs' \
 	  '  make compose-test      - run integration tests via Docker Compose' \
 	  '  make smoke-test        - run endpoint smoke tests against localhost' \
+	  '  make push-images       - build and push all images to registry' \
 	  '' \
 	  'Azure VM:' \
+	  '  make smoke-test-vm     - run smoke tests against the Azure VM' \
 	  '  make terraform-apply   - provision Azure VM' \
 	  '  make ansible-deploy    - configure VM and deploy app' \
 	  '  make deploy-azure      - full Azure deploy (terraform + ansible)' \
@@ -36,8 +46,10 @@ help:
 	  'Kubernetes / Helm:' \
 	  '  make helm-deploy       - install or upgrade the Helm release' \
 	  '  make helm-destroy      - uninstall the Helm release' \
+	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
 	  '' \
-	  'Pass ENV=prod SECRETS="-f secrets-values.yaml" to Helm targets for production.'
+	  '' \
+	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'
 
 # --- Clean & build ---
 
@@ -81,111 +93,67 @@ compose-ps:
 compose-logs:
 	docker compose --env-file $(COMPOSE_ENV) $(COMPOSE_FILES) logs -f --tail=100
 
+COMPOSE_TEST = docker compose --env-file $(COMPOSE_ENV) \
+  -f infra/docker-compose.yaml \
+  -f infra/docker-compose.test.yaml \
+  -p rolling-restarts-test \
+  --profile test
+
 compose-test:
-	docker compose --env-file $(COMPOSE_ENV) \
-	  -f infra/docker-compose.yaml \
-	  -f infra/docker-compose.test.yaml \
-	  --profile test run --rm spring-test; \
+	$(COMPOSE_TEST) run --rm spring-test; \
 	rc=$$?; \
-	docker compose --env-file $(COMPOSE_ENV) \
-	  -f infra/docker-compose.yaml \
-	  -f infra/docker-compose.test.yaml \
-	  --profile test down; \
+	$(COMPOSE_TEST) down -v; \
 	exit $$rc
 
 smoke-test:
-	@pass=0; fail=0; \
-	check() { \
-	  desc="$$1"; expected="$$2"; actual="$$3"; \
-	  if [ "$$actual" = "$$expected" ]; then \
-	    printf '  \033[32m✓\033[0m %s (got %s)\n' "$$desc" "$$actual"; \
-	    pass=$$((pass + 1)); \
-	  else \
-	    printf '  \033[31m✗\033[0m %s (expected %s, got %s)\n' "$$desc" "$$expected" "$$actual"; \
-	    fail=$$((fail + 1)); \
-	  fi; \
-	}; \
-	echo "=== Health Checks ==="; \
-	check "API Gateway health" '"UP"' "$$(curl -sf http://localhost:8080/actuator/health 2>/dev/null | jq -r .status | jq -Rs 'rtrimstr("\n")')"; \
-	check "User Service health" '"UP"' "$$(curl -sf http://localhost:8081/actuator/health 2>/dev/null | jq -r .status | jq -Rs 'rtrimstr("\n")')"; \
-	check "Content Service health" '"UP"' "$$(curl -sf http://localhost:8082/actuator/health 2>/dev/null | jq -r .status | jq -Rs 'rtrimstr("\n")')"; \
-	check "GenAI health" '"ok"' "$$(curl -sf http://localhost:8000/health 2>/dev/null | jq -r .status | jq -Rs 'rtrimstr("\n")')"; \
-	echo ""; \
-	echo "=== Gateway Routing ==="; \
-	check "GET /" '"Hello, World!"' "$$(curl -sf http://localhost:8080/ 2>/dev/null | jq -r .message | jq -Rs 'rtrimstr("\n")')"; \
-	check "GET /api/content/sources" "200" "$$(curl -so /dev/null -w '%{http_code}' http://localhost:8080/api/content/sources 2>/dev/null)"; \
-	check "GET /api/content/articles" "200" "$$(curl -so /dev/null -w '%{http_code}' http://localhost:8080/api/content/articles 2>/dev/null)"; \
-	check "GET /api/content/topics" "200" "$$(curl -so /dev/null -w '%{http_code}' http://localhost:8080/api/content/topics 2>/dev/null)"; \
-	echo ""; \
-	echo "=== Registration ==="; \
-	check "Invalid body returns 400" "400" "$$(curl -so /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/users/auth/register \
-	  -H 'Content-Type: application/json' \
-	  -d '{"username":"","email":"bad","password":"short"}' 2>/dev/null)"; \
-	reg_code=$$(curl -so /dev/null -w '%{http_code}' -X POST http://localhost:8080/api/users/auth/register \
-	  -H 'Content-Type: application/json' \
-	  -d "{\"username\":\"smoke$$$$\",\"email\":\"smoke$$$$@test.com\",\"password\":\"password123\",\"name\":\"Smoke Test\"}" 2>/dev/null); \
-	check "Valid body returns 201 (or 409 re-run)" "ok" "$$([ "$$reg_code" = "201" ] || [ "$$reg_code" = "409" ] && echo ok || echo $$reg_code)"; \
-	echo ""; \
-	echo "=== CORS ==="; \
-	cors=$$(curl -sf -I -X OPTIONS http://localhost:8080/api/content/articles \
-	  -H "Origin: http://localhost:3000" \
-	  -H "Access-Control-Request-Method: GET" 2>/dev/null | grep -ci access-control); \
-	check "CORS headers present" "yes" "$$([ "$$cors" -gt 0 ] 2>/dev/null && echo yes || echo no)"; \
-	echo ""; \
-	echo "=== Web Client ==="; \
-	check "GET localhost:3000" "200" "$$(curl -so /dev/null -w '%{http_code}' http://localhost:3000 2>/dev/null)"; \
-	echo ""; \
-	total=$$((pass + fail)); \
-	if [ $$fail -eq 0 ]; then \
-	  printf '\033[32mAll %d checks passed.\033[0m\n' $$total; \
-	else \
-	  printf '\033[31m%d/%d checks failed.\033[0m\n' $$fail $$total; \
-	  exit 1; \
-	fi
+	@infra/scripts/smoke-test.sh http://localhost:8080
+
+VM_IP ?= $(shell cd $(TF_DIR) && terraform output -raw vm_public_ip 2>/dev/null)
+
+smoke-test-vm:
+	@if [ -z "$(VM_IP)" ]; then echo "Error: could not determine VM IP. Run make terraform-apply first."; exit 1; fi
+	@echo "Targeting VM at $(VM_IP)"
+	@echo ""
+	@infra/scripts/smoke-test.sh "http://$(VM_IP):8080"
+
+K8S_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
+
+smoke-test-k8s:
+	@echo "Targeting K8s ingress at $(K8S_HOST)"
+	@echo ""
+	@infra/scripts/smoke-test.sh --insecure "https://$(K8S_HOST)"
+
+# --- Images ---
+
+push-images:
+	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml build
+	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml push
 
 # --- Terraform ---
 
 terraform-init:
-	cd infra/terraform/azure-vm && terraform init
+	cd $(TF_DIR) && terraform init
 
-terraform-plan: terraform-init
-	cd infra/terraform/azure-vm && terraform plan
-
-terraform-apply: terraform-init
-	cd infra/terraform/azure-vm && terraform apply
-
-terraform-destroy: terraform-init
-	cd infra/terraform/azure-vm && terraform destroy
+terraform-plan terraform-apply terraform-destroy: terraform-init
+	cd $(TF_DIR) && terraform $(subst terraform-,,$@)
 
 terraform-validate: terraform-init
-	cd infra/terraform/azure-vm && terraform validate && terraform fmt -check
+	cd $(TF_DIR) && terraform validate && terraform fmt -check
 
 # --- Ansible ---
 
 ansible-inventory:
 	./infra/scripts/generate-ansible-inventory.sh
 
+ANSIBLE_EXTRA ?=
+
 ansible-deploy:
-	cd infra/ansible && ansible-playbook playbooks/deploy.yml
+	cd infra/ansible && ansible-playbook playbooks/deploy.yml \
+	  --extra-vars "image_tag=$(IMAGE_TAG) registry=$(REGISTRY) $(ANSIBLE_EXTRA)"
 
 deploy-azure: terraform-apply ansible-inventory ansible-deploy
 
 # --- Helm (delegates to infra/helm/Makefile) ---
 
-helm-lint:
-	$(MAKE) -C $(HELM_DIR) helm-lint
-
-helm-template:
-	$(MAKE) -C $(HELM_DIR) helm-template
-
-helm-install:
-	$(MAKE) -C $(HELM_DIR) helm-install
-
-helm-upgrade:
-	$(MAKE) -C $(HELM_DIR) helm-upgrade
-
-helm-deploy:
-	$(MAKE) -C $(HELM_DIR) helm-deploy
-
-helm-destroy:
-	$(MAKE) -C $(HELM_DIR) helm-destroy
+helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy:
+	$(MAKE) -C $(HELM_DIR) $@
