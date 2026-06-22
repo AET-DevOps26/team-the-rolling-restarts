@@ -28,7 +28,9 @@ env:
 jobs:
   build-and-push:
     name: Build & push images to ACR
-    runs-on: ubuntu-latest
+    # Native arm64 runner (free for public repos) so images match the arm64
+    # Azure VM (Standard_B2ps_v2 / server-arm64) without QEMU emulation.
+    runs-on: ubuntu-24.04-arm
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
       registry_base: ${{ steps.meta.outputs.registry_base }}
