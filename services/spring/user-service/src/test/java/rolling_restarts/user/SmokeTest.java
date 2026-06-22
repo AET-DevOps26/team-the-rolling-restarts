@@ -94,4 +94,40 @@ class SmokeTest {
 		var response = rest.postForEntity("/auth/register", body, Map.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 	}
+
+	@Test
+	void loginAfterRegister_returns200WithToken() {
+		var registerBody = Map.of(
+				"username", "loginuser",
+				"email", "login@example.com",
+				"password", "password123",
+				"name", "Login User");
+		rest.postForEntity("/auth/register", registerBody, Map.class);
+
+		var loginBody = Map.of("username", "loginuser", "password", "password123");
+		var response = rest.postForEntity("/auth/login", loginBody, Map.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+		assertThat(response.getBody()).containsKey("token");
+	}
+
+	@Test
+	void loginWithWrongPassword_returns401() {
+		var registerBody = Map.of(
+				"username", "badpwuser",
+				"email", "badpw@example.com",
+				"password", "password123",
+				"name", "Bad PW User");
+		rest.postForEntity("/auth/register", registerBody, Map.class);
+
+		var loginBody = Map.of("username", "badpwuser", "password", "wrongpassword");
+		var response = rest.postForEntity("/auth/login", loginBody, Map.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+	}
+
+	@Test
+	void loginWithNonexistentUser_returns401() {
+		var loginBody = Map.of("username", "noonehere", "password", "password123");
+		var response = rest.postForEntity("/auth/login", loginBody, Map.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+	}
 }

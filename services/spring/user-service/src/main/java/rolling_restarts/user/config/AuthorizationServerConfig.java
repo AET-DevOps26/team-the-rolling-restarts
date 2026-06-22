@@ -21,7 +21,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
+import org.springframework.security.oauth2.core.oidc.OidcScopes;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.authorization.client.InMemoryRegisteredClientRepository;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
+import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.settings.AuthorizationServerSettings;
+import org.springframework.security.oauth2.server.authorization.settings.ClientSettings;
 
 @Configuration
 public class AuthorizationServerConfig {
@@ -90,7 +101,38 @@ public class AuthorizationServerConfig {
 	}
 
 	@Bean
-	public AuthorizationServerSettings authorizationServerSettings() {
-		return AuthorizationServerSettings.builder().build();
+	public JwtEncoder jwtEncoder(JWKSource<SecurityContext> jwkSource) {
+		return new NimbusJwtEncoder(jwkSource);
+	}
+
+	@Bean
+	public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
+		return OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
+	}
+
+	/**
+	 * The Authorization Server requires at least one registered client to initialize its
+	 * protocol endpoints (JWKS, OIDC discovery). Registers the web-client SPA as a public
+	 * client using authorization_code + PKCE (no secret).
+	 */
+	@Bean
+	public RegisteredClientRepository registeredClientRepository(
+			@Value("${jwt.web-client-redirect-uri:http://127.0.0.1:3000/login/oauth2/code/web-client}") String redirectUri) {
+		RegisteredClient webClient = RegisteredClient.withId(UUID.randomUUID().toString())
+				.clientId("web-client")
+				.clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
+				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+				.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+				.redirectUri(redirectUri)
+				.scope(OidcScopes.OPENID)
+				.scope(OidcScopes.PROFILE)
+				.clientSettings(ClientSettings.builder().requireProofKey(true).build())
+				.build();
+		return new InMemoryRegisteredClientRepository(webClient);
+	}
+
+	@Bean
+	public AuthorizationServerSettings authorizationServerSettings(@Value("${jwt.issuer}") String issuer) {
+		return AuthorizationServerSettings.builder().issuer(issuer).build();
 	}
 }

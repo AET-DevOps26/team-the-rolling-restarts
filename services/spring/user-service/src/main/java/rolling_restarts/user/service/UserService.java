@@ -1,6 +1,7 @@
 package rolling_restarts.user.service;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -49,6 +50,11 @@ public class UserService {
 		user.setSettings(settings);
 
 		return userRepository.save(user);
+	}
+
+	public Optional<User> authenticate(String username, String password) {
+		return userRepository.findByUsername(username)
+				.filter(user -> passwordEncoder.matches(password, user.getPasswordHash()));
 	}
 
 	public User findById(String id) {
