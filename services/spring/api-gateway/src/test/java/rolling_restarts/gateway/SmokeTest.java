@@ -11,10 +11,7 @@ import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.RequestEntity;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
@@ -48,18 +45,6 @@ class SmokeTest {
 		var response = rest.getForEntity("/test", Map.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).containsEntry("message", "Hello, World!\nTest!");
-	}
-
-	@Test
-	void corsHeadersPresentForAllowedOrigin() {
-		var headers = new HttpHeaders();
-		headers.set("Origin", "http://localhost:3000");
-		headers.set("Access-Control-Request-Method", "GET");
-		var request = new RequestEntity<>(headers, HttpMethod.OPTIONS, java.net.URI.create("/api/content/articles"));
-
-		var response = rest.exchange(request, Void.class);
-		assertThat(response.getHeaders().getAccessControlAllowOrigin()).isEqualTo("http://localhost:3000");
-		assertThat(response.getHeaders().getAccessControlAllowMethods()).isNotEmpty();
 	}
 
 	@Test

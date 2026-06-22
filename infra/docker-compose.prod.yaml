@@ -1,0 +1,20 @@
+services:
+  web-client:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
+
+  api-gateway:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/api-gateway:${IMAGE_TAG:-latest}
+
+  user-service:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/user-service:${IMAGE_TAG:-latest}
+
+  content-service:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/content-service:${IMAGE_TAG:-latest}
+
+  gen-ai:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/gen-ai:${IMAGE_TAG:-latest}
