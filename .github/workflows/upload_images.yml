@@ -57,7 +57,6 @@ jobs:
 
       # ---------------- WEB CLIENT (temporarily disabled) ----------------
       - name: Build web-client
-        if: false
         uses: docker/build-push-action@v7.2.0
         with:
           context: ./web-client
@@ -105,7 +104,6 @@ jobs:
 
       # ---------------- GEN AI (temporarily disabled) ----------------
       - name: Build gen-ai
-        if: false
         uses: docker/build-push-action@v7.2.0
         with:
           context: ./services/gen-ai
