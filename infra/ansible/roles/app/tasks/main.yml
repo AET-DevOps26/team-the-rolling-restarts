@@ -8,13 +8,27 @@
     mode: "0755"
   tags: [app, deploy]
 
-- name: Clone or update project repository
-  ansible.builtin.git:
-    repo: "{{ project_repo_url }}"
-    dest: "{{ project_root }}"
-    version: "{{ project_repo_version }}"
-    update: true
-  become_user: "{{ ansible_user }}"
+- name: Ensure nginx config directory exists
+  ansible.builtin.file:
+    path: "{{ project_root }}/nginx"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  tags: [app, deploy]
+
+- name: Copy docker-compose and nginx config files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ project_root }}/{{ item.dest }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  loop:
+    - { src: "{{ playbook_dir }}/../../docker-compose.yaml", dest: docker-compose.yaml }
+    - { src: "{{ playbook_dir }}/../../docker-compose.prod.yaml", dest: docker-compose.prod.yaml }
+    - { src: "{{ playbook_dir }}/../../nginx/default.conf", dest: nginx/default.conf }
+  notify: restart rolling-restarts
   tags: [app, deploy]
 
 - name: Render deployment environment file
@@ -25,6 +39,15 @@
     group: "{{ ansible_user }}"
     mode: "0600"
   notify: restart rolling-restarts
+  tags: [app, deploy]
+
+- name: Log in to container registry
+  ansible.builtin.command:
+    cmd: docker login {{ registry }} -u {{ registry_user }} -p {{ registry_token }}
+  become_user: "{{ ansible_user }}"
+  changed_when: true
+  no_log: true
+  when: registry_token is defined and registry_token | length > 0
   tags: [app, deploy]
 
 - name: Render systemd unit for compose stack
@@ -39,15 +62,16 @@
     - restart rolling-restarts
   tags: [app, deploy]
 
-- name: Ensure project service is enabled
+- name: Ensure project service is enabled and started
   ansible.builtin.systemd:
     name: "{{ app_service_name }}"
     enabled: true
+    state: started
   tags: [app, deploy]
 
 - name: Verify project endpoint responds
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ app_env.WEB_CLIENT_PORT }}/"
+    url: "http://127.0.0.1:{{ app_env.APP_PORT | default('8080') }}/"
     status_code: 200
     timeout: 30
   register: web_health

@@ -2,6 +2,4 @@
 common_packages:
   - ca-certificates
   - curl
-  - git
   - gnupg
-  - python3-pip

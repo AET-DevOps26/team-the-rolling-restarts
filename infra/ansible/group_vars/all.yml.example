@@ -1,10 +1,11 @@
 ---
 project_root: /opt/rolling-restarts
-project_repo_url: https://github.com/<org-or-user>/team-the-rolling-restarts.git
-project_repo_version: main
 
-compose_file: infra/docker-compose.yaml
-compose_env_path: infra/.env
+# Container registry (GHCR, Docker Hub, etc.)
+registry: ghcr.io/aet-devops26/team-the-rolling-restarts
+registry_user: ""
+registry_token: ""
+image_tag: latest
 
 app_env:
   NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080"
@@ -13,7 +14,7 @@ app_env:
   LLM_MODEL: "gpt-4o-mini"
   LOG_LEVEL: "INFO"
   WEB_CLIENT_PORT: "3000"
-  SPRING_API_PORT: "8080"
+  APP_PORT: "8080"
   GEN_AI_PORT: "8000"
   MONGO_PORT: "27017"
   MONGO_DATABASE: "mydatabase"
