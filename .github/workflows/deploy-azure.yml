@@ -10,7 +10,9 @@ name: Deploy to Azure
 
 on:
   push:
-    branches: [main]
+    # NOTE: feat/cicd-azure-acr-deploy is temporary, for testing the pipeline
+    # before merge. Remove it (leaving only main) before merging the PR.
+    branches: [main, feat/cicd-azure-acr-deploy]
   workflow_dispatch:
 
 concurrency:
