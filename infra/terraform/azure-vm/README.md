@@ -10,7 +10,14 @@ This directory provisions Azure infrastructure for deploying the team project.
 - Public IP and network interface
 - Ubuntu Linux VM (default size: `Standard_B2s`)
 - Azure Container Registry (default SKU: `Basic`) used by the deploy-azure CI/CD
-  workflow — kept in the same resource group so teardown removes it too
+  workflow — kept in the same resource group so teardown removes it too. Its name
+  is deterministic (project/environment + a subscription-ID hash), so it stays
+  identical across destroy/recreate and the GitHub `ACR_NAME` /
+  `ACR_LOGIN_SERVER` variables never need changing. Override with `acr_name`.
+
+Set `deploy_principal_id` to the CI/CD service principal's object ID to have
+Terraform grant it `AcrPush` (registry) and `Virtual Machine Contributor`
+(resource group) automatically, making re-deploys fully turnkey.
 
 Because `providers.tf` disables automatic provider registration, register the
 container-registry provider once per subscription before the first apply:

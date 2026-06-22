@@ -90,11 +90,35 @@ removes the `build:` blocks and points the app services at
 
    Build the `AZURE_CREDENTIALS` secret from the output as JSON:
    `{"clientId","clientSecret","subscriptionId","tenantId"}`. (You can set
-   `deploy_principal_id` in `terraform.tfvars` to have Terraform create the
-   `AcrPush` assignment for you.)
+   `deploy_principal_id` in `terraform.tfvars` to the SP's **object ID** and
+   Terraform will create **both** role assignments for you — see "Re-deploying
+   after teardown" below.)
 
 No SSH key is required for CI — the deploy job uses the Azure control plane, not
 SSH.
+
+## Re-deploying after teardown (stable configuration)
+
+`terraform destroy` removes the ACR along with everything else, but the GitHub
+configuration does **not** need to change when you re-create it:
+
+- **The ACR name is deterministic.** It is derived from project/environment plus
+  a hash of the subscription ID (no random suffix), so a fresh `terraform apply`
+  always produces the **same** `acr_name` / `acr_login_server`. `ACR_NAME` and
+  `ACR_LOGIN_SERVER` therefore stay constant. (Pin an exact name with the
+  `acr_name` variable if you prefer.)
+- **The resource group name is fixed** (`resource_group_name`), so
+  `AZURE_RESOURCE_GROUP` and `DEPLOY_DIR` never change. The VM is looked up by
+  resource group, so its random name suffix is irrelevant.
+- **The service principal persists** (it is an Azure AD object, not a resource
+  group resource), so `AZURE_CREDENTIALS` stays valid.
+- **Role assignments are recreated automatically** when `deploy_principal_id` is
+  set in `terraform.tfvars`: Terraform re-grants `AcrPush` on the new ACR and
+  `Virtual Machine Contributor` on the resource group on every apply.
+
+Net result: set the GitHub secrets/variables **once**. After a destroy, a single
+`terraform apply` (with `deploy_principal_id` set) is enough to redeploy — no
+GitHub changes required.
 
 ## Required GitHub secrets
 
@@ -120,8 +144,8 @@ They are non-sensitive configuration.
 
 | Variable | Example | Description |
 | --- | --- | --- |
-| `ACR_NAME` | `myregistry` | ACR resource name (`terraform output acr_name`). |
-| `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). |
+| `ACR_NAME` | `myregistry` | ACR resource name (`terraform output acr_name`). Stable across destroy/recreate. |
+| `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). Stable across destroy/recreate. |
 | `DEPLOY_DIR` | `/opt/rolling-restarts` | Directory on the VM the stack is deployed to. |
 | `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group of the VM (deploy looks up the VM here; also used by the teardown workflow). |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://<vm-host>:8080` | Public API URL baked into the web-client at build time. |

@@ -1,3 +1,14 @@
+variable "acr_name" {
+  description = "Explicit ACR name (5-50 lowercase alphanumeric, globally unique). Leave empty to derive a stable name from project/environment + subscription, which keeps the GitHub ACR variables constant across destroy/recreate."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.acr_name == "" || can(regex("^[a-z0-9]{5,50}$", var.acr_name))
+    error_message = "acr_name must be 5-50 lowercase alphanumeric characters, or empty to auto-derive."
+  }
+}
+
 variable "acr_sku" {
   description = "SKU for the Azure Container Registry (Basic is cheapest)"
   type        = string
