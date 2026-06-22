@@ -27,6 +27,13 @@ spec:
               value: "production"
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:MaxRAMPercentage=75"
+            - name: JWT_ISSUER_URI
+              value: "http://user-service:8081"
+            - name: SPRING_MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: uri
 
           readinessProbe:
             httpGet:
