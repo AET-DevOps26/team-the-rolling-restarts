@@ -1,32 +1,28 @@
 package rolling_restarts.gateway.controller;
 
-import org.openapitools.api.DummyApi;
-import org.openapitools.model.Message;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Gateway liveness / demo endpoints. Hand-written (code-first): the response shape is a plain
+ * record and springdoc derives the OpenAPI document from it.
+ */
 @RestController
-public class RootController implements DummyApi {
+@Tag(name = "root", description = "Gateway liveness and demo endpoints")
+public class RootController {
 
 	@GetMapping("/")
 	public ResponseEntity<Message> root() {
-		Message message = new Message();
-		message.setMessage("Hello, World!");
-		return ResponseEntity.ok(message);
+		return ResponseEntity.ok(new Message("Hello, World!"));
 	}
 
 	@GetMapping("/test")
 	public ResponseEntity<Message> test() {
-		Message message = new Message();
-		message.setMessage("Hello, World!\nTest!");
-		return ResponseEntity.ok(message);
+		return ResponseEntity.ok(new Message("Hello, World!\nTest!"));
 	}
 
-	@Override
-	public ResponseEntity<Message> dummy() {
-		Message message = new Message();
-		message.setMessage("Dummy response");
-		return ResponseEntity.ok(message);
-	}
+	public record Message(String message) {}
 }

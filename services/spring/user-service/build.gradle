@@ -8,8 +8,6 @@ springBoot {
 }
 
 dependencies {
-	implementation project(':generated')
-
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 	implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'

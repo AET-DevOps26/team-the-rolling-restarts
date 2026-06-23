@@ -1,6 +1,6 @@
 rootProject.name = 'spring-services'
 
-['generated', 'api-gateway', 'user-service', 'content-service'].each { name ->
+['api-gateway', 'user-service', 'content-service'].each { name ->
     if (file(name).isDirectory()) {
         include name
     }

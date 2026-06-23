@@ -44,7 +44,6 @@ public class RootControllerTest {
 
 	static Stream<Arguments> messageEndpoints() {
 		return Stream.of(
-				Arguments.of("/test", "Hello, World!\nTest!"),
-				Arguments.of("/dummy", "Dummy response"));
+				Arguments.of("/test", "Hello, World!\nTest!"));
 	}
 }
