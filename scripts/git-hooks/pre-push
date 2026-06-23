@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# Code-first guard (pre-push).
+#
+# Keeps api/openapi.yaml in sync with the Spring services on every push, so nobody has to remember
+# to run `make generate`. It regenerates the contract from the services; if it changed, it commits
+# the update and asks you to push again so the change is included.
+#
+# Install once with:  make install-hooks
+#
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Fast path: if no Spring service source changed versus the upstream branch, there is nothing the
+# contract could drift from, so skip the (slow) regeneration.
+if upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+  if git diff --quiet "$upstream" HEAD -- services/spring; then
+    echo "[pre-push] No Spring service changes; skipping OpenAPI contract regeneration."
+    exit 0
+  fi
+fi
+
+echo "[pre-push] Regenerating the OpenAPI contract from the Spring services (this boots them, ~30s)..."
+if ! ./api/scripts/gen-all.sh; then
+  echo "[pre-push] gen-all failed — fix the build before pushing." >&2
+  exit 1
+fi
+
+if ! git diff --quiet -- api/openapi.yaml; then
+  git add api/openapi.yaml
+  git commit -m "chore(openapi): regenerate contract from code"
+  echo "[pre-push] api/openapi.yaml was stale — regenerated and committed it."
+  echo "[pre-push] Re-run 'git push' to include the contract update."
+  exit 1
+fi
+
+echo "[pre-push] OpenAPI contract already in sync."
