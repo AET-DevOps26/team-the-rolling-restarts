@@ -1,4 +1,4 @@
-.PHONY: help clean generate spring-build preflight \
+.PHONY: help clean generate spring-build spring-openapi-docs install-hooks preflight \
        compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s push-images \
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure \
@@ -24,6 +24,8 @@ help:
 	  'Pre-flight & build:' \
 	  '  make generate          - generate OpenAPI clients (Spring, Python, TypeScript)' \
 	  '  make spring-build      - compile and test Spring services' \
+	  '  make spring-openapi-docs - export each services OpenAPI spec to build/openapi/' \
+	  '  make install-hooks     - install the pre-push hook that regenerates the OpenAPI contract' \
 	  '  make clean             - remove build artifacts (handles root-owned Docker files)' \
 	  '  make preflight         - full pre-flight: generate, build, lint helm, validate terraform' \
 	  '' \
@@ -66,11 +68,28 @@ generate:
 	npm ci
 	python -m pip install --upgrade pip
 	python -m pip install openapi-python-client
-	npx @redocly/cli@2.30.3 lint api/openapi.yaml
 	./api/scripts/gen-all.sh
+	npx @redocly/cli@2.30.3 lint api/openapi.yaml
 
 spring-build:
 	cd services/spring && ./gradlew build
+
+# Install the git pre-push hook that regenerates api/openapi.yaml from the services (code-first),
+# so the committed contract never drifts and no manual `make generate` is needed before pushing.
+install-hooks:
+	@mkdir -p .git/hooks
+	@ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
+	@chmod +x scripts/git-hooks/pre-push
+	@echo "Installed pre-push hook: regenerates api/openapi.yaml from the Spring services on push."
+
+# Generate each Spring service's OpenAPI spec from its springdoc endpoint (test-based, no live
+# DB) and collect them into services/spring/build/openapi/ for inspection or CI artifact upload.
+spring-openapi-docs:
+	cd services/spring && ./gradlew :user-service:test :content-service:test :api-gateway:test \
+	  --tests "*OpenApiDocGenerationTest"
+	@mkdir -p services/spring/build/openapi
+	@cp services/spring/*/build/openapi/*.json services/spring/build/openapi/
+	@echo "OpenAPI specs written to services/spring/build/openapi/:" && ls services/spring/build/openapi/
 
 preflight: generate spring-build helm-lint terraform-validate
 
