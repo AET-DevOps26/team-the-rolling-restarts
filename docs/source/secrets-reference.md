@@ -18,6 +18,7 @@ These must be changed from defaults in production. The dev defaults below work o
 | -------- | ----------- | ------------- | ------- |
 | `MONGO_ROOT_PASSWORD` | `secret` | Strong random password (24+ chars) | mongodb, user-service, content-service |
 | `MONGO_ROOT_USERNAME` | `root` | Keep or change | mongodb, user-service, content-service |
+| `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
 | `LLM_API_KEY` | _(empty)_ | OpenAI / provider API key | gen-ai |
 
 ### Configuration
@@ -29,8 +30,7 @@ Safe to leave at defaults for local dev. Override as needed.
 | `REGISTRY` | `ghcr.io/aet-devops26/team-the-rolling-restarts` | Container image registry. Use `ghcr.io/<github-username>/rolling-restarts` for personal dev |
 | `IMAGE_TAG` | `latest` | Image tag. Makefile defaults to current commit SHA |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | API base URL baked into web client at build time |
-| `WEB_CLIENT_PORT` | `3000` | Host port for web client |
-| `APP_PORT` | `8080` | Host port for the nginx reverse proxy (single entry point) |
+| `APP_PORT` | `8080` | Host port for the nginx reverse proxy — the single entry point; the web client is served through it at `/`, not on its own port |
 | `GEN_AI_PORT` | `8000` | Host port for GenAI service |
 | `LLM_PROVIDER` | `openai` | LLM provider (`openai`, etc.) |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name |
@@ -47,7 +47,6 @@ Safe to leave at defaults for local dev. Override as needed.
 ```bash
 # Works out of the box for local development
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
-WEB_CLIENT_PORT=3000
 APP_PORT=8080
 GEN_AI_PORT=8000
 
@@ -96,7 +95,6 @@ image_tag: latest
 
 app_env:
   NEXT_PUBLIC_API_BASE_URL: "https://your-domain.com"
-  WEB_CLIENT_PORT: "3000"
   APP_PORT: "8080"
   GEN_AI_PORT: "8000"
 
@@ -131,6 +129,7 @@ These override the dummy defaults in `values.yaml` and are injected into Kuberne
 | --- | ------------------------------ | ------------- | ----------- |
 | `mongodb.rootUsername` | `root` | Keep or change | mongodb + both `mongodb-credentials` and `mongodb-user-credentials` Secrets |
 | `mongodb.rootPassword` | `secret` | Strong random password | mongodb + both Secrets |
+| `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | Committed dev key pair (in `values.yaml`) | Fresh RSA pair (override in `secrets-values.yaml`) | `jwt-keys` Secret → user-service JWT signing |
 
 Both services share the same MongoDB instance with data isolation via separate databases:
 
@@ -189,11 +188,20 @@ The Spring services use profiles to switch between dev and production configurat
 | Service | Required env vars |
 | ------- | ----------------- |
 | **api-gateway** | `CORS_ALLOWED_ORIGINS`, `JWT_ISSUER_URI`, `USER_SERVICE_URL`, `CONTENT_SERVICE_URL` |
-| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER` |
+| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY` |
 | **content-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER_URI` |
 | **gen-ai** | `LLM_API_KEY` (optional — service starts without it but LLM calls fail) |
 
 > **JWT issuer must match across services.** user-service stamps the `iss` claim on tokens from `JWT_ISSUER` and serves OIDC discovery at that URL. api-gateway and content-service validate tokens via `JWT_ISSUER_URI`, which must resolve to the same user-service URL (default `http://user-service:8081` in Compose/Helm). A mismatch causes resource servers to reject every token with 401.
+>
+> **JWT signing key must be shared across user-service replicas.** user-service signs tokens
+> with the RSA key from `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` and derives a deterministic
+> JWK `kid` from its thumbprint. Every replica therefore advertises an identical JWKS, so a token
+> signed by one pod validates against the key served by any pod behind the Service — this is what
+> makes user-service horizontally scalable (`replicas: 2`). If the keys are **unset**, each pod
+> generates its own ephemeral key (logged as a warning) and auth breaks intermittently with 2+
+> replicas. All replicas must receive the **same** key pair (a single `jwt-keys` Secret in
+> Kubernetes, one env value in Compose).
 
 ---
 

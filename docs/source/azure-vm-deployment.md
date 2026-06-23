@@ -32,8 +32,8 @@ vm_image_sku = "server-arm64"
 
 Least-privilege note:
 
-- Keep `application_ports = [3000]` unless you explicitly need direct ingress on additional ports.
-- If needed for debugging, you can temporarily add `8080` for Spring API.
+- Keep `application_ports = [8080]` — the nginx reverse proxy is the single public entry point (it serves the web client at `/` and proxies `/api` to the gateway).
+- Backend service ports (8081/8082/8000), MongoDB (27017), and Grafana (3001) are bound to the VM's loopback by `docker-compose.prod.yaml`, so they are never exposed publicly. Reach them via an SSH tunnel rather than opening NSG ports.
 
 Capture connection details:
 
@@ -76,7 +76,7 @@ make deploy-azure
 From your machine:
 
 ```bash
-curl -I http://<vm-public-ip>:3000
+curl -I http://<vm-public-ip>:8080
 ```
 
 From the VM:
@@ -91,7 +91,7 @@ Note: if `docker ps` returns "permission denied while trying to connect to the d
 
 ## Security checklist
 
-- Restrict `allowed_ssh_cidr` in Terraform to your current IP
+- SSH access is restricted to a single source IP. By default `allowed_ssh_cidr` is left unset and Terraform auto-detects the public IP of the machine running `terraform apply`; set it explicitly to pin a fixed CIDR (e.g. an office range)
 - Store Ansible secrets with Vault (avoid plaintext `group_vars/all.yml`)
 - Keep `terraform.tfvars` and state files out of source control
 - Rotate sensitive values before production use

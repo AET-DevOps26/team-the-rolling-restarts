@@ -58,15 +58,14 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 | `GET http://localhost:8080/actuator/health` | `200 {"status":"UP"}` | API gateway is running |
 | `GET http://localhost:8081/actuator/health` | `200 {"status":"UP"}` | User service + MongoDB connection |
 | `GET http://localhost:8082/actuator/health` | `200 {"status":"UP"}` | Content service + MongoDB connection |
-| `GET http://localhost:8080/` | `200 {"message":"Hello, World!"}` | Gateway routing works |
+| `GET http://localhost:8080/` | `200` HTML page | Reverse proxy serves the web client at `/` |
 | `GET http://localhost:8080/swagger-ui.html` | `302` redirect to Swagger UI | OpenAPI docs accessible |
 | `POST http://localhost:8080/api/users/auth/register` | `201` with valid body, `400` with empty body | User registration + validation |
 | `POST http://localhost:8080/api/users/auth/login` | `200 {"token":"..."}` with valid creds, `401` with wrong password | Login + JWT issuance |
 | `GET http://localhost:8080/api/content/sources` | `200 [...]` | Content service accessible through gateway |
 | `GET http://localhost:8080/api/content/topics` | `200 [...]` | Topics endpoint |
 | `GET http://localhost:8080/api/content/articles` | `200 {"content":[...]}` | Paginated articles |
-| `GET http://localhost:3000` | `200` HTML page | Web client serving |
-| `GET http://localhost:8000/health` | `200` | GenAI service |
+| `GET http://localhost:8000/health` | `200` | GenAI service (direct port, dev only) |
 
 ### Smoke test
 
@@ -210,10 +209,12 @@ VM_IP=$(cd infra/terraform/azure-vm && terraform output -raw vm_public_ip)
 ssh azureuser@$VM_IP "sudo systemctl status rolling-restarts"
 ssh azureuser@$VM_IP "sudo docker ps"
 
-# Test endpoints
-curl -s http://$VM_IP:3000                          # web client
+# Test endpoints — everything goes through the reverse proxy on :8080 (the only public port).
+# Backend service ports (8081/8082/8000), MongoDB (27017) and Grafana (3001) are bound to the
+# VM's loopback by docker-compose.prod.yaml, so they are NOT reachable on the public IP — use
+# an SSH tunnel for those (see the MongoDB Compass section).
+curl -s http://$VM_IP:8080/                         # web client (served via reverse proxy)
 curl -s http://$VM_IP:8080/actuator/health          # gateway health
-curl -s http://$VM_IP:8080/                         # hello world
 curl -s http://$VM_IP:8080/api/content/sources      # content routing
 curl -s http://$VM_IP:8080/api/content/articles     # articles
 
@@ -268,6 +269,13 @@ make helm-deploy                    # install or upgrade
 # For production (2 replicas, letsencrypt-prod):
 make helm-deploy ENV=prod
 ```
+
+> **Image values are applied automatically.** Every `helm-*` Make target overlays
+> `infra/helm/image-values.yaml` last (`-f values.yaml … -f image-values.yaml`), so you don't pass
+> it explicitly. CI regenerates this file on each push (`upload_images.yml`); for a local deploy run
+> `make helm-setup` once to seed it from `image-values.example.yaml`. Any service **not** overridden
+> there falls back to `global.registry/<imageName>:<global.tag>` from `values.yaml`. The file must
+> exist, or Helm errors on the missing `-f` argument.
 
 ### Verify K8s deployment
 
@@ -341,15 +349,18 @@ make helm-destroy
 
 ## Endpoint Reference
 
-All endpoints accessible through the API gateway (port 8080 locally, or via ingress in K8s).
+All endpoints are reached through the single entry point on port 8080 (the nginx reverse proxy
+locally / on the VM, or the ingress in K8s). The entry point routes `/api`, `/actuator`,
+`/swagger-ui`, and `/v3/api-docs` to the API gateway, and everything else (`/`) to the web client.
+The paths below are the gateway routes; `/` at the edge returns the web-client UI, not the gateway
+root.
 
 ### Public Endpoints (no auth required)
 
 | Method | Path | Response |
 |--------|------|----------|
-| GET | `/` | `{"message": "Hello, World!"}` |
-| GET | `/test` | `{"message": "Hello, World!\nTest!"}` |
-| GET | `/actuator/health` | `{"status": "UP"}` |
+| GET | `/` (edge) | Web-client HTML page |
+| GET | `/actuator/health` | `{"status": "UP"}` (gateway health) |
 | GET | `/swagger-ui.html` | Swagger UI redirect |
 | GET | `/api/content/sources` | List of RSS sources |
 | GET | `/api/content/topics` | List of topics |
