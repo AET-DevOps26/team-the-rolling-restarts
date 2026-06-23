@@ -34,7 +34,7 @@ The Personalised News Aggregator lets users follow topics and consume articles e
 - **Talks to**: MongoDB (`content` database). Receives requests from the API Gateway. Validates JWT tokens issued by user-service.
 - **Why a separate deployable**: Content ingestion is I/O-heavy and benefits from independent scaling. The document-oriented data model (articles, sources) maps naturally to MongoDB, while user data is relational.
 
-All three Spring Boot services share a Gradle multi-module project at `services/spring/`, with generated OpenAPI code in a common `generated` library subproject.
+All three Spring Boot services share a Gradle multi-module project at `services/spring/`. The API is code-first: the controllers are the source of truth and `api/openapi.yaml` is generated from them via springdoc (see [OpenAPI workflow](openapi-workflow.md)).
 
 ### 2.5 GenAI Service (Python + LangChain)
 

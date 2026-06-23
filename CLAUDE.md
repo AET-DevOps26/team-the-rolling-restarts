@@ -47,7 +47,7 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 
 ## Key Conventions
 
-- **OpenAPI-first**: All inter-service contracts defined in `api/openapi.yaml`. DTOs generated, not hand-written.
+- **Code-first OpenAPI**: The Spring controllers are the source of truth. `api/openapi.yaml` is *generated* from them (springdoc per service → merged with gateway prefixes via `api/scripts/gen-all.sh`); DTOs are hand-written records, not generated. Consumer clients (web-client TypeScript, gen-ai Python) are generated *from* that spec — no Java server stubs are generated. See [docs/source/openapi-workflow.md](docs/source/openapi-workflow.md).
 - **Spring profiles**: `dev` for local (has default credentials), `production` for deployed (requires env vars). Base properties have no hardcoded secrets.
 - **JWT auth**: user-service is the OAuth2 Authorization Server. api-gateway and content-service validate JWTs as resource servers.
 - **CORS**: Configured only on api-gateway via `CORS_ALLOWED_ORIGINS` env var.

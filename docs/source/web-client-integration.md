@@ -48,6 +48,8 @@ The gateway forwards requests based on path prefix.
   services are running.
 - **Auth flow** — wire up login/signup forms to the OAuth2 token endpoint and
   store the JWT for subsequent requests.
-- **Generated types** — once the services are live, the springdoc-generated
-  OpenAPI spec at `http://localhost:8080/v3/api-docs` can be used to regenerate
-  the TypeScript client types.
+- **Generated types** — the API is code-first: `api/openapi.yaml` is generated
+  from the Spring controllers, and `web-client/src/generated/api.ts` is generated
+  from that contract (`make generate`, or `npx openapi-typescript api/openapi.yaml
+  -o web-client/src/generated/api.ts`). See [OpenAPI workflow](openapi-workflow.md).
+  The file is gitignored, so CI and the image build regenerate it before building.
