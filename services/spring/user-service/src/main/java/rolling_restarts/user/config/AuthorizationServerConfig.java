@@ -10,6 +10,7 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.UUID;
 
+import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.source.ImmutableJWKSet;
@@ -59,10 +60,18 @@ public class AuthorizationServerConfig {
 
 		RSAPublicKey publicKey = (RSAPublicKey) keyPair.getPublic();
 		RSAPrivateKey privateKey = (RSAPrivateKey) keyPair.getPrivate();
-		RSAKey rsaKey = new RSAKey.Builder(publicKey)
-				.privateKey(privateKey)
-				.keyID(UUID.randomUUID().toString())
-				.build();
+		RSAKey rsaKey;
+		try {
+			// Derive the key ID from the JWK thumbprint so every replica advertises an
+			// identical JWKS (same kid) for the same key. A random per-pod kid would make
+			// the gateway's kid-based key lookup fail intermittently behind the load balancer.
+			rsaKey = new RSAKey.Builder(publicKey)
+					.privateKey(privateKey)
+					.keyIDFromThumbprint()
+					.build();
+		} catch (JOSEException ex) {
+			throw new IllegalStateException("Failed to compute JWK thumbprint for RSA key", ex);
+		}
 		JWKSet jwkSet = new JWKSet(rsaKey);
 		return new ImmutableJWKSet<>(jwkSet);
 	}
