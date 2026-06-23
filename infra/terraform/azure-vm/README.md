@@ -10,8 +10,8 @@ This directory provisions Azure infrastructure for deploying the team project.
 - Public IP and network interface
 - Ubuntu Linux VM (default size: `Standard_B2s`)
 
-Default app ingress policy is least-privilege (`application_ports = [3000]`).
-Only add extra ports (for example `8080`) when needed.
+Default app ingress policy is least-privilege (`application_ports = [8080]`) — only the nginx
+reverse proxy, which serves the web client and proxies the API. Only add extra ports when needed.
 
 ## VM size and image architecture
 

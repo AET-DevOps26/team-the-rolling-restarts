@@ -11,12 +11,14 @@ vm_image_sku       = "server"
 admin_username     = "azureuser"
 # Set up own ssh key pair and adjust public_key_path
 public_key_path    = "~/.ssh/id_ed25519.pub"
-allowed_ssh_cidr   = "203.0.113.10/32"
+# allowed_ssh_cidr is auto-detected from your current public IP when left unset (recommended
+# for dynamic home IPs). Uncomment to pin a fixed CIDR, e.g. a static IP or office range.
+# allowed_ssh_cidr = "203.0.113.10/32"
 
 # Customize if needed for your network plan.
 vnet_cidr   = "10.42.0.0/16"
 subnet_cidr = "10.42.1.0/24"
 
-# Least-privilege default opens only the web client.
-# Add ports (for example 8080) only if you explicitly need direct access.
-application_ports = [3000]
+# Least-privilege: open only the nginx reverse proxy (single entry point — serves the web
+# client and proxies the API). Backend/DB/Grafana ports stay loopback-only on the VM.
+application_ports = [8080]
