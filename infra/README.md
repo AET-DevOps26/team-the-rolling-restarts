@@ -13,6 +13,8 @@ This folder contains both local Docker setup and cloud automation assets.
 
 - Terraform guide: `infra/terraform/azure-vm/README.md`
 - Ansible guide: `infra/ansible/README.md`
+- CI/CD deploy guide: `docs/cicd-azure-deploy.md` (GitHub Actions build → push to ACR → deploy to the VM)
+- `docker-compose.azure.yaml` - override that runs the stack from ACR images instead of local builds
 - Helper tasks: `Makefile` (`make terraform-plan`, `make deploy-azure`)
 
 ---

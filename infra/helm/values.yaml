@@ -52,6 +52,8 @@ apiGateway:
       value: http://user-service:8081
     - name: CONTENT_SERVICE_URL
       value: http://content-service:8082
+    - name: GEN_AI_URL
+      value: http://gen-ai:8000
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
   probes:

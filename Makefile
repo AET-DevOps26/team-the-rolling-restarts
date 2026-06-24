@@ -1,7 +1,7 @@
 .PHONY: help clean generate spring-build spring-openapi-docs install-hooks preflight \
        compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s push-images \
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
-       ansible-inventory ansible-deploy deploy-azure \
+       ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
        helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy
 
 HELM_DIR    ?= infra/helm
@@ -148,6 +148,10 @@ push-images:
 	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml build
 	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml push
 
+# Resource group used by azure-nuke. Defaults to the Terraform default; override
+# (make azure-nuke AZURE_RG=...) if you changed resource_group_name.
+AZURE_RG ?= rg-rolling-restarts-dev
+
 # --- Terraform ---
 
 terraform-init:
@@ -172,7 +176,25 @@ ansible-deploy:
 
 deploy-azure: terraform-apply ansible-inventory ansible-deploy
 
-# --- Helm (delegates to infra/helm/Makefile) ---
+# --- Cost control -----------------------------------------------------------
+# Pause the VM to stop compute billing (disk + static IP still incur a small
+# cost). Resume later with azure-start. Requires existing Terraform state.
+azure-stop:
+	cd $(TF_DIR) && az vm deallocate \
+		--resource-group "$$(terraform output -raw resource_group_name)" \
+		--name "$$(terraform output -raw vm_name)"
 
+azure-start:
+	cd $(TF_DIR) && az vm start \
+		--resource-group "$$(terraform output -raw resource_group_name)" \
+		--name "$$(terraform output -raw vm_name)"
+
+# Nuke everything by deleting the whole resource group (VM + ACR + networking).
+# State-independent fallback for when Terraform state is unavailable; prefer
+# `make terraform-destroy` for a clean teardown that keeps state in sync.
+azure-nuke:
+	az group delete --name "$(AZURE_RG)" --yes
+
+# --- Helm (delegates to infra/helm/Makefile) ---
 helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy:
 	$(MAKE) -C $(HELM_DIR) $@

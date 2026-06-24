@@ -40,6 +40,7 @@ services:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       USER_SERVICE_URL: http://user-service:8081
       CONTENT_SERVICE_URL: http://content-service:8082
+      GEN_AI_URL: http://gen-ai:8000
       JWT_ISSUER_URI: http://user-service:8081
     healthcheck:
       test:

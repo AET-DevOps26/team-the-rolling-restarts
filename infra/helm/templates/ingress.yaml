@@ -45,13 +45,6 @@ spec:
                 name: {{ .Values.apiGateway.name }}
                 port:
                   number: {{ .Values.apiGateway.port }}
-          - path: /ai/
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ .Values.genAi.name }}
-                port:
-                  number: {{ .Values.genAi.port }}
           - path: /
             pathType: Prefix
             backend:
