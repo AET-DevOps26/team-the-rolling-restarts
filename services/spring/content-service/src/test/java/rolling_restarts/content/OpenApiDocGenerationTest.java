@@ -34,7 +34,7 @@ import rolling_restarts.content.repository.TopicRepository;
 })
 class OpenApiDocGenerationTest {
 
-	private static final String API_DOCS_PATH = "/api/content/v3/api-docs";
+	private static final String API_DOCS_PATH = "/v3/api-docs";
 	private static final String OUTPUT_FILE = "content-service.json";
 
 	@MockitoBean

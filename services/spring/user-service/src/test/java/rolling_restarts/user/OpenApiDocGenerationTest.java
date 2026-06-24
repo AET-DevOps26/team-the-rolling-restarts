@@ -33,7 +33,7 @@ import rolling_restarts.user.repository.UserRepository;
 })
 class OpenApiDocGenerationTest {
 
-	private static final String API_DOCS_PATH = "/api/users/v3/api-docs";
+	private static final String API_DOCS_PATH = "/v3/api-docs";
 	private static final String OUTPUT_FILE = "user-service.json";
 
 	@MockitoBean
