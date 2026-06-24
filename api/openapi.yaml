@@ -246,6 +246,11 @@ components:
             type: string
           type: array
       type: object
+  securitySchemes:
+    bearer-jwt:
+      bearerFormat: JWT
+      scheme: bearer
+      type: http
 info:
   title: Personalised News Aggregator API
   version: 1.0.0
