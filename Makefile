@@ -2,7 +2,7 @@
        compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s push-images \
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
-       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy
+       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup
 
 HELM_DIR    ?= infra/helm
 COMPOSE_ENV  ?= infra/.env
@@ -22,7 +22,7 @@ export COMPOSE_GID ?= $(shell id -g)
 help:
 	@printf '%s\n' \
 	  'Pre-flight & build:' \
-	  '  make generate          - generate OpenAPI clients (Spring, Python, TypeScript)' \
+	  '  make generate          - regenerate OpenAPI spec + consumer clients (Python, TypeScript)' \
 	  '  make spring-build      - compile and test Spring services' \
 	  '  make spring-openapi-docs - export each services OpenAPI spec to build/openapi/' \
 	  '  make install-hooks     - install the pre-push hook that regenerates the OpenAPI contract' \
@@ -46,7 +46,8 @@ help:
 	  '  make terraform-destroy - destroy Azure VM' \
 	  '' \
 	  'Kubernetes / Helm:' \
-	  '  make helm-deploy       - install or upgrade the Helm release' \
+	  '  make helm-setup        - seed image-values.yaml from example (first time)' \
+	  '  make helm-deploy       - install or upgrade the Helm release (ENV=prod for production TLS)' \
 	  '  make helm-destroy      - uninstall the Helm release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
 	  '' \
@@ -196,5 +197,5 @@ azure-nuke:
 	az group delete --name "$(AZURE_RG)" --yes
 
 # --- Helm (delegates to infra/helm/Makefile) ---
-helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy:
+helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup:
 	$(MAKE) -C $(HELM_DIR) $@

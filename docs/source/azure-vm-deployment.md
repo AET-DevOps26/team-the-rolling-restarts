@@ -1,6 +1,7 @@
-# Azure VM Deployment Runbook
+# Azure VM Deployment Runbook (Manual / Ansible)
 
-This runbook documents end-to-end provisioning and deployment of this project on a Microsoft Azure VM.
+This runbook documents **manual** provisioning and deployment via Terraform + Ansible.
+For the automated CI/CD pipeline (GitHub Actions → ACR → `az vm run-command`), see [Azure CD Pipeline](cicd-azure-deploy.md).
 
 ## Validated student-account profile
 

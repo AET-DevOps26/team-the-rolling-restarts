@@ -92,48 +92,22 @@ make compose-down                   # stops containers and removes volumes
 ## 3. Azure VM Deployment
 
 The VM deploys pre-built container images — no compilation happens on the VM.
+There are two deployment paths:
 
-### GHCR setup
-
-Images are stored in GitHub Container Registry (GHCR). To allow the VM to pull them without credentials, make the packages public:
-
-1. Go to **github.com/orgs/\<org\>/packages** (or **github.com/\<user\>?tab=packages** for personal repos).
-2. Click each package → **Package settings** → **Danger Zone** → **Change visibility** → **Public**.
-
-Once public, `docker pull` works without authentication and no `registry_token` is needed in the Ansible vars.
-
-For **pushing** images (CI or manual), you need a GitHub token. The safest way to manage it locally is via the GitHub CLI (`gh`), which stores credentials securely in `~/.config/gh/` with restricted file permissions — no plaintext tokens in dotfiles.
-
-1. Install the GitHub CLI if you don't have it: <https://cli.github.com/>
-2. Authenticate with the required `write:packages` scope (the default login does **not** include it):
-
-   ```bash
-   gh auth login --scopes write:packages,read:packages
-   ```
-
-   If you already have `gh` authenticated but get `permission_denied: The token provided does not match expected scopes`, re-authenticate:
-
-   ```bash
-   gh auth logout
-   gh auth login --scopes write:packages,read:packages
-   ```
-
-3. Log in to GHCR (stores credentials in `~/.docker/config.json` — only needed once):
-
-   ```bash
-   gh auth token | docker login ghcr.io -u <github-username> --password-stdin
-   ```
-
-CI handles this automatically via the built-in `GITHUB_TOKEN` secret — no manual token needed for CI pushes.
+- **CI/CD pipeline** (recommended): GitHub Actions builds, pushes to ACR, and deploys via `az vm run-command` — no SSH needed. See [Azure CD Pipeline](cicd-azure-deploy.md) for full setup.
+- **Manual (Ansible)**: Build and push images yourself, then deploy via Ansible over SSH. See [Azure VM Deployment](azure-vm-deployment.md) for the runbook.
 
 ### Push images
 
-Images are built and pushed automatically by CI on every push (`build-and-package` workflow in `.github/workflows/upload_images.yml`). Each push produces images tagged with the short commit SHA and a channel tag (`main`, `dev`, or `wip`). For most deployments, you can skip the manual steps below and just use the SHA or channel tag that CI already pushed.
+Images are built and pushed automatically by CI:
 
-**Manual push (needed for local dev, testing feature branches before merging, or if CI is unavailable):**
+- **Azure CD pipeline** (`deploy-azure.yml`): pushes to ACR on merge to `main` or manual dispatch.
+- **GHCR pipeline** (`upload_images.yml`): pushes to GHCR on every push (used by the Helm/K8s path).
+
+**Manual push** (for testing feature branches or when CI is unavailable):
 
 ```bash
-# Push to the org registry (requires write:packages permission)
+# Push to the org registry (requires write:packages permission — see GHCR setup below)
 make push-images IMAGE_TAG=<tag-name>
 
 # Or push to your personal registry (no extra permissions needed)
@@ -142,13 +116,25 @@ make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling
 
 `IMAGE_TAG` defaults to the current commit SHA if not specified.
 
-### Deploy
+#### GHCR setup (for manual pushes)
+
+Authenticate the GitHub CLI with the `write:packages` scope:
+
+```bash
+gh auth login --scopes write:packages,read:packages
+gh auth token | docker login ghcr.io -u <github-username> --password-stdin
+```
+
+To allow the VM to pull GHCR images without credentials, make the packages public:
+**github.com/orgs/\<org\>/packages** → each package → **Package settings** → **Change visibility** → **Public**.
+
+### Deploy (manual / Ansible path)
 
 ```bash
 cp infra/ansible/group_vars/all.yml.example infra/ansible/group_vars/all.yml
 # Edit all.yml with real values
 
-# Deploy with the same tag you pushed
+# Full deploy (terraform + ansible)
 make deploy-azure IMAGE_TAG=<tag-name>
 
 # Or with a personal registry

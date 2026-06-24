@@ -60,6 +60,13 @@ make spring-openapi-docs   # writes services/spring/build/openapi/*.json
 without a build). Treat it as output: change the controllers, not the YAML. CI regenerates it and
 fails if the committed copy is stale, which is the drift check at the spec level.
 
+## Security scheme
+
+Both user-service and content-service declare a `bearer-jwt` security scheme via `@SecurityScheme` in
+`config/OpenApiConfig.java`. Controllers annotated with `@SecurityRequirement(name = "bearer-jwt")`
+reference this scheme; springdoc emits `components.securitySchemes.bearer-jwt` into each service's
+spec, and `merge-openapi.py` carries it into `api/openapi.yaml`.
+
 ## Lint the spec
 
 The generated contract is linted (in `make generate` and as a `pre-commit` hook on `api/openapi.yaml`):
@@ -67,6 +74,10 @@ The generated contract is linted (in `make generate` and as a `pre-commit` hook 
 ```bash
 npx @redocly/cli@2.30.3 lint api/openapi.yaml
 ```
+
+Lint rules are configured in `redocly.yaml` at the repo root. The `recommended` ruleset is extended
+with relaxations for generated specs: `security-defined` is downgraded to a warning (public endpoints
+have no security), and `operation-4xx-response` / `info-license` are disabled.
 
 ## Git hooks
 

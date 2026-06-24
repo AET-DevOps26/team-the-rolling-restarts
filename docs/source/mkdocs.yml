@@ -18,6 +18,7 @@ nav:
     - Deployment Testing: deployment-testing.md
     - Secrets & Environment Variables: secrets-reference.md
   - Infrastructure:
-    - Azure VM Deployment: azure-vm-deployment.md
+    - Azure CD Pipeline (ACR): cicd-azure-deploy.md
+    - Azure VM Deployment (Manual): azure-vm-deployment.md
     - Helm Chart: infra/helm/helm.md
     - Kubernetes: infra/k8s/kubernetes.md

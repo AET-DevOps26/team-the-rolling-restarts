@@ -9,7 +9,6 @@ Multi-module Gradle project containing three Spring Boot 4.x microservices.
 | `api-gateway` | 8080 | Spring Cloud Gateway MVC — routes, CORS, JWT validation | — |
 | `user-service` | 8081 | OAuth2 Authorization Server, user profiles, settings | MongoDB |
 | `content-service` | 8082 | RSS feed management, articles, topics | MongoDB |
-| `generated` | — | Shared OpenAPI-generated models (library only) | — |
 
 ## Build
 
@@ -55,16 +54,9 @@ Base `application.properties` contains no default credentials — they must come
 | `CONTENT_SERVICE_URL` | api-gateway | Upstream content-service URL |
 | `CORS_ALLOWED_ORIGINS` | api-gateway | Comma-separated allowed CORS origins |
 
-## OpenAPI Code Generation
+## OpenAPI (Code-First)
 
-The `generated` module is populated by running the OpenAPI generator from the project root:
-
-```bash
-npx @openapitools/openapi-generator-cli generate \
-  -i api/openapi.yaml -g spring -o services/spring/generated
-```
-
-Or use the helper script: `./api/scripts/gen-all.sh`
+The controllers are the source of truth. springdoc generates per-service specs during tests (`OpenApiDocGenerationTest`), which are merged into `api/openapi.yaml` by `api/scripts/gen-all.sh`. Consumer clients (Python, TypeScript) are generated from that spec — no Java server stubs are generated. See [OpenAPI Workflow](../../docs/source/openapi-workflow.md).
 
 ## Testing
 

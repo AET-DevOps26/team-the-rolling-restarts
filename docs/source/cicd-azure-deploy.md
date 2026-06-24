@@ -24,8 +24,10 @@ push to main / manual dispatch
 │  • az acr login      │     │  • render .env from secrets         │
 │  • build & push:     │     │  • az vm run-command (no SSH):      │
 │    web-client        │     │    write compose+.env, docker login │
-│    spring-api        │     │    compose pull + up -d             │
-│    gen-ai            │     │  • HTTP health check (in-VM curl)    │
+│    api-gateway       │     │    compose pull + up -d             │
+│    user-service      │     │  • HTTP health check (in-VM curl)    │
+│    content-service   │     │                                      │
+│    gen-ai            │     │                                      │
 └──────────────────────┘     └────────────────────────────────────┘
 ```
 
@@ -131,8 +133,6 @@ They are sensitive and are masked in logs.
 | `LLM_API_KEY` | API key for the GenAI provider. |
 | `MONGO_ROOT_USERNAME` | MongoDB root username. |
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
-| `POSTGRES_USER` | PostgreSQL username. |
-| `POSTGRES_PASSWORD` | PostgreSQL password. |
 
 The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
 Azure control plane, so no host/user/SSH-key secrets are needed.
@@ -152,7 +152,6 @@ They are non-sensitive configuration.
 | `LLM_PROVIDER` | `openai` | GenAI provider. |
 | `LLM_MODEL` | `gpt-4o-mini` | GenAI model. |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB database name. |
-| `POSTGRES_DB` | `mydatabase` | PostgreSQL database name. |
 
 ## Security notes
 
@@ -247,8 +246,8 @@ cat /var/log/rr-deploy.log         # pull/up output from the last deploy
 - **Image pull denied:** confirm the SP has `AcrPush` on the registry and the
   `ACR_LOGIN_SERVER` / `ACR_NAME` values match.
 - **Deploy reports `HEALTH_FAILED`:** check `/var/log/rr-deploy.log` and the
-  `web-client`/`spring-api` logs; the API waits on healthy
-  MongoDB/PostgreSQL/gen-ai containers before it starts.
+  `web-client`/`api-gateway`/`user-service`/`content-service` logs; the API
+  waits on healthy MongoDB/gen-ai containers before it starts.
 - **Note:** the in-browser app calls `NEXT_PUBLIC_API_BASE_URL` (port 8080). The
-  default NSG only opens 3000; add `8080` to `application_ports` and re-apply if
-  you need the UI's API calls to work from outside the VM.
+  default NSG opens port 8080 (`application_ports = [8080]` in
+  `terraform.tfvars.example`).

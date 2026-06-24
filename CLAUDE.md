@@ -9,7 +9,7 @@ Personalised News Aggregator with GenAI — a microservices platform combining S
 ```
 api/                    # OpenAPI spec (single source of truth)
 services/
-  spring/               # Gradle multi-module: api-gateway, user-service, content-service, generated
+  spring/               # Gradle multi-module: api-gateway, user-service, content-service
   gen-ai/               # Python FastAPI + LangChain
 web-client/             # Next.js + React 19 + TypeScript
 infra/
@@ -56,5 +56,6 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 ## Deployment Paths
 
 1. **Local**: Docker Compose (`infra/docker-compose.yaml` + `docker-compose.dev.yaml`)
-2. **Azure VM**: Terraform → Ansible → Docker Compose (see `docs/source/azure-vm-deployment.md`)
-3. **Kubernetes**: Helm chart (`infra/helm/`) or raw manifests (`infra/k8s/`)
+2. **Azure VM (CI/CD)**: GitHub Actions → ACR → `az vm run-command` (see `docs/source/cicd-azure-deploy.md`)
+3. **Azure VM (manual)**: Terraform → Ansible → Docker Compose (see `docs/source/azure-vm-deployment.md`)
+4. **Kubernetes**: Helm chart (`infra/helm/`) or raw manifests (`infra/k8s/`)
