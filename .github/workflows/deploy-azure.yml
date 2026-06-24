@@ -181,9 +181,6 @@ jobs:
           MONGO_DATABASE: ${{ vars.MONGO_DATABASE }}
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
-          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
           umask 077
           cat > deploy.env <<EOF
@@ -201,9 +198,6 @@ jobs:
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}
           MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
           MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
-          POSTGRES_DB=${POSTGRES_DB:-mydatabase}
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
