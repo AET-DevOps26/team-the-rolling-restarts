@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY build.gradle settings.gradle gradlew ./
 COPY gradle ./gradle
-COPY generated/build.gradle ./generated/build.gradle
 COPY content-service/build.gradle ./content-service/build.gradle
 
 # Download dependencies (cached unless build.gradle changes)
@@ -12,7 +11,6 @@ RUN ./gradlew :content-service:dependencies --no-daemon -q
 
 FROM deps AS build
 
-COPY generated ./generated
 COPY content-service ./content-service
 
 RUN ./gradlew :content-service:bootJar --no-daemon
