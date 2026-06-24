@@ -54,7 +54,7 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 ### Endpoint checklist
 
 | Endpoint | Expected | What it tests |
-|----------|----------|---------------|
+ | ---------- | ---------- | --------------- |
 | `GET http://localhost:8080/actuator/health` | `200 {"status":"UP"}` | API gateway is running |
 | `GET http://localhost:8081/actuator/health` | `200 {"status":"UP"}` | User service + MongoDB connection |
 | `GET http://localhost:8082/actuator/health` | `200 {"status":"UP"}` | Content service + MongoDB connection |
@@ -81,7 +81,7 @@ Hits health endpoints, content retrieval, registration (valid + invalid), and lo
 make compose-test
 ```
 
-### Tear down
+### Tear down (local)
 
 ```bash
 make compose-down                   # stops containers and removes volumes
@@ -325,7 +325,7 @@ kubectl get sa | grep -E "web-client|api-gateway|user-service|content-service|ge
 kubectl describe pod -l app=api-gateway | grep -A3 "Startup:"
 ```
 
-### Tear down
+### Tear down (K8s)
 
 ```bash
 make helm-destroy
@@ -344,7 +344,7 @@ root.
 ### Public Endpoints (no auth required)
 
 | Method | Path | Response |
-|--------|------|----------|
+| ------ | ---- | -------- |
 | GET | `/` (edge) | Web-client HTML page |
 | GET | `/actuator/health` | `{"status": "UP"}` (gateway health) |
 | GET | `/swagger-ui.html` | Swagger UI redirect |
@@ -358,7 +358,7 @@ root.
 ### Protected Endpoints (require JWT Bearer token)
 
 | Method | Path | Description |
-|--------|------|-------------|
+| ------ | ---- | ----------- |
 | GET | `/api/users/users/me` | Current user profile |
 | PUT | `/api/users/users/me` | Update profile |
 | GET | `/api/users/users/me/settings` | User settings |

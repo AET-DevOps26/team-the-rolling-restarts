@@ -44,7 +44,7 @@ public class RssFetcherService {
 
 	private void fetchSource(Source source) throws Exception {
 		SyndFeedInput input = new SyndFeedInput();
-		try (XmlReader reader = new XmlReader(URI.create(source.getRssUrl()).toURL())) {
+		try (XmlReader reader = new XmlReader(URI.create(source.getRssUrl()).toURL().openStream())) {
 			SyndFeed feed = input.build(reader);
 			int newArticles = 0;
 

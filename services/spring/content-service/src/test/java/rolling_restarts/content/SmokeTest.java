@@ -13,14 +13,18 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.testcontainers.context.ImportTestcontainers;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 
 @Tag("smoke")
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 @ImportTestcontainers(SmokeTest.Containers.class)
 class SmokeTest {
+
+	private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE = new ParameterizedTypeReference<>() {};
 
 	interface Containers {
 		@ServiceConnection
@@ -32,7 +36,7 @@ class SmokeTest {
 
 	@Test
 	void healthEndpointReturnsUp() {
-		var response = rest.getForEntity("/actuator/health", Map.class);
+		var response = rest.exchange("/actuator/health", HttpMethod.GET, null, MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).containsEntry("status", "UP");
 	}
@@ -53,7 +57,7 @@ class SmokeTest {
 
 	@Test
 	void articlesEndpoint_returnsPagedResponse() {
-		var response = rest.getForEntity("/articles", Map.class);
+		var response = rest.exchange("/articles", HttpMethod.GET, null, MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody())
 				.containsKey("content")
@@ -62,13 +66,13 @@ class SmokeTest {
 
 	@Test
 	void articlesEndpoint_nonExistentId_returns404() {
-		var response = rest.getForEntity("/articles/nonexistent", Map.class);
+		var response = rest.exchange("/articles/nonexistent", HttpMethod.GET, null, MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 	}
 
 	@Test
 	void sourcesEndpoint_nonExistentId_returns404() {
-		var response = rest.getForEntity("/sources/nonexistent", Map.class);
+		var response = rest.exchange("/sources/nonexistent", HttpMethod.GET, null, MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
 	}
 }

@@ -13,14 +13,19 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.testcontainers.context.ImportTestcontainers;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 
 @Tag("smoke")
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 @ImportTestcontainers(SmokeTest.Containers.class)
 class SmokeTest {
+
+	private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE = new ParameterizedTypeReference<>() {};
 
 	interface Containers {
 		@ServiceConnection
@@ -32,7 +37,7 @@ class SmokeTest {
 
 	@Test
 	void healthEndpointReturnsUp() {
-		var response = rest.getForEntity("/actuator/health", Map.class);
+		var response = rest.exchange("/actuator/health", HttpMethod.GET, null, MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).containsEntry("status", "UP");
 	}
@@ -45,7 +50,7 @@ class SmokeTest {
 				"password", "password123",
 				"name", "Smoke User");
 
-		var response = rest.postForEntity("/auth/register", body, Map.class);
+		var response = rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(body), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 		assertThat(response.getBody())
 				.containsEntry("username", "smokeuser")
@@ -60,14 +65,14 @@ class SmokeTest {
 				"email", "dup1@example.com",
 				"password", "password123",
 				"name", "Dup User");
-		rest.postForEntity("/auth/register", body, Map.class);
+		rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(body), MAP_TYPE);
 
 		var duplicate = Map.of(
 				"username", "dupuser",
 				"email", "dup2@example.com",
 				"password", "password123",
 				"name", "Dup User 2");
-		var response = rest.postForEntity("/auth/register", duplicate, Map.class);
+		var response = rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(duplicate), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
 		assertThat(response.getBody()).containsEntry("code", 409);
 	}
@@ -80,7 +85,7 @@ class SmokeTest {
 				"password", "short",
 				"name", "X");
 
-		var response = rest.postForEntity("/auth/register", body, Map.class);
+		var response = rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(body), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 		assertThat(response.getBody())
 				.containsEntry("code", 400)
@@ -91,7 +96,7 @@ class SmokeTest {
 	void registerWithMissingFields_returns400() {
 		var body = Map.of("username", "onlyuser");
 
-		var response = rest.postForEntity("/auth/register", body, Map.class);
+		var response = rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(body), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 	}
 
@@ -102,10 +107,10 @@ class SmokeTest {
 				"email", "login@example.com",
 				"password", "password123",
 				"name", "Login User");
-		rest.postForEntity("/auth/register", registerBody, Map.class);
+		rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(registerBody), MAP_TYPE);
 
 		var loginBody = Map.of("username", "loginuser", "password", "password123");
-		var response = rest.postForEntity("/auth/login", loginBody, Map.class);
+		var response = rest.exchange("/auth/login", HttpMethod.POST, new HttpEntity<>(loginBody), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 		assertThat(response.getBody()).containsKey("token");
 	}
@@ -117,17 +122,17 @@ class SmokeTest {
 				"email", "badpw@example.com",
 				"password", "password123",
 				"name", "Bad PW User");
-		rest.postForEntity("/auth/register", registerBody, Map.class);
+		rest.exchange("/auth/register", HttpMethod.POST, new HttpEntity<>(registerBody), MAP_TYPE);
 
 		var loginBody = Map.of("username", "badpwuser", "password", "wrongpassword");
-		var response = rest.postForEntity("/auth/login", loginBody, Map.class);
+		var response = rest.exchange("/auth/login", HttpMethod.POST, new HttpEntity<>(loginBody), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 	}
 
 	@Test
 	void loginWithNonexistentUser_returns401() {
 		var loginBody = Map.of("username", "noonehere", "password", "password123");
-		var response = rest.postForEntity("/auth/login", loginBody, Map.class);
+		var response = rest.exchange("/auth/login", HttpMethod.POST, new HttpEntity<>(loginBody), MAP_TYPE);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 	}
 }
