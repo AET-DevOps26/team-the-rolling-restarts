@@ -17,7 +17,8 @@ A microservices platform combining Spring Boot backends, a Next.js frontend, and
 1. **Local** — Docker Compose ([Deployment Testing](deployment-testing.md))
 2. **Azure VM (CI/CD)** — GitHub Actions → ACR → `az vm run-command` ([Azure CD Pipeline](cicd-azure-deploy.md))
 3. **Azure VM (manual)** — Terraform → Ansible → Docker Compose ([Azure VM Deployment](azure-vm-deployment.md))
-4. **Kubernetes** — Helm chart ([Helm](infra/helm/helm.md)) or raw manifests ([K8s](infra/k8s/kubernetes.md))
+4. **Kubernetes (CI/CD)** — GitHub Actions → GHCR → Helm deploy ([Kubernetes CD Pipeline](cicd-kubernetes-deploy.md))
+5. **Kubernetes (manual)** — Helm chart ([Helm](infra/helm/helm.md)) or raw manifests ([K8s](infra/k8s/kubernetes.md))
 
 ## Quick start
 

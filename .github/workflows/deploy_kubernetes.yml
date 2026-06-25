@@ -5,8 +5,7 @@ on:
     workflows: [build-and-package]
     types: [completed]
   workflow_dispatch:
-  pull_request:
-        
+
 concurrency:
   group: deploy-k8s-${{ github.ref }}
   cancel-in-progress: false
@@ -16,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
       github.event.workflow_run.conclusion == 'success'
 
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
@@ -40,7 +38,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fallback to example image values
-        if: github.event_name != 'workflow_run'
+        if: github.event_name == 'workflow_dispatch'
         run: cp infra/helm/image-values.example.yaml infra/helm/image-values.yaml
 
       - name: Set up Helm

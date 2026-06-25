@@ -24,6 +24,7 @@ nav:
   - Infrastructure:
     - Overview: infra/README.md
     - Azure CD Pipeline (ACR): cicd-azure-deploy.md
+    - Kubernetes CD Pipeline (Helm): cicd-kubernetes-deploy.md
     - Azure VM Deployment (Manual): azure-vm-deployment.md
     - Ansible: infra/ansible/README.md
     - Terraform: infra/terraform/azure-vm/README.md
