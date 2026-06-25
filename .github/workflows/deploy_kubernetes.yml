@@ -4,6 +4,9 @@ on:
   workflow_run:
     workflows: [build-and-package]
     types: [completed]
+  # Manual runs are a coarse fallback: there is no build artifact, so they deploy
+  # the example image values (latest/wip tags) to dev. The real production path is
+  # a workflow_run from main, which carries the SHA-pinned image-values artifact.
   workflow_dispatch:
 
 concurrency:
@@ -13,9 +16,13 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Only deploy from the long-lived branches. build-and-package runs on every
+    # push (any branch), so without this gate every feature-branch build would
+    # deploy to and clobber the shared dev cluster.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+       contains(fromJSON('["main", "dev"]'), github.event.workflow_run.head_branch))
 
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
 
@@ -62,12 +69,18 @@ jobs:
           umask 077
           python3 -c '
           import os, yaml, sys
-          str_representer = lambda dumper, data: dumper.represent_scalar("tag:yaml.org,2002:str", data, style="\"" if data.isnumeric() else None)
-          yaml.add_representer(str, str_representer)
+
+          # Force the Mongo credentials to be emitted as quoted scalars so a value
+          # that looks like a number/bool/null (e.g. "1e10", "yes") cannot be
+          # coerced to the wrong type by Helm. PEM keys use default handling
+          # (PyYAML round-trips multi-line scalars correctly).
+          class QuotedStr(str): pass
+          yaml.add_representer(QuotedStr, lambda d, v: d.represent_scalar("tag:yaml.org,2002:str", v, style="\""))
+
           data = {
               "mongodb": {
-                  "rootUsername": str(os.environ["MONGO_ROOT_USERNAME"]),
-                  "rootPassword": str(os.environ["MONGO_ROOT_PASSWORD"]),
+                  "rootUsername": QuotedStr(os.environ["MONGO_ROOT_USERNAME"]),
+                  "rootPassword": QuotedStr(os.environ["MONGO_ROOT_PASSWORD"]),
               },
               "userService": {
                   "jwtKeys": {
