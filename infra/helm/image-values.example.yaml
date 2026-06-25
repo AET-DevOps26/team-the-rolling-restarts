@@ -12,16 +12,16 @@
 # genAi:
 #   image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
 webClient:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:latest
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:wip
 
 apiGateway:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/api-gateway:latest
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/api-gateway:wip
 
 userService:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/user-service:latest
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/user-service:wip
 
 contentService:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:latest
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:wip
 
 genAi:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:latest
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
