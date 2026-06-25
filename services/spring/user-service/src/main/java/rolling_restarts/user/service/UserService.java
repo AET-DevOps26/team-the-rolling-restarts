@@ -35,13 +35,7 @@ public class UserService {
 		user.setEmail(email);
 		user.setPasswordHash(passwordEncoder.encode(password));
 		user.setName(name);
-		if (name != null && name.length() >= 2) {
-			String[] parts = name.split("\\s+", 2);
-			String initials = parts.length > 1
-					? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
-					: name.substring(0, 2).toUpperCase();
-			user.setAvatarInitials(initials);
-		}
+		user.setAvatarInitials(computeInitials(name));
 
 		UserSettings settings = new UserSettings();
 		settings.setSelectedTopicIds(List.of());
@@ -71,11 +65,25 @@ public class UserService {
 		User user = findById(userId);
 		if (name != null) {
 			user.setName(name);
+			user.setAvatarInitials(computeInitials(name));
 		}
-		if (email != null) {
+		if (email != null && !email.equals(user.getEmail())) {
+			if (userRepository.existsByEmail(email)) {
+				throw new IllegalArgumentException("Email already registered");
+			}
 			user.setEmail(email);
 		}
 		return userRepository.save(user);
+	}
+
+	private static String computeInitials(String name) {
+		if (name == null || name.length() < 2) {
+			return null;
+		}
+		String[] parts = name.split("\\s+", 2);
+		return parts.length > 1
+				? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
+				: name.substring(0, 2).toUpperCase();
 	}
 
 	public UserSettings getSettings(String userId) {
