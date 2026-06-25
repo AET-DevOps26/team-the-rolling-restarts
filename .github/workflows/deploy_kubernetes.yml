@@ -5,7 +5,6 @@ on:
     workflows: [build-and-package]
     types: [completed]
   workflow_dispatch:
-  pull_request:
 
 concurrency:
   group: deploy-k8s-${{ github.ref }}
@@ -16,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'pull_request' ||
       github.event.workflow_run.conclusion == 'success'
 
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
@@ -58,20 +56,22 @@ jobs:
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
         run: |
           umask 077
-          PUB="$(echo "$JWT_RSA_PUBLIC_KEY" | sed 's/^/    /')"
-          PRIV="$(echo "$JWT_RSA_PRIVATE_KEY" | sed 's/^/    /')"
-          cat <<EOF > infra/helm/secrets-values.yaml
-          mongodb:
-            rootUsername: ${MONGO_ROOT_USERNAME}
-            rootPassword: ${MONGO_ROOT_PASSWORD}
-
-          userService:
-            jwtKeys:
-              publicKey: |
-          ${PUB}
-              privateKey: |
-          ${PRIV}
-          EOF
+          python3 -c '
+          import os, yaml, sys
+          data = {
+              "mongodb": {
+                  "rootUsername": os.environ["MONGO_ROOT_USERNAME"],
+                  "rootPassword": os.environ["MONGO_ROOT_PASSWORD"],
+              },
+              "userService": {
+                  "jwtKeys": {
+                      "publicKey": os.environ["JWT_RSA_PUBLIC_KEY"],
+                      "privateKey": os.environ["JWT_RSA_PRIVATE_KEY"],
+                  }
+              }
+          }
+          yaml.dump(data, sys.stdout, default_flow_style=False)
+          ' > infra/helm/secrets-values.yaml
 
       - name: Build values file list
         id: values
