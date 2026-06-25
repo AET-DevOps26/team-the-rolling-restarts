@@ -5,6 +5,7 @@ on:
     workflows: [build-and-package]
     types: [completed]
   workflow_dispatch:
+  pull_request:
 
 concurrency:
   group: deploy-k8s-${{ github.ref }}
@@ -15,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     if: >-
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
       github.event.workflow_run.conclusion == 'success'
 
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
