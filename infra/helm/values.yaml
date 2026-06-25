@@ -8,11 +8,11 @@ global:
     path: /
   resources:
     requests:
-      cpu: 100m
+      cpu: 50m
       memory: 128Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 250m
+      memory: 384Mi
   service:
     type: ClusterIP
     protocol: TCP
@@ -68,11 +68,11 @@ apiGateway:
       timeoutSeconds: 2
   resources:
     requests:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 100m
+      memory: 192Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 350m
+      memory: 448Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -151,11 +151,11 @@ userService:
       timeoutSeconds: 2
   resources:
     requests:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 100m
+      memory: 192Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 350m
+      memory: 448Mi
 
 # Content service manages RSS feeds and articles (MongoDB).
 contentService:
@@ -186,11 +186,11 @@ contentService:
       timeoutSeconds: 5
   resources:
     requests:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 100m
+      memory: 192Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 350m
+      memory: 448Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -223,11 +223,11 @@ mongodb:
   storage: 1Gi
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 50m
+      memory: 192Mi
     limits:
-      cpu: 250m
-      memory: 512Mi
+      cpu: 150m
+      memory: 384Mi
 
 ingress:
   enabled: true
