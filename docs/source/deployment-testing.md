@@ -195,21 +195,21 @@ VM_IP=$(cd infra/terraform/azure-vm && terraform output -raw vm_public_ip)
 ssh azureuser@$VM_IP "sudo systemctl status rolling-restarts"
 ssh azureuser@$VM_IP "sudo docker ps"
 
-# Test endpoints — everything goes through the reverse proxy on :8080 (the only public port).
+# Test endpoints — everything goes through the reverse proxy on port 80 (the only public port).
 # Backend service ports (8081/8082/8000), MongoDB (27017) and Grafana (3001) are bound to the
 # VM's loopback by docker-compose.prod.yaml, so they are NOT reachable on the public IP — use
 # an SSH tunnel for those (see the MongoDB Compass section).
-curl -s http://$VM_IP:8080/                         # web client (served via reverse proxy)
-curl -s http://$VM_IP:8080/actuator/health          # gateway health
-curl -s http://$VM_IP:8080/api/content/sources      # content routing
-curl -s http://$VM_IP:8080/api/content/articles     # articles
+curl -s http://$VM_IP/                              # web client (served via reverse proxy)
+curl -s http://$VM_IP/actuator/health               # gateway health
+curl -s http://$VM_IP/api/content/sources           # content routing
+curl -s http://$VM_IP/api/content/articles          # articles
 
 # Registration + login
-curl -s -X POST http://$VM_IP:8080/api/users/auth/register \
+curl -s -X POST http://$VM_IP/api/users/auth/register \
   -H "Content-Type: application/json" \
   -d '{"username":"vmtest","email":"vm@test.com","password":"password123","name":"VM Test"}'
 
-curl -s -X POST http://$VM_IP:8080/api/users/auth/login \
+curl -s -X POST http://$VM_IP/api/users/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"vmtest","password":"password123"}'
 ```
@@ -335,8 +335,8 @@ make helm-destroy
 
 ## Endpoint Reference
 
-All endpoints are reached through the single entry point on port 8080 (the nginx reverse proxy
-locally / on the VM, or the ingress in K8s). The entry point routes `/api`, `/actuator`,
+All endpoints are reached through the single entry point (the nginx reverse proxy on `APP_PORT` —
+port 8080 locally, port 80 on the VM, or the ingress in K8s). The entry point routes `/api`, `/actuator`,
 `/swagger-ui`, and `/v3/api-docs` to the API gateway, and everything else (`/`) to the web client.
 The paths below are the gateway routes; `/` at the edge returns the web-client UI, not the gateway
 root.

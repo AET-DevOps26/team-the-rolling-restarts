@@ -1,8 +1,8 @@
 # Production overlay (used on the Azure VM). On top of pre-built images, this clamps every
-# host-published port EXCEPT the reverse-proxy (8080) to the loopback interface (127.0.0.1),
-# so the backend services, database, and Grafana are NOT reachable on the VM's public IP —
-# "only 8080 is public" becomes true by construction instead of relying on the Azure NSG as
-# the sole barrier. They stay reachable on the VM itself (and via SSH tunnel, e.g. MongoDB
+# host-published port EXCEPT the reverse-proxy (APP_PORT, default 80) to the loopback
+# interface (127.0.0.1), so the backend services, database, and Grafana are NOT reachable on
+# the VM's public IP — "only the proxy port is public" becomes true by construction instead
+# of relying on the Azure NSG as the sole barrier. They stay reachable on the VM itself (and via SSH tunnel, e.g. MongoDB
 # Compass), and container-to-container traffic over the docker network is unaffected.
 #
 # `!override` REPLACES the base `ports:` list — without it, Compose would APPEND, leaving the

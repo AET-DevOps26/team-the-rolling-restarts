@@ -2,7 +2,8 @@
        compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s push-images \
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
-       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup
+       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup \
+       docs-serve
 
 HELM_DIR    ?= infra/helm
 COMPOSE_ENV  ?= infra/.env
@@ -51,6 +52,8 @@ help:
 	  '  make helm-destroy      - uninstall the Helm release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
 	  '' \
+	  'Documentation:' \
+	  '  make docs-serve        - serve MkDocs locally at http://localhost:8000' \
 	  '' \
 	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'
 
@@ -126,7 +129,7 @@ compose-test:
 	exit $$rc
 
 smoke-test:
-	@infra/scripts/smoke-test.sh http://localhost:8080
+	@infra/scripts/smoke-test.sh "http://localhost:$(or $(APP_PORT),8080)"
 
 VM_IP ?= $(shell cd $(TF_DIR) && terraform output -raw vm_public_ip 2>/dev/null)
 
@@ -134,7 +137,7 @@ smoke-test-vm:
 	@if [ -z "$(VM_IP)" ]; then echo "Error: could not determine VM IP. Run make terraform-apply first."; exit 1; fi
 	@echo "Targeting VM at $(VM_IP)"
 	@echo ""
-	@infra/scripts/smoke-test.sh "http://$(VM_IP):8080"
+	@infra/scripts/smoke-test.sh "http://$(VM_IP)$(if $(filter-out 80,$(or $(APP_PORT),8080)),:$(APP_PORT),)"
 
 K8S_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
 
@@ -199,3 +202,7 @@ azure-nuke:
 # --- Helm (delegates to infra/helm/Makefile) ---
 helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup:
 	$(MAKE) -C $(HELM_DIR) $@
+
+# --- Documentation ---
+docs-serve:
+	mkdocs serve -f docs/source/mkdocs.yml

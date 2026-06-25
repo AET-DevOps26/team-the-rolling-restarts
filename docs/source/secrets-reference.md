@@ -30,7 +30,7 @@ Safe to leave at defaults for local dev. Override as needed.
 | `REGISTRY` | `ghcr.io/aet-devops26/team-the-rolling-restarts` | Container image registry. Use `ghcr.io/<github-username>/rolling-restarts` for personal dev |
 | `IMAGE_TAG` | `latest` | Image tag. Makefile defaults to current commit SHA |
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | API base URL baked into web client at build time |
-| `APP_PORT` | `8080` | Host port for the nginx reverse proxy — the single entry point; the web client is served through it at `/`, not on its own port |
+| `APP_PORT` | `8080` (local) / `80` (VM) | Host port for the nginx reverse proxy — the single entry point; the web client is served through it at `/`, not on its own port |
 | `GEN_AI_PORT` | `8000` | Host port for GenAI service |
 | `LLM_PROVIDER` | `openai` | LLM provider (`openai`, etc.) |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name |

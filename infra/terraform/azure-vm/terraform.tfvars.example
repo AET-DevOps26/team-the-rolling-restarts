@@ -21,7 +21,7 @@ subnet_cidr = "10.42.1.0/24"
 
 # Least-privilege: open only the nginx reverse proxy (single entry point — serves the web
 # client and proxies the API). Backend/DB/Grafana ports stay loopback-only on the VM.
-application_ports = [8080]
+application_ports = [80]
 
 # Container registry used by the deploy-azure CI/CD workflow.
 # Basic is the cheapest tier and is plenty for testing.

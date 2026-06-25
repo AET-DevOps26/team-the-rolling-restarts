@@ -6,16 +6,17 @@ frontend to integrate with the new API surface.
 
 ## What changed
 
-The single `spring-api` on port 8080 has been replaced by:
+The single `spring-api` has been replaced by:
 
-| Service           | Port | Role                                              |
-| ----------------- | ---- | ------------------------------------------------- |
-| `api-gateway`     | 8080 | Routes traffic, JWT validation, unified Swagger UI |
-| `user-service`    | 8081 | OAuth2 Authorization Server, user profiles/settings |
-| `content-service` | 8082 | RSS feeds, articles, topics                        |
+| Service           | Internal Port | Role                                              |
+| ----------------- | ------------- | ------------------------------------------------- |
+| `api-gateway`     | 8080          | Routes traffic, JWT validation, unified Swagger UI |
+| `user-service`    | 8081          | OAuth2 Authorization Server, user profiles/settings |
+| `content-service` | 8082          | RSS feeds, articles, topics                        |
 
-The web client still talks only to port 8080 (`NEXT_PUBLIC_API_BASE_URL`).
-The gateway forwards requests based on path prefix.
+The web client talks to the nginx reverse proxy (`NEXT_PUBLIC_API_BASE_URL`) which
+forwards to the gateway. Locally the proxy is on port 8080 (`APP_PORT`), on the VM
+it is on port 80. The gateway forwards requests based on path prefix.
 
 ## New API endpoints
 

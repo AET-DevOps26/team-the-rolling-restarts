@@ -77,7 +77,7 @@ make deploy-azure
 From your machine:
 
 ```bash
-curl -I http://<vm-public-ip>:8080
+curl -I http://<vm-public-ip>
 ```
 
 From the VM:

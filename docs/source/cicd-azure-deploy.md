@@ -148,7 +148,7 @@ They are non-sensitive configuration.
 | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). Stable across destroy/recreate. |
 | `DEPLOY_DIR` | `/opt/rolling-restarts` | Directory on the VM the stack is deployed to. |
 | `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group of the VM (deploy looks up the VM here; also used by the teardown workflow). |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://<vm-host>:8080` | Public API URL baked into the web-client at build time. |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://<vm-host>` | Public API URL baked into the web-client at build time. |
 | `LLM_PROVIDER` | `openai` | GenAI provider. |
 | `LLM_MODEL` | `gpt-4o-mini` | GenAI model. |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB database name. |
@@ -248,6 +248,5 @@ cat /var/log/rr-deploy.log         # pull/up output from the last deploy
 - **Deploy reports `HEALTH_FAILED`:** check `/var/log/rr-deploy.log` and the
   `web-client`/`api-gateway`/`user-service`/`content-service` logs; the API
   waits on healthy MongoDB/gen-ai containers before it starts.
-- **Note:** the in-browser app calls `NEXT_PUBLIC_API_BASE_URL` (port 8080). The
-  default NSG opens port 8080 (`application_ports = [8080]` in
-  `terraform.tfvars.example`).
+- **Note:** the in-browser app calls `NEXT_PUBLIC_API_BASE_URL`. The default NSG
+  opens port 80 (`application_ports = [80]` in `terraform.tfvars.example`).
