@@ -58,7 +58,7 @@ All three Spring Boot services share a Gradle multi-module project at `services/
 
 ## 3. UML Diagrams
 
-The diagrams below are authored as PlantUML in [docs/diagrams/](./diagrams/) and rendered to PNG by [.github/workflows/generate_uml_diagrams.yml](../../.github/workflows/generate_uml_diagrams.yml).
+The diagrams below are authored as PlantUML in [docs/diagrams/](./diagrams/) and rendered to PNG by the [publish_docs workflow](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/.github/workflows/publish_docs.yml).
 
 ### 3.1 Analysis Object Model
 

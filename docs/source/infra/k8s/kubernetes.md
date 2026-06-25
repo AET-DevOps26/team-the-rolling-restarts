@@ -23,8 +23,8 @@ kubectl delete -R -f .
 
 - [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim).
 - [services/](services) contains one service manifest per workload, including `mongodb-service.yml`.
-- [secrets.yml](secrets.yml) defines the `mongodb-credentials` and `mongodb-user-credentials` Secrets consumed by MongoDB and the Spring services. Ships with dev defaults — change them (or swap in a real secret store) before any non-local deployment.
-- [ingress.yml](ingress.yml) defines the external routing rules.
+- [secrets.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml) defines the `mongodb-credentials` and `mongodb-user-credentials` Secrets consumed by MongoDB and the Spring services. Ships with dev defaults — change them (or swap in a real secret store) before any non-local deployment.
+- [ingress.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/ingress.yml) defines the external routing rules.
 
 ## Stack Setup Notes
 
@@ -48,7 +48,7 @@ Use absolute paths when merging configs. Confirm the active configuration with:
 kubectl config view
 ```
 
-Push images to the registry before applying the manifests or Helm chart. The repository uses the GitHub Actions workflow in [`.github/workflows/upload_images.yml`](../../.github/workflows/upload_images.yml) for that step.
+Push images to the registry before applying the manifests or Helm chart. The repository uses the GitHub Actions workflow in [`upload_images.yml`](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/.github/workflows/upload_images.yml) for that step.
 
 ## When to use the raw manifests
 

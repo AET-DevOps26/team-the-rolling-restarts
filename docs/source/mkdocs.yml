@@ -12,13 +12,20 @@ nav:
   - Problem Statement: PROBLEM_STATEMENT.md
   - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
   - API Docs: api.html
+  - Services:
+    - Spring Microservices: services/spring/README.md
+    - GenAI Service: gen-ai-service.md
+    - Web Client: web-client/README.md
   - Guides:
     - OpenAPI Workflow: openapi-workflow.md
     - Web Client Integration: web-client-integration.md
     - Deployment Testing: deployment-testing.md
     - Secrets & Environment Variables: secrets-reference.md
   - Infrastructure:
+    - Overview: infra/README.md
     - Azure CD Pipeline (ACR): cicd-azure-deploy.md
     - Azure VM Deployment (Manual): azure-vm-deployment.md
+    - Ansible: infra/ansible/README.md
+    - Terraform: infra/terraform/azure-vm/README.md
     - Helm Chart: infra/helm/helm.md
     - Kubernetes: infra/k8s/kubernetes.md

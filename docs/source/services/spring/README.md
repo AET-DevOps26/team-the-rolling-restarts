@@ -56,7 +56,7 @@ Base `application.properties` contains no default credentials — they must come
 
 ## OpenAPI (Code-First)
 
-The controllers are the source of truth. springdoc generates per-service specs during tests (`OpenApiDocGenerationTest`), which are merged into `api/openapi.yaml` by `api/scripts/gen-all.sh`. Consumer clients (Python, TypeScript) are generated from that spec — no Java server stubs are generated. See [OpenAPI Workflow](../../docs/source/openapi-workflow.md).
+The controllers are the source of truth. springdoc generates per-service specs during tests (`OpenApiDocGenerationTest`), which are merged into `api/openapi.yaml` by `api/scripts/gen-all.sh`. Consumer clients (Python, TypeScript) are generated from that spec — no Java server stubs are generated. See [OpenAPI Workflow](../../openapi-workflow.md).
 
 ## Testing
 

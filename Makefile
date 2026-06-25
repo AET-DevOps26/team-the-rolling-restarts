@@ -205,4 +205,5 @@ helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-
 
 # --- Documentation ---
 docs-serve:
+	@cp services/gen-ai/README.md docs/source/gen-ai-service.md
 	mkdocs serve -f docs/source/mkdocs.yml
