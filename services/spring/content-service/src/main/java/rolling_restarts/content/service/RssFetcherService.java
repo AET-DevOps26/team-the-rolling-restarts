@@ -2,7 +2,10 @@ package rolling_restarts.content.service;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import com.rometools.rome.feed.synd.SyndEntry;
 import com.rometools.rome.feed.synd.SyndFeed;
@@ -46,11 +49,22 @@ public class RssFetcherService {
 		SyndFeedInput input = new SyndFeedInput();
 		try (XmlReader reader = new XmlReader(URI.create(source.getRssUrl()).toURL().openStream())) {
 			SyndFeed feed = input.build(reader);
-			int newArticles = 0;
+
+			List<String> entryUrls = feed.getEntries().stream()
+					.map(SyndEntry::getLink)
+					.filter(url -> url != null)
+					.toList();
+
+			Set<String> existingUrls = articleRepository.findByExternalUrlIn(entryUrls).stream()
+					.map(Article::getExternalUrl)
+					.collect(Collectors.toSet());
+
+			Instant now = Instant.now();
+			List<Article> newArticles = new ArrayList<>();
 
 			for (SyndEntry entry : feed.getEntries()) {
 				String url = entry.getLink();
-				if (url == null || articleRepository.existsByExternalUrl(url)) {
+				if (url == null || existingUrls.contains(url)) {
 					continue;
 				}
 
@@ -64,16 +78,17 @@ public class RssFetcherService {
 				article.setPublishedAt(
 						entry.getPublishedDate() != null
 								? entry.getPublishedDate().toInstant()
-								: Instant.now());
-				article.setFetchedAt(Instant.now());
-
-				articleRepository.save(article);
-				newArticles++;
+								: now);
+				article.setFetchedAt(now);
+				newArticles.add(article);
 			}
 
-			source.setLastFetchedAt(Instant.now());
+			if (!newArticles.isEmpty()) {
+				articleRepository.saveAll(newArticles);
+			}
+			source.setLastFetchedAt(now);
 			sourceRepository.save(source);
-			log.info("Fetched {} new articles from {}", newArticles, source.getName());
+			log.info("Fetched {} new articles from {}", newArticles.size(), source.getName());
 		}
 	}
 }

@@ -18,4 +18,6 @@ public interface ArticleRepository extends MongoRepository<Article, String> {
 	List<Article> findByIdIn(List<String> ids);
 
 	boolean existsByExternalUrl(String externalUrl);
+
+	List<Article> findByExternalUrlIn(java.util.Collection<String> urls);
 }
