@@ -55,10 +55,15 @@ public class SecurityConfig {
 
 	private CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration config = new CorsConfiguration();
-		config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+		List<String> origins = Arrays.asList(allowedOrigins.split(","));
+		if (origins.contains("*")) {
+			config.setAllowedOriginPatterns(List.of("*"));
+		} else {
+			config.setAllowedOrigins(origins);
+			config.setAllowCredentials(true);
+		}
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("*"));
-		config.setAllowCredentials(true);
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/**", config);
 		return source;

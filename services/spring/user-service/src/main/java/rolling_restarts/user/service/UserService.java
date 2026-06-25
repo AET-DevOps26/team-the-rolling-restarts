@@ -77,13 +77,17 @@ public class UserService {
 	}
 
 	private static String computeInitials(String name) {
-		if (name == null || name.length() < 2) {
+		if (name == null) {
 			return null;
 		}
-		String[] parts = name.split("\\s+", 2);
+		String trimmed = name.trim();
+		if (trimmed.length() < 2) {
+			return null;
+		}
+		String[] parts = trimmed.split("\\s+", 2);
 		return parts.length > 1
 				? ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase()
-				: name.substring(0, 2).toUpperCase();
+				: trimmed.substring(0, 2).toUpperCase();
 	}
 
 	public UserSettings getSettings(String userId) {
