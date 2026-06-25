@@ -7,7 +7,6 @@ on:
   workflow_dispatch:
   pull_request:
         
-
 concurrency:
   group: deploy-k8s-${{ github.ref }}
   cancel-in-progress: false
