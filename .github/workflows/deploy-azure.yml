@@ -10,7 +10,7 @@ name: Deploy to Azure
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
@@ -39,20 +39,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
 
       - name: Generate OpenAPI clients
         run: |
@@ -188,6 +188,7 @@ jobs:
           IMAGE_TAG=${IMAGE_TAG}
           # Single external entry point: the nginx reverse-proxy publishes APP_PORT
           # and proxies / -> web-client and /api -> api-gateway on the internal network.
+          SPRING_PROFILES_ACTIVE=production
           APP_PORT=80
           GEN_AI_PORT=8000
           NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}

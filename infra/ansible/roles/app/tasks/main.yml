@@ -62,6 +62,12 @@
     - restart rolling-restarts
   tags: [app, deploy]
 
+- name: Force-recreate containers to pick up env/config changes
+  ansible.builtin.command:
+    cmd: docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} up -d --force-recreate
+    chdir: "{{ project_root }}"
+  tags: [app, deploy]
+
 - name: Ensure project service is enabled and started
   ansible.builtin.systemd:
     name: "{{ app_service_name }}"

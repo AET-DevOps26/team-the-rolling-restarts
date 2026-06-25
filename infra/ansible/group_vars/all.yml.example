@@ -8,6 +8,7 @@ registry_token: ""
 image_tag: latest
 
 app_env:
+  SPRING_PROFILES_ACTIVE: "production"
   NEXT_PUBLIC_API_BASE_URL: "http://localhost:8080"
   LLM_PROVIDER: "openai"
   LLM_API_KEY: "replace-with-vault-secret"
