@@ -37,6 +37,7 @@ components:
           type: string
         rssUrl:
           minLength: 1
+          pattern: ^https?://.*
           type: string
       required:
       - name
