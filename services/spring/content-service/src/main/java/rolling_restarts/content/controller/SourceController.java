@@ -1,5 +1,7 @@
 package rolling_restarts.content.controller;
 
+import java.net.InetAddress;
+import java.net.URI;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,6 +67,7 @@ public class SourceController {
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
 	public ResponseEntity<Source> create(@Valid @RequestBody CreateSourceRequest request) {
+		validateUrlNotInternal(request.rssUrl());
 		return sourceRepository.findByRssUrl(request.rssUrl())
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> {
@@ -94,5 +98,29 @@ public class SourceController {
 		return ResponseEntity.noContent().build();
 	}
 
-	public record CreateSourceRequest(@NotBlank String name, @NotBlank String rssUrl) {}
+	private static void validateUrlNotInternal(String url) {
+		try {
+			URI uri = URI.create(url);
+			String scheme = uri.getScheme();
+			if (scheme == null || (!scheme.equals("http") && !scheme.equals("https"))) {
+				throw new IllegalArgumentException("RSS URL must use http or https");
+			}
+			String host = uri.getHost();
+			if (host == null) {
+				throw new IllegalArgumentException("RSS URL must have a valid host");
+			}
+			InetAddress addr = InetAddress.getByName(host);
+			if (addr.isLoopbackAddress() || addr.isSiteLocalAddress() || addr.isLinkLocalAddress()) {
+				throw new IllegalArgumentException("RSS URL must not target internal networks");
+			}
+		} catch (IllegalArgumentException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new IllegalArgumentException("Invalid RSS URL: " + e.getMessage());
+		}
+	}
+
+	public record CreateSourceRequest(
+			@NotBlank String name,
+			@NotBlank @Pattern(regexp = "^https?://.*", message = "must be an http or https URL") String rssUrl) {}
 }
