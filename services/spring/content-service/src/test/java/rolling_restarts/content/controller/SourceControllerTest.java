@@ -116,6 +116,30 @@ class SourceControllerTest {
 
 	@Test
 	@WithMockUser
+	void create_internalUrl_returns400() throws Exception {
+		mockMvc.perform(post("/sources")
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"Internal","rssUrl":"http://localhost:8081/actuator/env"}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@WithMockUser
+	void create_nonHttpScheme_returns400() throws Exception {
+		mockMvc.perform(post("/sources")
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"FTP","rssUrl":"ftp://example.com/feed"}
+								"""))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	@WithMockUser
 	void delete_existingSource_returns204() throws Exception {
 		when(sourceRepository.existsById("1")).thenReturn(true);
 

@@ -67,10 +67,32 @@ check "Login response contains token" "true" "$has_token"
 check "Login with wrong password returns 401" "401" "$(http -X POST "$base_url/api/users/auth/login" \
   -H 'Content-Type: application/json' \
   -d "{\"username\":\"smoke$$\",\"password\":\"wrongpassword\"}")"
+
+token=$(echo "$login_body" | jq -r '.token // empty' 2>/dev/null || true)
+echo ""
+
+echo "=== RSS Source Lifecycle ==="
+if [ -n "$token" ]; then
+  source_code=$(http -X POST "$base_url/api/content/sources" \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $token" \
+    -d '{"name":"Süddeutsche Zeitung","rssUrl":"https://rss.sueddeutsche.de/alles"}')
+  if [ "$source_code" = "201" ] || [ "$source_code" = "200" ]; then
+    check "Create RSS source returns 201 (or 200 if exists)" "ok" "ok"
+  else
+    check "Create RSS source returns 201 (or 200 if exists)" "ok" "$source_code"
+  fi
+
+  sources_body=$(curl $curl_extra -sf --connect-timeout 5 --max-time 10 "$base_url/api/content/sources" 2>/dev/null || true)
+  has_sz=$(echo "$sources_body" | jq -r '[.[] | select(.name == "Süddeutsche Zeitung")] | length' 2>/dev/null || echo 0)
+  check "Source 'Süddeutsche Zeitung' exists in list" "1" "$has_sz"
+else
+  check "Create RSS source (skipped - no token)" "ok" "skipped"
+  check "Source exists in list (skipped - no token)" "1" "skipped"
+fi
 echo ""
 
 echo "=== Protected Endpoints ==="
-token=$(echo "$login_body" | jq -r '.token // empty' 2>/dev/null || true)
 check "GET /users/me without token returns 401" "401" "$(http "$base_url/api/users/users/me")"
 if [ -n "$token" ]; then
   check "GET /users/me with token returns 200" "200" "$(http "$base_url/api/users/users/me" \
