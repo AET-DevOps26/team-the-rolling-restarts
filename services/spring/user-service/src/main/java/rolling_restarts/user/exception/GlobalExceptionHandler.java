@@ -74,7 +74,7 @@ public class GlobalExceptionHandler {
 		ApiError error = new ApiError(
 				Instant.now(),
 				HttpStatus.INTERNAL_SERVER_ERROR.value(),
-				ex.getClass().getName() + ": " + ex.getMessage(),
+				"Internal server error",
 				List.of(),
 				extractPath(request));
 		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
