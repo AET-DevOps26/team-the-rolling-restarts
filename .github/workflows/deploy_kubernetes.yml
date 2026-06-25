@@ -64,10 +64,12 @@ jobs:
           umask 077
           python3 -c '
           import os, yaml, sys
+          str_representer = lambda dumper, data: dumper.represent_scalar("tag:yaml.org,2002:str", data, style="\"" if data.isnumeric() else None)
+          yaml.add_representer(str, str_representer)
           data = {
               "mongodb": {
-                  "rootUsername": os.environ["MONGO_ROOT_USERNAME"],
-                  "rootPassword": os.environ["MONGO_ROOT_PASSWORD"],
+                  "rootUsername": str(os.environ["MONGO_ROOT_USERNAME"]),
+                  "rootPassword": str(os.environ["MONGO_ROOT_PASSWORD"]),
               },
               "userService": {
                   "jwtKeys": {
