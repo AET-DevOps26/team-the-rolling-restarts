@@ -1,0 +1,98 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: [build-and-package]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-k8s-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
+
+    env:
+      HELM_RELEASE: newsgenai
+      HELM_CHART: ./infra/helm
+      PROFILE: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Download image-values artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: image-values
+          path: infra/helm
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Generate secrets values
+        env:
+          MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
+          MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+          JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
+          JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
+        run: |
+          umask 077
+          PUB="$(echo "$JWT_RSA_PUBLIC_KEY" | sed 's/^/    /')"
+          PRIV="$(echo "$JWT_RSA_PRIVATE_KEY" | sed 's/^/    /')"
+          cat <<EOF > infra/helm/secrets-values.yaml
+          mongodb:
+            rootUsername: ${MONGO_ROOT_USERNAME}
+            rootPassword: ${MONGO_ROOT_PASSWORD}
+
+          userService:
+            jwtKeys:
+              publicKey: |
+          ${PUB}
+              privateKey: |
+          ${PRIV}
+          EOF
+
+      - name: Build values file list
+        id: values
+        run: |
+          FILES="-f infra/helm/values.yaml"
+          if [[ "${{ env.PROFILE }}" == "prod" ]]; then
+            FILES="$FILES -f infra/helm/values-prod.yaml"
+          fi
+          FILES="$FILES -f infra/helm/secrets-values.yaml"
+          FILES="$FILES -f infra/helm/image-values.yaml"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            ${{ steps.values.outputs.files }} \
+            --wait --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api-gateway --timeout=120s
+          kubectl rollout status deployment/user-service --timeout=120s
+          kubectl rollout status deployment/content-service --timeout=120s
+          kubectl rollout status deployment/web-client --timeout=120s
+          kubectl rollout status deployment/gen-ai --timeout=120s
+          echo "All deployments rolled out successfully."
