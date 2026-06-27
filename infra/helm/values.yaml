@@ -41,7 +41,7 @@ webClient:
       cpu: 50m
       memory: 128Mi
     limits:
-      cpu: 300m
+      cpu: 200m
       memory: 256Mi
 
 # API Gateway routes traffic to user-service and content-service.
@@ -73,16 +73,16 @@ apiGateway:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
-  # Requests are the namespace fair-use budget (capped at 4 vCPU / 6 GB per team). Kept low so
-  # two replicas of every service still sit well under half the budget. CPU limit is generous
-  # because limits are NOT counted toward the cap and a throttled JVM is very slow to start.
+  # The `deployment` namespace enforces a ResourceQuota on LIMITS (total limits.cpu=2,
+  # limits.memory=3000Mi), so limits — not just requests — must stay small. These three JVM
+  # services dominate the budget: 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
   resources:
     requests:
-      cpu: 150m
+      cpu: 100m
       memory: 256Mi
     limits:
-      cpu: 1000m
-      memory: 640Mi
+      cpu: 350m
+      memory: 512Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -125,16 +125,16 @@ userService:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
-  # Requests are the namespace fair-use budget (capped at 4 vCPU / 6 GB per team). Kept low so
-  # two replicas of every service still sit well under half the budget. CPU limit is generous
-  # because limits are NOT counted toward the cap and a throttled JVM is very slow to start.
+  # The `deployment` namespace enforces a ResourceQuota on LIMITS (total limits.cpu=2,
+  # limits.memory=3000Mi), so limits — not just requests — must stay small. These three JVM
+  # services dominate the budget: 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
   resources:
     requests:
-      cpu: 150m
+      cpu: 100m
       memory: 256Mi
     limits:
-      cpu: 1000m
-      memory: 640Mi
+      cpu: 350m
+      memory: 512Mi
 
 # Content service manages RSS feeds and articles (MongoDB).
 contentService:
@@ -163,16 +163,16 @@ contentService:
       initialDelaySeconds: 30
       periodSeconds: 20
       timeoutSeconds: 5
-  # Requests are the namespace fair-use budget (capped at 4 vCPU / 6 GB per team). Kept low so
-  # two replicas of every service still sit well under half the budget. CPU limit is generous
-  # because limits are NOT counted toward the cap and a throttled JVM is very slow to start.
+  # The `deployment` namespace enforces a ResourceQuota on LIMITS (total limits.cpu=2,
+  # limits.memory=3000Mi), so limits — not just requests — must stay small. These three JVM
+  # services dominate the budget: 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
   resources:
     requests:
-      cpu: 150m
+      cpu: 100m
       memory: 256Mi
     limits:
-      cpu: 1000m
-      memory: 640Mi
+      cpu: 350m
+      memory: 512Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -198,8 +198,8 @@ genAi:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 300m
+      memory: 384Mi
 
 # Database services
 mongodb:
@@ -217,7 +217,7 @@ mongodb:
       cpu: 100m
       memory: 256Mi
     limits:
-      cpu: 500m
+      cpu: 250m
       memory: 512Mi
 
 ingress:
