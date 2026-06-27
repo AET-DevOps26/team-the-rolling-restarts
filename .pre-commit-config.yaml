@@ -1,16 +1,13 @@
 repos:
   - repo: local
     hooks:
+      # Validate the generated public contract whenever it changes. Cheap and safe for a hook.
       - id: redocly-lint
         name: Lint OpenAPI spec
         entry: npx @redocly/cli@2.30.3 lint
         language: system
         files: ^api/openapi\.yaml$
-        
-      - id: generate-api-clients
-        name: Generate API Clients
-        entry: ./api/scripts/gen-all.sh
-        language: script
-        stages: [post-checkout, post-merge]
-        always_run: true
-        pass_filenames: false
+
+# NOTE: client generation (./api/scripts/gen-all.sh) is NOT a git hook. Code-first means the
+# spec and clients are derived from the Spring services, which requires booting them (~30s) —
+# too slow for pre-commit/post-checkout. That runs in CI (and on demand via `make generate`).

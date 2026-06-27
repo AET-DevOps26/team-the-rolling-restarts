@@ -39,20 +39,20 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: "25"
 
       - name: Generate OpenAPI clients
         run: |
@@ -96,17 +96,44 @@ jobs:
           cache-from: type=gha,scope=web-client
           cache-to: type=gha,mode=max,scope=web-client
 
-      - name: Build & push spring-api
+      # Spring is a Gradle multi-module project split into three deployable
+      # services, each with its own Dockerfile under services/spring/. The build
+      # context is the shared services/spring/ root so the modules can resolve.
+      - name: Build & push api-gateway
         uses: docker/build-push-action@v7.2.0
         with:
-          context: ./services/spring-api
-          file: ./services/spring-api/Dockerfile
+          context: ./services/spring
+          file: ./services/spring/api-gateway/Dockerfile
           push: true
           tags: |
-            ${{ steps.meta.outputs.registry_base }}/spring-api:${{ steps.meta.outputs.image_tag }}
-            ${{ steps.meta.outputs.registry_base }}/spring-api:latest
-          cache-from: type=gha,scope=spring-api
-          cache-to: type=gha,mode=max,scope=spring-api
+            ${{ steps.meta.outputs.registry_base }}/api-gateway:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.registry_base }}/api-gateway:latest
+          cache-from: type=gha,scope=api-gateway
+          cache-to: type=gha,mode=max,scope=api-gateway
+
+      - name: Build & push user-service
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring
+          file: ./services/spring/user-service/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.registry_base }}/user-service:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.registry_base }}/user-service:latest
+          cache-from: type=gha,scope=user-service
+          cache-to: type=gha,mode=max,scope=user-service
+
+      - name: Build & push content-service
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring
+          file: ./services/spring/content-service/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.registry_base }}/content-service:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.registry_base }}/content-service:latest
+          cache-from: type=gha,scope=content-service
+          cache-to: type=gha,mode=max,scope=content-service
 
       - name: Build & push gen-ai
         uses: docker/build-push-action@v7.2.0
@@ -154,16 +181,15 @@ jobs:
           MONGO_DATABASE: ${{ vars.MONGO_DATABASE }}
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
-          POSTGRES_DB: ${{ vars.POSTGRES_DB }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
           umask 077
           cat > deploy.env <<EOF
           REGISTRY_BASE=${REGISTRY_BASE}
           IMAGE_TAG=${IMAGE_TAG}
-          WEB_CLIENT_PORT=3000
-          SPRING_API_PORT=8080
+          # Single external entry point: the nginx reverse-proxy publishes APP_PORT
+          # and proxies / -> web-client and /api -> api-gateway on the internal network.
+          SPRING_PROFILES_ACTIVE=production
+          APP_PORT=80
           GEN_AI_PORT=8000
           NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
           LLM_PROVIDER=${LLM_PROVIDER:-openai}
@@ -173,9 +199,6 @@ jobs:
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}
           MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
           MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
-          POSTGRES_DB=${POSTGRES_DB:-mydatabase}
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
@@ -191,6 +214,7 @@ jobs:
           umask 077
           COMPOSE_B64="$(base64 -w0 infra/docker-compose.yaml)"
           OVERRIDE_B64="$(base64 -w0 infra/docker-compose.azure.yaml)"
+          NGINX_B64="$(base64 -w0 infra/nginx/default.conf)"
           ENV_B64="$(base64 -w0 deploy.env)"
 
           # Header: inject values (expanded) as quoted shell assignments.
@@ -202,6 +226,7 @@ jobs:
           ACR_TOKEN="${ACR_TOKEN}"
           COMPOSE_B64="${COMPOSE_B64}"
           OVERRIDE_B64="${OVERRIDE_B64}"
+          NGINX_B64="${NGINX_B64}"
           ENV_B64="${ENV_B64}"
           EOF
 
@@ -210,6 +235,8 @@ jobs:
           mkdir -p "$DEPLOY_DIR"
           printf '%s' "$COMPOSE_B64"  | base64 -d > "$DEPLOY_DIR/docker-compose.yaml"
           printf '%s' "$OVERRIDE_B64" | base64 -d > "$DEPLOY_DIR/docker-compose.azure.yaml"
+          mkdir -p "$DEPLOY_DIR/nginx"
+          printf '%s' "$NGINX_B64"    | base64 -d > "$DEPLOY_DIR/nginx/default.conf"
           umask 077
           printf '%s' "$ENV_B64" | base64 -d > "$DEPLOY_DIR/.env"
           printf '%s' "$ACR_TOKEN" | docker login "$ACR_LOGIN_SERVER" \
@@ -222,11 +249,11 @@ jobs:
           docker logout "$ACR_LOGIN_SERVER" >/dev/null 2>&1 || true
           docker image prune -f >/dev/null 2>&1 || true
           for i in $(seq 1 12); do
-            if curl -fsS "http://127.0.0.1:3000/" >/dev/null 2>&1; then
-              echo "DEPLOY_OK web-client healthy"
+            if curl -fsS "http://127.0.0.1:8080/" >/dev/null 2>&1; then
+              echo "DEPLOY_OK reverse-proxy healthy"
               exit 0
             fi
-            echo "waiting for web-client ($i/12)..."
+            echo "waiting for reverse-proxy ($i/12)..."
             sleep 10
           done
           echo "HEALTH_FAILED"; compose ps; exit 1

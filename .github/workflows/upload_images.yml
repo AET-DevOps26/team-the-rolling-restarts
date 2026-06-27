@@ -16,11 +16,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.3
 
-      - name: Generate OpenAPI clients
+      # Code-first: Spring service images build self-contained (no generated server stubs). The web
+      # client consumes the generated TypeScript client for its cross-service calls, and it is
+      # gitignored, so generate it from the COMMITTED contract into the build context before the
+      # web-client image build (no Spring boot — the spec is the committed source of truth).
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Generate web-client API types from the contract
         run: |
-          pip install openapi-python-client
-          chmod +x api/scripts/gen-all.sh
-          ./api/scripts/gen-all.sh
+          npm ci
+          npx openapi-typescript api/openapi.yaml -o web-client/src/generated/api.ts
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Generate gen-ai API client from the contract
+        # Pre-generated into the gen-ai build context so the image bundles the typed client
+        # (the Dockerfile installs ./generated when present). Lightweight — no Spring boot.
+        run: |
+          python -m pip install --upgrade pip openapi-python-client
+          rm -rf services/gen-ai/generated
+          openapi-python-client generate --path api/openapi.yaml \
+            --output-path services/gen-ai/generated --overwrite
 
       - name: Docker login
         uses: docker/login-action@v4.2.0
@@ -40,7 +64,7 @@ jobs:
           REPO="$(echo "$REPO_RAW" | tr '[:upper:]' '[:lower:]')"
 
           PROJECT="${REPO#*/}"
-          SHA=${GITHUB_SHA::7}  
+          SHA=${GITHUB_SHA::7}
           if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
             CHANNEL="main"
           elif [[ "${GITHUB_REF_NAME}" == "dev" ]]; then
@@ -55,7 +79,7 @@ jobs:
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
           echo "api_base_url=https://api.rolling-restarts.stud.k8s.aet.cit.tum.de" >> $GITHUB_OUTPUT
 
-      # ---------------- WEB CLIENT ----------------
+      # ---------------- WEB CLIENT (temporarily disabled) ----------------
       - name: Build web-client
         uses: docker/build-push-action@v7.2.0
         with:
@@ -69,18 +93,40 @@ jobs:
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.channel }}
 
-      # ---------------- SPRING API ----------------
-      - name: Build spring-api
+      # ---------------- API GATEWAY ----------------
+      - name: Build api-gateway
         uses: docker/build-push-action@v7.2.0
         with:
-          context: ./services/spring-api
-          file: ./services/spring-api/Dockerfile
+          context: ./services/spring
+          file: ./services/spring/api-gateway/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
-            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.channel }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.channel }}
 
-      # ---------------- GEN AI ----------------
+      # ---------------- USER SERVICE ----------------
+      - name: Build user-service
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring
+          file: ./services/spring/user-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.channel }}
+
+      # ---------------- CONTENT SERVICE ----------------
+      - name: Build content-service
+        uses: docker/build-push-action@v7.2.0
+        with:
+          context: ./services/spring
+          file: ./services/spring/content-service/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.channel }}
+
+      # ---------------- GEN AI (temporarily disabled) ----------------
       - name: Build gen-ai
         uses: docker/build-push-action@v7.2.0
         with:
@@ -98,8 +144,14 @@ jobs:
           webClient:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/web-client:${{ steps.meta.outputs.sha }}
 
-          springApi:
-            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/spring-api:${{ steps.meta.outputs.sha }}
+          apiGateway:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.sha }}
+
+          userService:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.sha }}
+
+          contentService:
+            image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.sha }}
 
           genAi:
             image: ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}

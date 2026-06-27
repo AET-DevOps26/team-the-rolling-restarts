@@ -7,8 +7,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory={{ project_root }}
-ExecStart=/usr/bin/docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} up -d --build
-ExecStop=/usr/bin/docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} down
+ExecStartPre=/usr/bin/docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} pull
+ExecStart=/usr/bin/docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} up -d
+ExecStop=/usr/bin/docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} down
 RemainAfterExit=yes
 TimeoutStartSec=0
 

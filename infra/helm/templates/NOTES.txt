@@ -1,0 +1,15 @@
+{{ .Release.Name }} has been deployed.
+
+Endpoints (https://{{ .Values.host }}):
+  Web Client:     https://{{ .Values.host }}/
+  API Gateway:    https://{{ .Values.host }}/api/
+  AI Service:     https://{{ .Values.host }}/ai/
+  Swagger UI:     https://{{ .Values.host }}/swagger-ui.html
+
+To check pod status:
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }}
+
+To view logs for a specific service:
+  kubectl logs -l app=api-gateway --tail=100 -f
+  kubectl logs -l app=user-service --tail=100 -f
+  kubectl logs -l app=content-service --tail=100 -f

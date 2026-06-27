@@ -1,24 +1,27 @@
 ---
 - name: Install Docker engine and Compose plugin
   ansible.builtin.apt:
-    name:
-      - docker.io
-      - docker-compose-v2
+    name: "{{ docker_packages }}"
     state: present
+  notify: restart docker
+  tags: [docker]
 
 - name: Ensure docker group exists
   ansible.builtin.group:
     name: docker
     state: present
+  tags: [docker]
 
 - name: Add remote user to docker group
   ansible.builtin.user:
     name: "{{ ansible_user }}"
     groups: docker
     append: true
+  tags: [docker]
 
-- name: Enable and start Docker service
+- name: Enable Docker service
   ansible.builtin.systemd:
-    name: docker
+    name: "{{ docker_service_name }}"
     enabled: true
     state: started
+  tags: [docker]

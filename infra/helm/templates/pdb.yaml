@@ -1,0 +1,29 @@
+{{- $apps := list
+  (dict "key" "webClient" "cfg" .Values.webClient)
+  (dict "key" "apiGateway" "cfg" .Values.apiGateway)
+  (dict "key" "userService" "cfg" .Values.userService)
+  (dict "key" "contentService" "cfg" .Values.contentService)
+  (dict "key" "genAi" "cfg" .Values.genAi)
+-}}
+{{- $first := true -}}
+{{- range $index, $app := $apps }}
+{{- $cfg := $app.cfg -}}
+{{- $replicas := default $.Values.global.replicas $cfg.replicas -}}
+{{- if gt (int $replicas) 1 }}
+{{- if not $first }}
+---
+{{- end }}
+{{- $first = false }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $cfg.name }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: {{ $cfg.name }}
+{{- end }}
+{{- end }}

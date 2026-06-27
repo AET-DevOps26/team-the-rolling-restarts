@@ -4,7 +4,13 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 RUN python -c 'import subprocess, tomllib; deps = tomllib.load(open("pyproject.toml","rb"))["project"]["dependencies"]; subprocess.check_call(["python","-m","pip","install","--no-cache-dir", *deps])'
-COPY app/ ./app/
+
+# Copy the build context: the app sources, plus the generated OpenAPI client when it has been
+# pre-generated into ./generated (by CI, the image workflow, or `make generate`). The client is
+# installed only when present, so a bare local build without it still succeeds — gen-ai uses the
+# generated client for typed cross-service calls.
+COPY . .
+RUN if [ -d generated ]; then pip install --no-cache-dir ./generated; fi
 RUN pip install --no-cache-dir --no-deps .
 
 EXPOSE 8000

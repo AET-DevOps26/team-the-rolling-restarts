@@ -1,7 +1,9 @@
 {{/* Render the services alongside the deployments so ports stay in sync. */}}
 {{- $apps := list
   (dict "key" "webClient" "cfg" .Values.webClient)
-  (dict "key" "springApi" "cfg" .Values.springApi)
+  (dict "key" "apiGateway" "cfg" .Values.apiGateway)
+  (dict "key" "userService" "cfg" .Values.userService)
+  (dict "key" "contentService" "cfg" .Values.contentService)
   (dict "key" "genAi" "cfg" .Values.genAi)
 -}}
 {{- range $index, $app := $apps }}
@@ -14,6 +16,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ $cfg.name }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
 spec:
   type: {{ default $.Values.global.service.type (get $service "type") }}
   selector:

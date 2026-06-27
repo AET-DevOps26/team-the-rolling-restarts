@@ -10,14 +10,20 @@ on:
 concurrency: ci-${{ github.ref }}
 
 jobs:
-  generate-and-test:
+  build-and-test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - service: spring-api
-            working_directory: services/spring-api
-            command: ./gradlew --no-daemon test
+          - service: api-gateway
+            working_directory: services/spring
+            command: ./gradlew :api-gateway:test --no-daemon
+          - service: user-service
+            working_directory: services/spring
+            command: ./gradlew :user-service:test --no-daemon
+          - service: content-service
+            working_directory: services/spring
+            command: ./gradlew :content-service:test --no-daemon
           - service: gen-ai
             working_directory: services/gen-ai
             command: |
@@ -55,26 +61,36 @@ jobs:
           cache-dependency-path: |
             services/gen-ai/pyproject.toml
 
-      - name: Setup Java (spring-api)
-        if: matrix.service == 'spring-api'
+      - name: Setup Java
+        if: contains(fromJSON('["api-gateway","user-service","content-service"]'), matrix.service)
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
           cache: gradle
 
-      - name: Install OpenAPI tooling
+      # Code-first: the Spring services are self-contained (no generated server stubs). Consumers
+      # generate their client from the COMMITTED contract (lightweight, no Spring boot). The web
+      # client uses the generated TypeScript types for its cross-service calls, so generate them
+      # before its build. (gen-ai does not consume its client yet; add the same step here when it
+      # does.) The contract itself is produced and drift-checked in the openapi-contract job.
+      - name: Generate web-client API types
+        if: matrix.service == 'web-client'
         run: |
           npm ci
-          python -m pip install --upgrade pip
-          python -m pip install openapi-python-client
+          npx openapi-typescript api/openapi.yaml -o web-client/src/generated/api.ts
 
-      - name: Lint OpenAPI
-        run: npx @redocly/cli@2.30.3 lint api/openapi.yaml
-
-      - name: Generate code
-        run: ./api/scripts/gen-all.sh
-        shell: bash
+      # gen-ai's client is generated from the committed contract and installed, so it is both
+      # continuously validated (Python-specific generation issues surface here) and importable by
+      # tests the moment gen-ai starts using it — no further CI edits needed.
+      - name: Generate and install gen-ai API client
+        if: matrix.service == 'gen-ai'
+        run: |
+          python -m pip install --upgrade pip openapi-python-client
+          rm -rf services/gen-ai/generated
+          openapi-python-client generate --path api/openapi.yaml \
+            --output-path services/gen-ai/generated --overwrite
+          pip install ./services/gen-ai/generated
 
       - name: Build & test
         working-directory: ${{ matrix.working_directory }}
@@ -82,8 +98,88 @@ jobs:
           SERVICE_NAME: ${{ matrix.service }}
         run: ${{ matrix.command }}
 
+  openapi-contract:
+    # Code-first contract check: regenerate api/openapi.yaml from the running services and fail if
+    # the committed copy is stale, so the spec can never drift from the implementation.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: gradle
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install tooling
+        run: |
+          npm ci
+          python -m pip install --upgrade pip pyyaml
+
+      - name: Regenerate contract from the services
+        working-directory: services/spring
+        run: |
+          ./gradlew \
+            :user-service:cleanTest :user-service:test \
+            :content-service:cleanTest :content-service:test \
+            --tests "*OpenApiDocGenerationTest" --no-daemon
+
+      - name: Merge into the public contract
+        run: |
+          python3 api/scripts/merge-openapi.py --output api/openapi.yaml \
+            services/spring/user-service/build/openapi/user-service.json:/api/users \
+            services/spring/content-service/build/openapi/content-service.json:/api/content
+
+      - name: Lint contract
+        run: npx @redocly/cli@2.30.3 lint api/openapi.yaml
+
+      - name: Fail if the committed contract is stale
+        run: |
+          if ! git diff --quiet -- api/openapi.yaml; then
+            echo "::error::api/openapi.yaml is out of date with the Spring services."
+            echo "Run 'make generate' (or push with the pre-push hook installed) and commit the result."
+            git --no-pager diff -- api/openapi.yaml
+            exit 1
+          fi
+          echo "OpenAPI contract is in sync with the services."
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v4
+      - name: Terraform init
+        working-directory: infra/terraform/azure-vm
+        run: terraform init -backend=false
+      - name: Terraform validate
+        working-directory: infra/terraform/azure-vm
+        run: terraform validate
+      - name: Terraform fmt check
+        working-directory: infra/terraform/azure-vm
+        run: terraform fmt -check -recursive
+
+  helm-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Helm lint
+        run: helm lint infra/helm
+
   contract-test:
-    needs: generate-and-test
+    needs: build-and-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

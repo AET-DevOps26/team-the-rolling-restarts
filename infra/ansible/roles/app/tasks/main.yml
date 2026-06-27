@@ -6,14 +6,30 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0755"
+  tags: [app, deploy]
 
-- name: Clone or update project repository
-  ansible.builtin.git:
-    repo: "{{ project_repo_url }}"
-    dest: "{{ project_root }}"
-    version: "{{ project_repo_version }}"
-    update: true
-  become_user: "{{ ansible_user }}"
+- name: Ensure nginx config directory exists
+  ansible.builtin.file:
+    path: "{{ project_root }}/nginx"
+    state: directory
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0755"
+  tags: [app, deploy]
+
+- name: Copy docker-compose and nginx config files
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ project_root }}/{{ item.dest }}"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: "0644"
+  loop:
+    - { src: "{{ playbook_dir }}/../../docker-compose.yaml", dest: docker-compose.yaml }
+    - { src: "{{ playbook_dir }}/../../docker-compose.prod.yaml", dest: docker-compose.prod.yaml }
+    - { src: "{{ playbook_dir }}/../../nginx/default.conf", dest: nginx/default.conf }
+  notify: restart rolling-restarts
+  tags: [app, deploy]
 
 - name: Render deployment environment file
   ansible.builtin.template:
@@ -22,31 +38,50 @@
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
     mode: "0600"
+  notify: restart rolling-restarts
+  tags: [app, deploy]
+
+- name: Log in to container registry
+  ansible.builtin.command:
+    cmd: docker login {{ registry }} -u {{ registry_user }} -p {{ registry_token }}
+  become_user: "{{ ansible_user }}"
+  changed_when: true
+  no_log: true
+  when: registry_token is defined and registry_token | length > 0
+  tags: [app, deploy]
 
 - name: Render systemd unit for compose stack
   ansible.builtin.template:
     src: rolling-restarts.service.j2
-    dest: /etc/systemd/system/rolling-restarts.service
+    dest: /etc/systemd/system/{{ app_service_name }}.service
     owner: root
     group: root
     mode: "0644"
+  notify:
+    - reload systemd
+    - restart rolling-restarts
+  tags: [app, deploy]
 
-- name: Reload systemd daemon
-  ansible.builtin.systemd:
-    daemon_reload: true
+- name: Force-recreate containers to pick up env/config changes
+  ansible.builtin.command:
+    cmd: docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} up -d --force-recreate
+    chdir: "{{ project_root }}"
+  tags: [app, deploy]
 
-- name: Enable and start project service
+- name: Ensure project service is enabled and started
   ansible.builtin.systemd:
-    name: rolling-restarts
+    name: "{{ app_service_name }}"
     enabled: true
-    state: restarted
+    state: started
+  tags: [app, deploy]
 
 - name: Verify project endpoint responds
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ app_env.WEB_CLIENT_PORT }}/"
+    url: "http://127.0.0.1:{{ app_env.APP_PORT | default('8080') }}/"
     status_code: 200
     timeout: 30
   register: web_health
-  retries: 5
-  delay: 10
+  retries: "{{ health_check_retries }}"
+  delay: "{{ health_check_delay }}"
   until: web_health.status == 200
+  tags: [app, deploy, verify]

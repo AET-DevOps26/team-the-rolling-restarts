@@ -34,6 +34,12 @@ resource "azurerm_network_security_group" "main" {
   tags                = local.common_tags
 }
 
+# Auto-detect the public IP of the machine running Terraform, used as the SSH source CIDR
+# unless var.allowed_ssh_cidr explicitly overrides it (see locals.tf -> ssh_cidr).
+data "http" "my_ip" {
+  url = "https://api.ipify.org"
+}
+
 resource "azurerm_network_security_rule" "allow_ssh" {
   name                        = "allow-ssh"
   priority                    = 100
@@ -42,7 +48,7 @@ resource "azurerm_network_security_rule" "allow_ssh" {
   protocol                    = "Tcp"
   source_port_range           = "*"
   destination_port_range      = "22"
-  source_address_prefix       = var.allowed_ssh_cidr
+  source_address_prefix       = local.ssh_cidr
   destination_address_prefix  = "*"
   resource_group_name         = azurerm_resource_group.main.name
   network_security_group_name = azurerm_network_security_group.main.name

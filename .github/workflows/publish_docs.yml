@@ -40,6 +40,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Copy docs that live next to their build context
+        run: cp services/gen-ai/README.md docs/source/gen-ai-service.md
+
       - name: Build API docs
         run: npx @redocly/cli@2.30.3 build-docs api/openapi.yaml -o docs/source/api.html
 

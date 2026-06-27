@@ -28,14 +28,15 @@ variable "deploy_principal_id" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR block allowed to access SSH port 22 (use your public IP/32)"
+  description = "CIDR block allowed to access SSH port 22. Leave null to auto-detect the public IP of the machine running Terraform (recommended for dynamic home IPs); set to a specific value (e.g. your-ip/32 or an office range) to override."
   type        = string
+  default     = null
 }
 
 variable "application_ports" {
-  description = "TCP ports opened for application access (least-privilege default: web-client only)"
+  description = "TCP ports opened for application access. Least-privilege default is the reverse-proxy entry point only (8080), which serves the web client and proxies the API; backend/DB ports stay private."
   type        = list(number)
-  default     = [3000]
+  default     = [8080]
 }
 
 variable "environment" {

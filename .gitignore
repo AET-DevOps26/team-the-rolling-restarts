@@ -277,4 +277,6 @@ infra/ansible/inventories/production.ini
 infra/ansible/group_vars/all.yml
 infra/ansible/.vault_pass.txt
 docs/site/
+docs/source/gen-ai-service.md
 infra/helm/image-values.yaml
+infra/helm/secrets-values.yaml

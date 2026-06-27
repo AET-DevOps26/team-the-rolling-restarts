@@ -21,9 +21,10 @@ kubectl delete -R -f .
 
 ## What is here
 
-- [deployments/](deployments) contains one deployment manifest per workload.
-- [services/](services) contains one service manifest per workload.
-- [ingress.yml](ingress.yml) defines the external routing rules for the three hosts.
+- [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim).
+- [services/](services) contains one service manifest per workload, including `mongodb-service.yml`.
+- [secrets.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml) defines the `mongodb-credentials` and `mongodb-user-credentials` Secrets consumed by MongoDB and the Spring services. Ships with dev defaults — change them (or swap in a real secret store) before any non-local deployment.
+- [ingress.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/ingress.yml) defines the external routing rules.
 
 ## Stack Setup Notes
 
@@ -47,7 +48,7 @@ Use absolute paths when merging configs. Confirm the active configuration with:
 kubectl config view
 ```
 
-Push images to the registry before applying the manifests or Helm chart. The repository uses the GitHub Actions workflow in [`.github/workflows/upload_images.yml`](../../.github/workflows/upload_images.yml) for that step.
+Push images to the registry before applying the manifests or Helm chart. The repository uses the GitHub Actions workflow in [`upload_images.yml`](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/.github/workflows/upload_images.yml) for that step.
 
 ## When to use the raw manifests
 
@@ -94,9 +95,12 @@ kubectl get ingress
 ## Resource Map
 
 - `web-client` listens on port `3000`.
-- `spring-api` listens on port `8080`.
+- `api-gateway` listens on port `8080`.
+- `user-service` listens on port `8081`.
+- `content-service` listens on port `8082`.
 - `gen-ai` listens on port `8000`.
-- The ingress routes `app.rolling-restarts.stud.k8s.aet.cit.tum.de` to the web client, `api.rolling-restarts.stud.k8s.aet.cit.tum.de` to the Spring API, and `ai.rolling-restarts.stud.k8s.aet.cit.tum.de` to the GenAI service.
+- `mongodb` listens on port `27017` (ClusterIP only — not exposed via ingress). user-service uses database `users`, content-service uses database `content`, both via the `*-credentials` Secrets.
+- The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator` → API gateway, `/ai/` → GenAI service, `/` → web client.
 - The ingress secret is `rolling-restarts-tls`.
 
 ## Relationship To Helm

@@ -5,19 +5,46 @@ kind: Ingress
 metadata:
   name: {{ .Release.Name }}
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    nginx.ingress.kubernetes.io/use-regex: "true"
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   tls:
     - hosts:
-        - {{ .Values.hosts.web }}
-        - {{ .Values.hosts.api }}
-        - {{ .Values.hosts.ai }}
+        - {{ .Values.host }}
       secretName: {{ .Values.ingress.tlsSecret }}
   rules:
-    - host: {{ .Values.hosts.web }}
+    - host: {{ .Values.host }}
       http:
         paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /actuator
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /swagger-ui
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /v3/api-docs
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
           - path: /
             pathType: Prefix
             backend:
@@ -25,24 +52,4 @@ spec:
                 name: {{ .Values.webClient.name }}
                 port:
                   number: {{ .Values.webClient.port }}
-    - host: {{ .Values.hosts.api }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ .Values.springApi.name }}
-                port:
-                  number: {{ .Values.springApi.port }}
-    - host: {{ .Values.hosts.ai }}
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ .Values.genAi.name }}
-                port:
-                  number: {{ .Values.genAi.port }}
 {{- end }}

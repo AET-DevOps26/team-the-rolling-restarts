@@ -14,6 +14,11 @@
 # `!reset null` removes the inherited `build:` block (requires Compose v2.24+)
 # so the app services are sourced purely from the registry.
 #
+# Only the app services we build are overridden. The reverse-proxy
+# (nginx:alpine), mongodb and grafana-lgtm use public images straight from the
+# base compose file. External access is the nginx reverse-proxy only (APP_PORT,
+# default 8080); it proxies / -> web-client and /api -> api-gateway internally.
+#
 # Required environment variables (provided via the generated .env):
 #   REGISTRY_BASE  e.g. myregistry.azurecr.io/team-the-rolling-restarts
 #   IMAGE_TAG      e.g. the deployed commit SHA
@@ -23,9 +28,17 @@ services:
     build: !reset null
     image: ${REGISTRY_BASE}/web-client:${IMAGE_TAG}
 
-  spring-api:
+  api-gateway:
     build: !reset null
-    image: ${REGISTRY_BASE}/spring-api:${IMAGE_TAG}
+    image: ${REGISTRY_BASE}/api-gateway:${IMAGE_TAG}
+
+  user-service:
+    build: !reset null
+    image: ${REGISTRY_BASE}/user-service:${IMAGE_TAG}
+
+  content-service:
+    build: !reset null
+    image: ${REGISTRY_BASE}/content-service:${IMAGE_TAG}
 
   gen-ai:
     build: !reset null

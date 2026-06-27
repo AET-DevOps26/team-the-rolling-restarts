@@ -1,20 +1,40 @@
-# Welcome to MkDocs
+# Personalised News Aggregator
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+A microservices platform combining Spring Boot backends, a Next.js frontend, and a Python GenAI service.
 
-## Commands
+## Architecture
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve -f docs/source/mkdocs.yml` - Start the live-reloading docs server (from root).
-* `mkdocs serve` - Start the live-reloading docs server (from from docs/source).
-* `mkdocs build -f docs/source/mkdocs.yml` - Build the documentation site (from root).
-* `mkdocs build` - Build the documentation site (from docs/source).
-* `mkdocs -h` - Print help message and exit.
+| Service | Description |
+| ------- | ----------- |
+| [API Gateway](spring-services.md) | Spring Cloud Gateway MVC — routes, CORS, JWT validation, Swagger UI |
+| [User Service](spring-services.md) | OAuth2 Authorization Server, user profiles, settings (MongoDB) |
+| [Content Service](spring-services.md) | RSS feed management, articles, topics (MongoDB) |
+| [GenAI Service](gen-ai-service.md) | Python FastAPI + LangChain — summarization, sentiment, recommendations |
+| [Web Client](web-client.md) | Next.js + React 19 + TypeScript |
 
-## Project layout
+## Deployment paths
 
-    docs/
-        source/
-            mkdocs.yml    # The configuration file.
-            index.md  # The documentation homepage.
-            ...       # Other markdown pages, images and other files.
+1. **Local** — Docker Compose ([Deployment Testing](deployment-testing.md))
+2. **Azure VM (CI/CD)** — GitHub Actions → ACR → `az vm run-command` ([Azure CD Pipeline](cicd-azure-deploy.md))
+3. **Azure VM (manual)** — Terraform → Ansible → Docker Compose ([Azure VM Deployment](azure-vm-deployment.md))
+4. **Kubernetes** — Helm chart ([Helm](infra/helm/helm.md)) or raw manifests ([K8s](infra/k8s/kubernetes.md))
+
+## Quick start
+
+```bash
+cp infra/.env.example infra/.env    # fill in required values
+make compose-up                     # start the local dev stack
+make smoke-test                     # verify endpoints
+```
+
+See [Deployment Testing](deployment-testing.md) for the full checklist, and [Secrets & Environment Variables](secrets-reference.md) for all configuration options.
+
+## Developing
+
+```bash
+make generate       # regenerate OpenAPI spec + consumer clients
+make spring-build   # compile and test Spring services
+make preflight      # full pre-flight: generate, build, lint helm, validate terraform
+```
+
+See [OpenAPI Workflow](openapi-workflow.md) for the code-first spec pipeline.

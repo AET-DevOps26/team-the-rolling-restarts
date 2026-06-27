@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  labels:
+    app: user-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/user-service:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8081
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "production"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75"
+            - name: JWT_ISSUER
+              value: "http://user-service:8081"
+            - name: SPRING_MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-user-credentials
+                  key: uri
+            # Shared JWT signing key so all replicas issue/serve consistent tokens + JWKS.
+            - name: JWT_RSA_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-keys
+                  key: public-key
+            - name: JWT_RSA_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-keys
+                  key: private-key
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 2
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            failureThreshold: 30
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: content-service
+  labels:
+    app: content-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: content-service
+  template:
+    metadata:
+      labels:
+        app: content-service
+    spec:
+      containers:
+        - name: content-service
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8082
+
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "production"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75"
+            - name: JWT_ISSUER_URI
+              value: "http://user-service:8081"
+            - name: SPRING_MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-credentials
+                  key: uri
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 2
+
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8082
+            failureThreshold: 30
+            periodSeconds: 10
+
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

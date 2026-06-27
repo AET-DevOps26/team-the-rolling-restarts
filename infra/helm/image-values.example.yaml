@@ -7,15 +7,21 @@
 # Example overrides:
 # webClient:
 #   image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:dev
-# springApi:
-#   image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:main
+# apiGateway:
+#   image: ghcr.io/aet-devops26/team-the-rolling-restarts/api-gateway:main
 # genAi:
 #   image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
 webClient:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:d317d56
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:latest
 
-springApi:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/spring-api:d317d56
+apiGateway:
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/api-gateway:latest
+
+userService:
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/user-service:latest
+
+contentService:
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:latest
 
 genAi:
-  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:d317d56
+  image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:latest
