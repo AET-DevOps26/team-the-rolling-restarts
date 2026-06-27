@@ -1,9 +1,10 @@
-.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup
+.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets
 
 HELM ?= helm
 RELEASE ?= newsgenai
 CHART ?= .
 ENV ?= dev
+MONGO_USER ?= root
 
 # Auto-detect secrets-values.yaml if present, unless overridden
 ifneq ($(wildcard secrets-values.yaml),)
@@ -27,6 +28,7 @@ help:
 	  '  make helm-upgrade             - upgrade an existing release' \
 	  '  make helm-deploy              - upgrade or install in one step' \
 	  '  make helm-destroy             - uninstall the release' \
+	  '  make helm-secrets             - generate secrets-values.yaml (RSA key + random Mongo password)' \
 	  '' \
 	  'Set ENV=prod for production TLS (default: staging)' \
 	  'secrets-values.yaml is auto-included if present (override: SECRETS=)'
@@ -56,3 +58,26 @@ helm-deploy:
 ## Remove the release from the cluster.
 helm-destroy:
 	$(HELM) uninstall $(RELEASE)
+
+## Generate a working secrets-values.yaml: a fresh shared RSA key pair for JWT signing and a
+## random Mongo root password. Refuses to overwrite an existing file (delete it to regenerate).
+## Override the Mongo user with MONGO_USER=...
+helm-secrets:
+	@if [ -f secrets-values.yaml ]; then \
+	  echo "secrets-values.yaml already exists — remove it first to regenerate."; exit 1; \
+	fi
+	@umask 077; tmp=$$(mktemp); \
+	openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$$tmp" 2>/dev/null; \
+	{ \
+	  echo "mongodb:"; \
+	  echo "  rootUsername: $(MONGO_USER)"; \
+	  echo "  rootPassword: $$(openssl rand -hex 16)"; \
+	  echo "userService:"; \
+	  echo "  jwtKeys:"; \
+	  echo "    publicKey: |"; \
+	  openssl pkey -in "$$tmp" -pubout | sed 's/^/      /'; \
+	  echo "    privateKey: |"; \
+	  sed 's/^/      /' "$$tmp"; \
+	} > secrets-values.yaml; \
+	rm -f "$$tmp"; \
+	echo "Wrote secrets-values.yaml (gitignored). Mongo user: $(MONGO_USER)."
