@@ -11,8 +11,8 @@ global:
       cpu: 50m
       memory: 128Mi
     limits:
-      cpu: 250m
-      memory: 384Mi
+      cpu: 300m
+      memory: 256Mi
   service:
     type: ClusterIP
     protocol: TCP
@@ -36,6 +36,13 @@ webClient:
     liveness:
       initialDelaySeconds: 15
       periodSeconds: 20
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
 
 # API Gateway routes traffic to user-service and content-service.
 apiGateway:
@@ -66,13 +73,16 @@ apiGateway:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
+  # Requests are the namespace fair-use budget (capped at 4 vCPU / 6 GB per team). Kept low so
+  # two replicas of every service still sit well under half the budget. CPU limit is generous
+  # because limits are NOT counted toward the cap and a throttled JVM is very slow to start.
   resources:
     requests:
-      cpu: 100m
-      memory: 192Mi
+      cpu: 150m
+      memory: 256Mi
     limits:
-      cpu: 350m
-      memory: 448Mi
+      cpu: 1000m
+      memory: 640Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -115,13 +125,16 @@ userService:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
+  # Requests are the namespace fair-use budget (capped at 4 vCPU / 6 GB per team). Kept low so
+  # two replicas of every service still sit well under half the budget. CPU limit is generous
+  # because limits are NOT counted toward the cap and a throttled JVM is very slow to start.
   resources:
     requests:
-      cpu: 100m
-      memory: 192Mi
+      cpu: 150m
+      memory: 256Mi
     limits:
-      cpu: 350m
-      memory: 448Mi
+      cpu: 1000m
+      memory: 640Mi
 
 # Content service manages RSS feeds and articles (MongoDB).
 contentService:
@@ -150,13 +163,16 @@ contentService:
       initialDelaySeconds: 30
       periodSeconds: 20
       timeoutSeconds: 5
+  # Requests are the namespace fair-use budget (capped at 4 vCPU / 6 GB per team). Kept low so
+  # two replicas of every service still sit well under half the budget. CPU limit is generous
+  # because limits are NOT counted toward the cap and a throttled JVM is very slow to start.
   resources:
     requests:
-      cpu: 100m
-      memory: 192Mi
+      cpu: 150m
+      memory: 256Mi
     limits:
-      cpu: 350m
-      memory: 448Mi
+      cpu: 1000m
+      memory: 640Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -177,6 +193,13 @@ genAi:
     liveness:
       initialDelaySeconds: 15
       periodSeconds: 20
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
 
 # Database services
 mongodb:
@@ -191,11 +214,11 @@ mongodb:
   storage: 1Gi
   resources:
     requests:
-      cpu: 50m
-      memory: 192Mi
+      cpu: 100m
+      memory: 256Mi
     limits:
-      cpu: 150m
-      memory: 384Mi
+      cpu: 500m
+      memory: 512Mi
 
 ingress:
   enabled: true
