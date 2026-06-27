@@ -1,7 +1,5 @@
 package rolling_restarts.content.controller;
 
-import java.net.InetAddress;
-import java.net.URI;
 import java.util.List;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -15,7 +13,6 @@ import jakarta.validation.constraints.Pattern;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.service.SourceService;
+import rolling_restarts.content.util.UrlSafetyValidator;
 
 @RestController
 @RequestMapping("/sources")
@@ -32,9 +31,11 @@ import rolling_restarts.content.repository.SourceRepository;
 public class SourceController {
 
 	private final SourceRepository sourceRepository;
+	private final SourceService sourceService;
 
-	public SourceController(SourceRepository sourceRepository) {
+	public SourceController(SourceRepository sourceRepository, SourceService sourceService) {
 		this.sourceRepository = sourceRepository;
+		this.sourceService = sourceService;
 	}
 
 	@GetMapping
@@ -67,7 +68,7 @@ public class SourceController {
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
 	public ResponseEntity<Source> create(@Valid @RequestBody CreateSourceRequest request) {
-		validateUrlNotInternal(request.rssUrl());
+		UrlSafetyValidator.validatePublicUrl(request.rssUrl());
 		return sourceRepository.findByRssUrl(request.rssUrl())
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> {
@@ -81,43 +82,38 @@ public class SourceController {
 				});
 	}
 
-	@DeleteMapping("/{id}")
+	@PostMapping("/{id}/subscribe")
 	@SecurityRequirement(name = "bearer-jwt")
 	@Operation(
-			summary = "Remove a source",
+			operationId = "incrementSourceSubscribers",
+			summary = "Register a subscription to a source",
+			description = "Increments the source's subscriber count. Intended for service-to-service "
+					+ "use by user-service when a user subscribes.",
 			responses = {
-					@ApiResponse(responseCode = "204", description = "Source deleted"),
+					@ApiResponse(responseCode = "200", description = "Subscription registered"),
 					@ApiResponse(responseCode = "404", description = "Source not found"),
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
-	public ResponseEntity<Void> delete(@PathVariable String id) {
-		if (!sourceRepository.existsById(id)) {
-			return ResponseEntity.notFound().build();
-		}
-		sourceRepository.deleteById(id);
-		return ResponseEntity.noContent().build();
+	public ResponseEntity<Source> subscribe(@PathVariable String id) {
+		Source updated = sourceService.subscribe(id);
+		return updated != null ? ResponseEntity.ok(updated) : ResponseEntity.notFound().build();
 	}
 
-	private static void validateUrlNotInternal(String url) {
-		try {
-			URI uri = URI.create(url);
-			String scheme = uri.getScheme();
-			if (scheme == null || (!scheme.equals("http") && !scheme.equals("https"))) {
-				throw new IllegalArgumentException("RSS URL must use http or https");
-			}
-			String host = uri.getHost();
-			if (host == null) {
-				throw new IllegalArgumentException("RSS URL must have a valid host");
-			}
-			InetAddress addr = InetAddress.getByName(host);
-			if (addr.isLoopbackAddress() || addr.isSiteLocalAddress() || addr.isLinkLocalAddress()) {
-				throw new IllegalArgumentException("RSS URL must not target internal networks");
-			}
-		} catch (IllegalArgumentException e) {
-			throw e;
-		} catch (Exception e) {
-			throw new IllegalArgumentException("Invalid RSS URL: " + e.getMessage());
-		}
+	@PostMapping("/{id}/unsubscribe")
+	@SecurityRequirement(name = "bearer-jwt")
+	@Operation(
+			operationId = "decrementSourceSubscribers",
+			summary = "Remove a subscription from a source",
+			description = "Decrements the source's subscriber count; the source is deleted once the "
+					+ "count reaches zero. Intended for service-to-service use by user-service.",
+			responses = {
+					@ApiResponse(responseCode = "204", description = "Subscription removed"),
+					@ApiResponse(responseCode = "404", description = "Source not found"),
+					@ApiResponse(responseCode = "401", description = "Not authenticated")
+			})
+	public ResponseEntity<Void> unsubscribe(@PathVariable String id) {
+		boolean existed = sourceService.unsubscribe(id);
+		return existed ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
 	}
 
 	public record CreateSourceRequest(

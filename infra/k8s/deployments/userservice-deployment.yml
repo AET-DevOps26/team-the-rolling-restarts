@@ -29,6 +29,8 @@ spec:
               value: "-XX:MaxRAMPercentage=75"
             - name: JWT_ISSUER
               value: "http://user-service:8081"
+            - name: CONTENT_SERVICE_URL
+              value: "http://content-service:8082"
             - name: SPRING_MONGODB_URI
               valueFrom:
                 secretKeyRef:

@@ -168,6 +168,9 @@ components:
           type: string
         rssUrl:
           type: string
+        subscriberCount:
+          format: int32
+          type: integer
       type: object
     TokenResponse:
       properties:
@@ -398,26 +401,6 @@ paths:
       tags:
       - Sources
   /api/content/sources/{id}:
-    delete:
-      operationId: delete
-      parameters:
-      - in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      responses:
-        '204':
-          description: Source deleted
-        '401':
-          description: Not authenticated
-        '404':
-          description: Source not found
-      security:
-      - bearer-jwt: []
-      summary: Remove a source
-      tags:
-      - Sources
     get:
       operationId: get
       parameters:
@@ -440,6 +423,64 @@ paths:
                 $ref: '#/components/schemas/Source'
           description: Source not found
       summary: Get source details
+      tags:
+      - Sources
+  /api/content/sources/{id}/subscribe:
+    post:
+      description: Increments the source's subscriber count. Intended for service-to-service use by user-service
+        when a user subscribes.
+      operationId: incrementSourceSubscribers
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: Subscription registered
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: Not authenticated
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Source'
+          description: Source not found
+      security:
+      - bearer-jwt: []
+      summary: Register a subscription to a source
+      tags:
+      - Sources
+  /api/content/sources/{id}/unsubscribe:
+    post:
+      description: Decrements the source's subscriber count; the source is deleted once the count reaches
+        zero. Intended for service-to-service use by user-service.
+      operationId: decrementSourceSubscribers
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Subscription removed
+        '401':
+          description: Not authenticated
+        '404':
+          description: Source not found
+      security:
+      - bearer-jwt: []
+      summary: Remove a subscription from a source
       tags:
       - Sources
   /api/content/topics:
@@ -601,6 +642,63 @@ paths:
       security:
       - bearer-jwt: []
       summary: Update current user settings
+      tags:
+      - Users
+  /api/users/users/me/subscriptions/{sourceId}:
+    delete:
+      description: Removes the source from the user's enabled sources and decrements the shared subscriber
+        count in content-service (the source is removed there once nobody is subscribed).
+      operationId: unsubscribeFromSource
+      parameters:
+      - in: path
+        name: sourceId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Unsubscribed
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Not authenticated
+      security:
+      - bearer-jwt: []
+      summary: Unsubscribe the current user from a source
+      tags:
+      - Users
+    post:
+      description: Adds the source to the user's enabled sources and increments the shared subscriber
+        count in content-service.
+      operationId: subscribeToSource
+      parameters:
+      - in: path
+        name: sourceId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Subscribed
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Not authenticated
+      security:
+      - bearer-jwt: []
+      summary: Subscribe the current user to a source
       tags:
       - Users
 servers:

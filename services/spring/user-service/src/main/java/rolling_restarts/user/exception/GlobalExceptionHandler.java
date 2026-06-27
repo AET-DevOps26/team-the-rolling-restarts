@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -67,6 +68,18 @@ public class GlobalExceptionHandler {
 				List.of(),
 				extractPath(request));
 		return ResponseEntity.badRequest().body(error);
+	}
+
+	@ExceptionHandler(BadCredentialsException.class)
+	public ResponseEntity<ApiError> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
+		// Deliberately generic: do not reveal whether the username or the password was wrong.
+		ApiError error = new ApiError(
+				Instant.now(),
+				HttpStatus.UNAUTHORIZED.value(),
+				"Invalid username or password",
+				List.of(),
+				extractPath(request));
+		return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
 	}
 
 	@ExceptionHandler(DuplicateKeyException.class)

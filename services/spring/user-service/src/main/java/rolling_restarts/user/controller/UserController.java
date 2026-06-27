@@ -13,12 +13,16 @@ import jakarta.validation.constraints.Email;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import rolling_restarts.user.client.ContentServiceClient;
 import rolling_restarts.user.model.User;
 import rolling_restarts.user.model.UserSettings;
 import rolling_restarts.user.service.UserService;
@@ -30,9 +34,11 @@ import rolling_restarts.user.service.UserService;
 public class UserController {
 
 	private final UserService userService;
+	private final ContentServiceClient contentServiceClient;
 
-	public UserController(UserService userService) {
+	public UserController(UserService userService, ContentServiceClient contentServiceClient) {
 		this.userService = userService;
+		this.contentServiceClient = contentServiceClient;
 	}
 
 	@GetMapping("/me")
@@ -94,6 +100,47 @@ public class UserController {
 		settings.setSavedArticleIds(request.savedArticleIds());
 		UserSettings updated = userService.updateSettings(userId, settings);
 		return ResponseEntity.ok(UserSettingsResponse.from(updated));
+	}
+
+	@PostMapping("/me/subscriptions/{sourceId}")
+	@Operation(
+			operationId = "subscribeToSource",
+			summary = "Subscribe the current user to a source",
+			description = "Adds the source to the user's enabled sources and increments the shared "
+					+ "subscriber count in content-service.",
+			responses = {
+					@ApiResponse(responseCode = "200", description = "Subscribed"),
+					@ApiResponse(responseCode = "401", description = "Not authenticated")
+			})
+	public ResponseEntity<UserSettingsResponse> subscribe(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable String sourceId) {
+		String userId = jwt.getSubject();
+		if (userService.addSubscription(userId, sourceId)) {
+			contentServiceClient.subscribe(sourceId, jwt.getTokenValue());
+		}
+		return ResponseEntity.ok(UserSettingsResponse.from(userService.getSettings(userId)));
+	}
+
+	@DeleteMapping("/me/subscriptions/{sourceId}")
+	@Operation(
+			operationId = "unsubscribeFromSource",
+			summary = "Unsubscribe the current user from a source",
+			description = "Removes the source from the user's enabled sources and decrements the "
+					+ "shared subscriber count in content-service (the source is removed there once "
+					+ "nobody is subscribed).",
+			responses = {
+					@ApiResponse(responseCode = "200", description = "Unsubscribed"),
+					@ApiResponse(responseCode = "401", description = "Not authenticated")
+			})
+	public ResponseEntity<UserSettingsResponse> unsubscribe(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable String sourceId) {
+		String userId = jwt.getSubject();
+		if (userService.removeSubscription(userId, sourceId)) {
+			contentServiceClient.unsubscribe(sourceId, jwt.getTokenValue());
+		}
+		return ResponseEntity.ok(UserSettingsResponse.from(userService.getSettings(userId)));
 	}
 
 	public record UpdateProfileRequest(String name, @Email String email) {}

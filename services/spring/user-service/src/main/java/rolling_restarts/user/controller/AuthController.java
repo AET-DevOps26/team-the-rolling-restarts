@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
@@ -66,20 +67,18 @@ public class AuthController {
 					@ApiResponse(responseCode = "401", description = "Invalid credentials")
 			})
 	public ResponseEntity<TokenResponse> login(@Valid @RequestBody LoginRequest request) {
-		return userService.authenticate(request.username(), request.password())
-				.map(user -> {
-					Instant now = Instant.now();
-					JwtClaimsSet claims = JwtClaimsSet.builder()
-							.issuer(jwtIssuer)
-							.subject(user.getId())
-							.claim("username", user.getUsername())
-							.issuedAt(now)
-							.expiresAt(now.plusSeconds(3600))
-							.build();
-					String token = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
-					return ResponseEntity.ok(new TokenResponse(token));
-				})
-				.orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+		User user = userService.authenticate(request.username(), request.password())
+				.orElseThrow(() -> new BadCredentialsException("Invalid username or password"));
+		Instant now = Instant.now();
+		JwtClaimsSet claims = JwtClaimsSet.builder()
+				.issuer(jwtIssuer)
+				.subject(user.getId())
+				.claim("username", user.getUsername())
+				.issuedAt(now)
+				.expiresAt(now.plusSeconds(3600))
+				.build();
+		String token = jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+		return ResponseEntity.ok(new TokenResponse(token));
 	}
 
 	public record LoginRequest(

@@ -3,6 +3,8 @@ package rolling_restarts.user.controller;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+
+import java.util.Optional;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -99,5 +101,19 @@ class AuthControllerTest {
 				.andExpect(status().isConflict())
 				.andExpect(jsonPath("$.code").value(409))
 				.andExpect(jsonPath("$.message").value("Username already taken"));
+	}
+
+	@Test
+	void login_invalidCredentials_returns401WithStructuredBody() throws Exception {
+		when(userService.authenticate(anyString(), anyString())).thenReturn(Optional.empty());
+
+		mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"username":"someone","password":"wrongpassword"}
+								"""))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value(401))
+				.andExpect(jsonPath("$.message").value("Invalid username or password"));
 	}
 }

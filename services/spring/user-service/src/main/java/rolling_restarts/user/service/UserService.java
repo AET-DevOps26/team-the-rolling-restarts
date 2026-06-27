@@ -1,5 +1,6 @@
 package rolling_restarts.user.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,10 +17,16 @@ public class UserService {
 	private final UserRepository userRepository;
 	private final PasswordEncoder passwordEncoder;
 
+	// Pre-computed hash of a throwaway password. When a username does not exist we still run a
+	// password comparison against this hash so authentication takes a similar amount of time
+	// whether or not the user exists, avoiding a username-enumeration timing oracle.
+	private final String dummyPasswordHash;
+
 	public UserService(UserRepository userRepository,
 			PasswordEncoder passwordEncoder) {
 		this.userRepository = userRepository;
 		this.passwordEncoder = passwordEncoder;
+		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-constant-time-auth");
 	}
 
 	public User register(String username, String email, String password, String name) {
@@ -47,8 +54,14 @@ public class UserService {
 	}
 
 	public Optional<User> authenticate(String username, String password) {
-		return userRepository.findByUsername(username)
-				.filter(user -> passwordEncoder.matches(password, user.getPasswordHash()));
+		Optional<User> user = userRepository.findByUsername(username);
+		if (user.isEmpty()) {
+			// Run a comparison against a dummy hash so timing does not reveal whether the
+			// username exists, then fail.
+			passwordEncoder.matches(password, dummyPasswordHash);
+			return Optional.empty();
+		}
+		return user.filter(u -> passwordEncoder.matches(password, u.getPasswordHash()));
 	}
 
 	public User findById(String id) {
@@ -109,10 +122,63 @@ public class UserService {
 			settings = new UserSettings();
 		}
 		settings.setSelectedTopicIds(updated.getSelectedTopicIds());
-		settings.setEnabledSourceIds(updated.getEnabledSourceIds());
+		// enabledSourceIds is intentionally NOT updated here: subscriptions are managed only via
+		// subscribe/unsubscribe so the shared subscriber count in content-service stays authoritative.
 		settings.setSavedArticleIds(updated.getSavedArticleIds());
 		user.setSettings(settings);
 		userRepository.save(user);
+		return settings;
+	}
+
+	/**
+	 * Adds {@code sourceId} to the user's enabled sources.
+	 *
+	 * @return {@code true} if it was newly added, {@code false} if already subscribed.
+	 */
+	public boolean addSubscription(String userId, String sourceId) {
+		User user = findById(userId);
+		UserSettings settings = ensureSettings(user);
+		List<String> ids = new ArrayList<>(settings.getEnabledSourceIds());
+		if (ids.contains(sourceId)) {
+			return false;
+		}
+		ids.add(sourceId);
+		settings.setEnabledSourceIds(ids);
+		user.setSettings(settings);
+		userRepository.save(user);
+		return true;
+	}
+
+	/**
+	 * Removes {@code sourceId} from the user's enabled sources.
+	 *
+	 * @return {@code true} if it was present and removed, {@code false} otherwise.
+	 */
+	public boolean removeSubscription(String userId, String sourceId) {
+		User user = findById(userId);
+		UserSettings settings = ensureSettings(user);
+		List<String> ids = new ArrayList<>(settings.getEnabledSourceIds());
+		if (!ids.remove(sourceId)) {
+			return false;
+		}
+		settings.setEnabledSourceIds(ids);
+		user.setSettings(settings);
+		userRepository.save(user);
+		return true;
+	}
+
+	private static UserSettings ensureSettings(User user) {
+		UserSettings settings = user.getSettings();
+		if (settings == null) {
+			settings = new UserSettings();
+			settings.setSelectedTopicIds(List.of());
+			settings.setEnabledSourceIds(List.of());
+			settings.setSavedArticleIds(List.of());
+			user.setSettings(settings);
+		}
+		if (settings.getEnabledSourceIds() == null) {
+			settings.setEnabledSourceIds(List.of());
+		}
 		return settings;
 	}
 }
