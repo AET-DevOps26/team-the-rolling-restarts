@@ -222,7 +222,37 @@ jobs:
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             ${{ steps.values.outputs.files }} \
-            --wait --timeout 5m
+            --wait --timeout 10m
+
+      # On any failure (e.g. a helm --wait timeout), dump enough cluster state to
+      # see WHY a pod isn't Ready — phase, events, and the logs of every container
+      # that isn't ready — instead of just "context deadline exceeded".
+      - name: Diagnose on failure
+        if: failure()
+        run: |
+          echo "::group::Pods"
+          kubectl get pods -o wide || true
+          echo "::endgroup::"
+          echo "::group::Recent events"
+          kubectl get events --sort-by=.lastTimestamp | tail -40 || true
+          echo "::endgroup::"
+          echo "::group::PVCs"
+          kubectl get pvc || true
+          echo "::endgroup::"
+          for d in api-gateway user-service content-service gen-ai web-client mongodb; do
+            echo "::group::describe deployment/$d"
+            kubectl describe deployment "$d" 2>/dev/null | sed -n '/Conditions:/,/Events:/p' || true
+            echo "::endgroup::"
+          done
+          # Logs of any pod that is not Ready (current + previous in case it crash-looped).
+          for p in $(kubectl get pods --no-headers 2>/dev/null | awk '$2 !~ /^([1-9][0-9]*)\/\1$/ {print $1}'); do
+            echo "::group::logs $p (current)"
+            kubectl logs "$p" --all-containers --tail=80 2>/dev/null || true
+            echo "::endgroup::"
+            echo "::group::logs $p (previous)"
+            kubectl logs "$p" --all-containers --previous --tail=80 2>/dev/null || true
+            echo "::endgroup::"
+          done
 
       - name: Verify deployment
         run: |
