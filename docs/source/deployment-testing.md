@@ -73,7 +73,7 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 make smoke-test
 ```
 
-Hits health endpoints, content retrieval, registration (valid + invalid), and login (valid credentials + wrong password). Safe to run repeatedly — uses a unique username per run.
+Hits health endpoints, content retrieval, registration (valid + invalid), login (valid credentials + wrong password), and the shared-source subscriber lifecycle — two users subscribe to the same source, then unsubscribe one at a time, verifying the source survives until the last subscriber leaves, is then auto-deleted, and disappears from each user's enabled sources. Safe to run repeatedly — uses a unique username per run.
 
 ### Integration tests
 
@@ -182,7 +182,7 @@ ssh azureuser@$VM_IP "sudo docker compose -f /opt/rolling-restarts/docker-compos
 make smoke-test-vm
 ```
 
-Runs the same checks as `make smoke-test` (health, routing, registration, login) against the VM. The VM IP is read automatically from Terraform output.
+Runs the same checks as `make smoke-test` (health, routing, registration, login, shared-source subscriber lifecycle) against the VM. The VM IP is read automatically from Terraform output.
 
 #### VM manual checks
 
@@ -271,7 +271,7 @@ make helm-deploy ENV=prod
 make smoke-test-k8s
 ```
 
-Runs the same checks as `make smoke-test` (health, routing, registration, login) against the K8s ingress. Override the host with `make smoke-test-k8s K8S_HOST=your-host.example.com`.
+Runs the same checks as `make smoke-test` (health, routing, registration, login, shared-source subscriber lifecycle) against the K8s ingress. Override the host with `make smoke-test-k8s K8S_HOST=your-host.example.com`.
 
 #### K8s manual checks
 
