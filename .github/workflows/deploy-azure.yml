@@ -58,7 +58,7 @@ jobs:
         run: |
           npm ci
           python -m pip install --upgrade pip
-          python -m pip install openapi-python-client
+          python -m pip install openapi-python-client pyyaml
           chmod +x api/scripts/gen-all.sh
           ./api/scripts/gen-all.sh
 
