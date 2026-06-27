@@ -44,6 +44,13 @@ a channel tag (`main`, `dev`, or `wip`).
 - **`workflow_dispatch`** — manual run from the Actions tab. Uses
   `image-values.example.yaml` as a fallback since no artifact is available.
 
+### CI gate
+
+`build-and-package` runs on every push regardless of CI, so the deploy job's first step requires
+that the **CI** workflow for the same commit has finished and passed (it polls the CI run for that
+SHA, up to ~15 min) before touching the cluster. If CI failed or never ran, the deploy aborts.
+Manual `workflow_dispatch` runs skip this check.
+
 ## Environment selection
 
 The workflow dynamically selects the GitHub Environment and Helm values based

@@ -50,6 +50,13 @@ removes the `build:` blocks and points the app services at
 - `push` to `main`.
 - `workflow_dispatch` (manual run from the Actions tab).
 
+### CI gate
+
+A `verify-ci` job runs first and blocks the build/deploy until the **CI** workflow for the same
+commit has finished and passed (it polls the CI run for that SHA, up to ~15 min). If CI fails or
+times out, nothing is built or deployed. Manual `workflow_dispatch` runs skip this wait so you can
+force a deploy when needed.
+
 ## Prerequisites
 
 1. **The Azure VM and the ACR provisioned** via the `infra/terraform/azure-vm`

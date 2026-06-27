@@ -16,6 +16,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     # Only deploy from the long-lived branches. build-and-package runs on every
     # push (any branch), so without this gate every feature-branch build would
     # deploy to and clobber the shared dev cluster.
@@ -32,6 +35,36 @@ jobs:
       PROFILE: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
 
     steps:
+      # CI gate: build-and-package runs on push regardless of CI, so before deploying we require
+      # that the CI workflow for this exact commit has finished and passed. (Skipped for manual
+      # workflow_dispatch runs, which deploy the example image values.)
+      - name: Require CI to pass for this commit
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "Waiting for the CI workflow to finish for $SHA ..."
+          for i in $(seq 1 60); do
+            run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=1" \
+                  --jq '.workflow_runs[0] | "\(.status):\(.conclusion)"' 2>/dev/null || echo "")
+            status="${run%%:*}"; conclusion="${run##*:}"
+            if [ -z "$run" ] || [ "$run" = "null:null" ]; then
+              echo "  CI run not found yet (attempt $i/60)…"
+            elif [ "$status" = "completed" ]; then
+              echo "  CI concluded: $conclusion"
+              [ "$conclusion" = "success" ] && exit 0
+              echo "::error::CI did not pass (conclusion=$conclusion) — aborting deploy."
+              exit 1
+            else
+              echo "  CI status: $status (attempt $i/60)…"
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out waiting for CI to finish for $SHA."
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v6.0.3
 
