@@ -133,6 +133,8 @@ They are sensitive and are masked in logs.
 | `LLM_API_KEY` | API key for the GenAI provider. |
 | `MONGO_ROOT_USERNAME` | MongoDB root username. |
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
+| `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) the user-service auth server publishes via JWKS. Stored as a single-line PEM (newlines stripped). If unset, user-service generates an ephemeral key that is lost on every restart, invalidating all issued tokens. |
+| `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) the user-service auth server signs JWTs with. Single-line PEM; pair it with `JWT_RSA_PUBLIC_KEY`. |
 
 The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
 Azure control plane, so no host/user/SSH-key secrets are needed.

@@ -181,8 +181,15 @@ jobs:
           MONGO_DATABASE: ${{ vars.MONGO_DATABASE }}
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+          JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
+          JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
         run: |
           umask 077
+          # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
+          # RSA PEMs are collapsed to a single line. user-service strips the PEM markers and all
+          # whitespace before decoding (AuthorizationServerConfig.loadKeyPair), so this is lossless.
+          JWT_RSA_PUBLIC_KEY_ONELINE="$(printf '%s' "$JWT_RSA_PUBLIC_KEY" | tr -d '\r\n')"
+          JWT_RSA_PRIVATE_KEY_ONELINE="$(printf '%s' "$JWT_RSA_PRIVATE_KEY" | tr -d '\r\n')"
           cat > deploy.env <<EOF
           REGISTRY_BASE=${REGISTRY_BASE}
           IMAGE_TAG=${IMAGE_TAG}
@@ -199,6 +206,8 @@ jobs:
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}
           MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
           MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+          JWT_RSA_PUBLIC_KEY=${JWT_RSA_PUBLIC_KEY_ONELINE}
+          JWT_RSA_PRIVATE_KEY=${JWT_RSA_PRIVATE_KEY_ONELINE}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
