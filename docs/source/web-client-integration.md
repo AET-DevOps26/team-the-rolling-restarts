@@ -28,13 +28,14 @@ it is on port 80. The gateway forwards requests based on path prefix.
 - `PUT  /api/users/users/me` — update profile
 - `GET  /api/users/users/me/settings` — user preferences
 - `PUT  /api/users/users/me/settings` — update preferences
+- `POST   /api/users/users/me/subscriptions/{sourceId}` — subscribe to a source
+- `DELETE /api/users/users/me/subscriptions/{sourceId}` — unsubscribe from a source
 
 ### Content service (via `/api/content/`)
 
 - `GET    /api/content/sources` — list RSS sources
 - `POST   /api/content/sources` — submit a new RSS feed URL
-- `GET    /api/content/sources/{id}` — source details
-- `DELETE /api/content/sources/{id}` — remove a source
+- `GET    /api/content/sources/{id}` — source details (includes `subscriberCount`)
 - `GET    /api/content/topics` — list topics
 - `GET    /api/content/articles` — paginated articles (query params: `sourceId`, `topicId`)
 - `GET    /api/content/articles/{id}` — full article

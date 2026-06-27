@@ -363,8 +363,9 @@ root.
 | PUT | `/api/users/users/me` | Update profile |
 | GET | `/api/users/users/me/settings` | User settings |
 | PUT | `/api/users/users/me/settings` | Update settings |
+| POST | `/api/users/users/me/subscriptions/{sourceId}` | Subscribe to a source |
+| DELETE | `/api/users/users/me/subscriptions/{sourceId}` | Unsubscribe from a source |
 | POST | `/api/content/sources` | Add RSS source |
-| DELETE | `/api/content/sources/{id}` | Remove source |
 | POST | `/api/content/articles/saved` | Batch-get saved articles |
 
 ### Error Response Format
