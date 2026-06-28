@@ -4,7 +4,7 @@ const cookieStore = { get: vi.fn() };
 vi.mock("next/headers", () => ({ cookies: async () => cookieStore }));
 vi.mock("server-only", () => ({}));
 
-import { apiFetch, ApiError } from "./client";
+import { apiFetch } from "./client";
 
 afterEach(() => {
   vi.restoreAllMocks();
