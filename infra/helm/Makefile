@@ -21,6 +21,13 @@ else
 VALUES_FILES ?= -f values.yaml -f values-dev.yaml $(SECRETS) -f image-values.yaml
 endif
 
+# Override the ingress host: make helm-deploy HELM_HOST=my-host.example.com
+ifdef HELM_HOST
+HOST_SET = --set host=$(HELM_HOST)
+else
+HOST_SET =
+endif
+
 help:
 	@printf '%s\n' \
 	  'Available Helm targets:' \
@@ -34,29 +41,30 @@ help:
 	  '' \
 	  'Default ENV=dev: staging TLS + a dev.-prefixed host (values-dev.yaml) so a manual deploy' \
 	  'does not collide with the CD release on the shared ingress. Set ENV=prod for the prod host + TLS.' \
+	  'Override the ingress host: HELM_HOST=my-host.example.com' \
 	  'secrets-values.yaml is auto-included if present (override: SECRETS=)'
 
 ## Lint the chart before rendering or installing.
 helm-lint:
-	$(HELM) lint $(CHART) $(VALUES_FILES)
+	$(HELM) lint $(CHART) $(VALUES_FILES) $(HOST_SET)
 helm-setup:
 	cp image-values.example.yaml image-values.yaml
 
 ## Render the chart locally without touching the cluster.
 helm-template:
-	$(HELM) template $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) template $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Install the chart into a namespace.
 helm-install:
-	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Upgrade an existing release.
 helm-upgrade:
-	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Install or upgrade in one command.
 helm-deploy:
-	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Remove the release from the cluster.
 helm-destroy:
