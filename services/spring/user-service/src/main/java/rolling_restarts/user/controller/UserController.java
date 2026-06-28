@@ -117,7 +117,7 @@ public class UserController {
 			@PathVariable String sourceId) {
 		String userId = jwt.getSubject();
 		if (userService.addSubscription(userId, sourceId)) {
-			contentServiceClient.subscribe(sourceId, jwt.getTokenValue());
+			contentServiceClient.subscribe(sourceId);
 		}
 		return ResponseEntity.ok(UserSettingsResponse.from(userService.getSettings(userId)));
 	}
@@ -138,7 +138,7 @@ public class UserController {
 			@PathVariable String sourceId) {
 		String userId = jwt.getSubject();
 		if (userService.removeSubscription(userId, sourceId)) {
-			contentServiceClient.unsubscribe(sourceId, jwt.getTokenValue());
+			contentServiceClient.unsubscribe(sourceId);
 		}
 		return ResponseEntity.ok(UserSettingsResponse.from(userService.getSettings(userId)));
 	}

@@ -22,6 +22,12 @@ public class SecurityConfig {
 						.permitAll()
 						.requestMatchers(HttpMethod.GET, "/sources", "/sources/**", "/topics", "/articles", "/articles/**")
 						.permitAll()
+						// Subscriber-count mutations are service-to-service only: user-service calls them
+						// with a client_credentials token scoped to source.write. Ordinary end-user JWTs
+						// never carry this scope, so a user cannot inflate/deflate counts or delete a
+						// shared source by hitting these endpoints directly through the gateway.
+						.requestMatchers(HttpMethod.POST, "/sources/*/subscribe", "/sources/*/unsubscribe")
+						.hasAuthority("SCOPE_source.write")
 						.anyRequest().authenticated())
 				.csrf(csrf -> csrf.disable())
 				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))

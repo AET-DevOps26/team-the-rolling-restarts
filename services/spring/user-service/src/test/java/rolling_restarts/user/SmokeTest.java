@@ -17,12 +17,14 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.context.TestPropertySource;
 import org.testcontainers.mongodb.MongoDBContainer;
 
 @Tag("smoke")
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
 @AutoConfigureTestRestTemplate
 @ImportTestcontainers(SmokeTest.Containers.class)
+@TestPropertySource(properties = "service.client.secret=test-secret")
 class SmokeTest {
 
 	private static final ParameterizedTypeReference<Map<String, Object>> MAP_TYPE = new ParameterizedTypeReference<>() {};

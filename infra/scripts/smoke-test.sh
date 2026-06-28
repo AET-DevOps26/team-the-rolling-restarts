@@ -146,6 +146,12 @@ if [ -n "$tokenA" ] && [ -n "$tokenB" ]; then
   fi
   check "Shared source created (has id)" "true" "$([ -n "$source_id" ] && echo true || echo false)"
 
+  # An end-user JWT must NOT be able to mutate the shared subscriber count directly: the
+  # content-service subscribe/unsubscribe endpoints require the service-only 'source.write' scope.
+  # Subscriptions go through user-service (below), which uses a client_credentials service token.
+  check "Direct content-service subscribe forbidden for end user (403)" "403" \
+    "$(http -X POST "$base_url/api/content/sources/$source_id/subscribe" -H "Authorization: Bearer $tokenA")"
+
   # Both users subscribe to the same source.
   api_json POST "$base_url/api/users/users/me/subscriptions/$source_id" "$tokenA" >/dev/null
   api_json POST "$base_url/api/users/users/me/subscriptions/$source_id" "$tokenB" >/dev/null
