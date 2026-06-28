@@ -21,6 +21,10 @@ public class Source {
 
 	private boolean active = true;
 
+	// Number of users currently subscribed to this shared source. Adjusted via subscribe/
+	// unsubscribe; when it drops to 0 the source is auto-removed (see SourceService).
+	private int subscriberCount = 0;
+
 	private Instant lastFetchedAt;
 
 	private Instant createdAt = Instant.now();
@@ -39,6 +43,9 @@ public class Source {
 
 	public boolean isActive() { return active; }
 	public void setActive(boolean active) { this.active = active; }
+
+	public int getSubscriberCount() { return subscriberCount; }
+	public void setSubscriberCount(int subscriberCount) { this.subscriberCount = subscriberCount; }
 
 	public Instant getLastFetchedAt() { return lastFetchedAt; }
 	public void setLastFetchedAt(Instant lastFetchedAt) { this.lastFetchedAt = lastFetchedAt; }

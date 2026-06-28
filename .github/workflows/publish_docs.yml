@@ -5,6 +5,11 @@ on:
       - main
       - dev
   workflow_dispatch:
+
+concurrency:
+  group: publish-docs-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 jobs:

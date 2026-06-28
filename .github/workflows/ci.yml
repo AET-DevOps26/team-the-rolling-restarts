@@ -7,7 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
-concurrency: ci-${{ github.ref }}
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -176,7 +178,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Helm lint
-        run: helm lint infra/helm
+        # Supply the example secrets so the chart's required credentials render during lint.
+        # Real secrets are injected at deploy time (see deploy_kubernetes.yml).
+        run: helm lint infra/helm -f infra/helm/secrets-values.example.yaml
 
   contract-test:
     needs: build-and-test

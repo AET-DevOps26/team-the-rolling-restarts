@@ -1,6 +1,11 @@
 package rolling_restarts.content.service;
 
+import java.io.InputStream;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,14 +25,25 @@ import rolling_restarts.content.model.Article;
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.ArticleRepository;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.util.UrlSafetyValidator;
 
 @Service
 public class RssFetcherService {
 
 	private static final Logger log = LoggerFactory.getLogger(RssFetcherService.class);
 
+	private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+	private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
+
 	private final SourceRepository sourceRepository;
 	private final ArticleRepository articleRepository;
+
+	// Redirects are disabled so a public URL cannot 30x-bounce us to an internal address after
+	// the up-front SSRF validation.
+	private final HttpClient httpClient = HttpClient.newBuilder()
+			.connectTimeout(CONNECT_TIMEOUT)
+			.followRedirects(HttpClient.Redirect.NEVER)
+			.build();
 
 	public RssFetcherService(SourceRepository sourceRepository, ArticleRepository articleRepository) {
 		this.sourceRepository = sourceRepository;
@@ -46,8 +62,27 @@ public class RssFetcherService {
 	}
 
 	private void fetchSource(Source source) throws Exception {
+		// Re-validate at fetch time: DNS may have re-resolved to an internal address since the
+		// source was created (TOCTOU), so the create-time check alone is not sufficient.
+		UrlSafetyValidator.validatePublicUrl(source.getRssUrl());
+
+		HttpRequest request = HttpRequest.newBuilder()
+				.uri(URI.create(source.getRssUrl()))
+				.timeout(REQUEST_TIMEOUT)
+				.GET()
+				.build();
+		HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+
+		// Redirects are not followed; a 3xx is treated as a failed fetch rather than chased to a
+		// potentially internal Location.
+		if (response.statusCode() >= 300) {
+			response.body().close();
+			throw new IllegalStateException("Unexpected HTTP status " + response.statusCode()
+					+ " fetching " + source.getRssUrl());
+		}
+
 		SyndFeedInput input = new SyndFeedInput();
-		try (XmlReader reader = new XmlReader(URI.create(source.getRssUrl()).toURL().openStream())) {
+		try (XmlReader reader = new XmlReader(response.body())) {
 			SyndFeed feed = input.build(reader);
 
 			List<String> entryUrls = feed.getEntries().stream()

@@ -1,6 +1,8 @@
 name: Deploy to Azure
 
 # Continuous deployment pipeline:
+#   0. verify-ci      - wait for the CI workflow for this commit to pass before
+#      anything is built or deployed (skipped for manual workflow_dispatch runs).
 #   1. build-and-push - build the three application images and push them to
 #      Azure Container Registry (ACR).
 #   2. deploy         - pull the freshly pushed images onto the Azure VM and
@@ -19,13 +21,49 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   IMAGE_NAMESPACE: team-the-rolling-restarts
 
 jobs:
+  # CI gate: do not build/push/deploy a commit whose CI run hasn't passed. CI and this
+  # workflow both start on the same push, so we poll the CI run for this exact SHA until it
+  # finishes and require success. (Skipped for manual workflow_dispatch runs.)
+  verify-ci:
+    name: Require CI to pass
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for CI success on this commit
+        if: github.event_name != 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          echo "Waiting for the CI workflow to finish for $SHA ..."
+          for i in $(seq 1 60); do
+            run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=1" \
+                  --jq '.workflow_runs[0] | "\(.status):\(.conclusion)"' 2>/dev/null || echo "")
+            status="${run%%:*}"; conclusion="${run##*:}"
+            if [ -z "$run" ] || [ "$run" = "null:null" ]; then
+              echo "  CI run not found yet (attempt $i/60)…"
+            elif [ "$status" = "completed" ]; then
+              echo "  CI concluded: $conclusion"
+              [ "$conclusion" = "success" ] && exit 0
+              echo "::error::CI did not pass (conclusion=$conclusion) — aborting deploy."
+              exit 1
+            else
+              echo "  CI status: $status (attempt $i/60)…"
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out waiting for CI to finish for $SHA."
+          exit 1
+
   build-and-push:
     name: Build & push images to ACR
+    needs: verify-ci
     # Native arm64 runner (free for public repos) so images match the arm64
     # Azure VM (Standard_B2ps_v2 / server-arm64) without QEMU emulation.
     runs-on: ubuntu-24.04-arm
@@ -58,7 +96,7 @@ jobs:
         run: |
           npm ci
           python -m pip install --upgrade pip
-          python -m pip install openapi-python-client
+          python -m pip install openapi-python-client pyyaml
           chmod +x api/scripts/gen-all.sh
           ./api/scripts/gen-all.sh
 
@@ -181,8 +219,15 @@ jobs:
           MONGO_DATABASE: ${{ vars.MONGO_DATABASE }}
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+          JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
+          JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
         run: |
           umask 077
+          # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
+          # RSA PEMs are collapsed to a single line. user-service strips the PEM markers and all
+          # whitespace before decoding (AuthorizationServerConfig.loadKeyPair), so this is lossless.
+          JWT_RSA_PUBLIC_KEY_ONELINE="$(printf '%s' "$JWT_RSA_PUBLIC_KEY" | tr -d '\r\n')"
+          JWT_RSA_PRIVATE_KEY_ONELINE="$(printf '%s' "$JWT_RSA_PRIVATE_KEY" | tr -d '\r\n')"
           cat > deploy.env <<EOF
           REGISTRY_BASE=${REGISTRY_BASE}
           IMAGE_TAG=${IMAGE_TAG}
@@ -199,6 +244,8 @@ jobs:
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}
           MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
           MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+          JWT_RSA_PUBLIC_KEY=${JWT_RSA_PUBLIC_KEY_ONELINE}
+          JWT_RSA_PRIVATE_KEY=${JWT_RSA_PRIVATE_KEY_ONELINE}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
@@ -249,7 +296,7 @@ jobs:
           docker logout "$ACR_LOGIN_SERVER" >/dev/null 2>&1 || true
           docker image prune -f >/dev/null 2>&1 || true
           for i in $(seq 1 12); do
-            if curl -fsS "http://127.0.0.1:8080/" >/dev/null 2>&1; then
+            if curl -fsS "http://127.0.0.1/" >/dev/null 2>&1; then
               echo "DEPLOY_OK reverse-proxy healthy"
               exit 0
             fi

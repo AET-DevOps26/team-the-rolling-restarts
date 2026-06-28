@@ -50,6 +50,13 @@ removes the `build:` blocks and points the app services at
 - `push` to `main`.
 - `workflow_dispatch` (manual run from the Actions tab).
 
+### CI gate
+
+A `verify-ci` job runs first and blocks the build/deploy until the **CI** workflow for the same
+commit has finished and passed (it polls the CI run for that SHA, up to ~15 min). If CI fails or
+times out, nothing is built or deployed. Manual `workflow_dispatch` runs skip this wait so you can
+force a deploy when needed.
+
 ## Prerequisites
 
 1. **The Azure VM and the ACR provisioned** via the `infra/terraform/azure-vm`
@@ -133,6 +140,8 @@ They are sensitive and are masked in logs.
 | `LLM_API_KEY` | API key for the GenAI provider. |
 | `MONGO_ROOT_USERNAME` | MongoDB root username. |
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
+| `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) the user-service auth server publishes via JWKS. Stored as a single-line PEM (newlines stripped). If unset, user-service generates an ephemeral key that is lost on every restart, invalidating all issued tokens. |
+| `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) the user-service auth server signs JWTs with. Single-line PEM; pair it with `JWT_RSA_PUBLIC_KEY`. |
 
 The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
 Azure control plane, so no host/user/SSH-key secrets are needed.

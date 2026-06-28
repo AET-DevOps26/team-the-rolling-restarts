@@ -58,4 +58,5 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
 1. **Local**: Docker Compose (`infra/docker-compose.yaml` + `docker-compose.dev.yaml`)
 2. **Azure VM (CI/CD)**: GitHub Actions → ACR → `az vm run-command` (see `docs/source/cicd-azure-deploy.md`)
 3. **Azure VM (manual)**: Terraform → Ansible → Docker Compose (see `docs/source/azure-vm-deployment.md`)
-4. **Kubernetes**: Helm chart (`infra/helm/`) or raw manifests (`infra/k8s/`)
+4. **Kubernetes (CI/CD)**: GitHub Actions → GHCR → Helm deploy (see `docs/source/cicd-kubernetes-deploy.md`)
+5. **Kubernetes (manual)**: Helm chart (`infra/helm/`) or raw manifests (`infra/k8s/`)

@@ -51,7 +51,7 @@ Base `application.properties` contains no default credentials — they must come
 | `JWT_ISSUER` | user-service | Issuer (`iss`) claim stamped on minted JWTs and advertised via OIDC discovery; must equal the resource servers' `JWT_ISSUER_URI` |
 | `JWT_ISSUER_URI` | api-gateway, content-service | OAuth2 token issuer used to validate JWTs (user-service URL) |
 | `USER_SERVICE_URL` | api-gateway | Upstream user-service URL |
-| `CONTENT_SERVICE_URL` | api-gateway | Upstream content-service URL |
+| `CONTENT_SERVICE_URL` | api-gateway, user-service | Upstream content-service URL (user-service uses it for service-to-service subscription-count updates) |
 | `CORS_ALLOWED_ORIGINS` | api-gateway | Comma-separated allowed CORS origins |
 
 ## OpenAPI (Code-First)

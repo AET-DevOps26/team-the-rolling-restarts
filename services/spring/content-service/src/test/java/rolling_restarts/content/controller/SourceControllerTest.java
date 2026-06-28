@@ -3,7 +3,6 @@ package rolling_restarts.content.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import rolling_restarts.content.config.SecurityConfig;
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.service.SourceService;
 
 @WebMvcTest(SourceController.class)
 @Import(SecurityConfig.class)
@@ -34,6 +34,9 @@ class SourceControllerTest {
 
 	@MockitoBean
 	private SourceRepository sourceRepository;
+
+	@MockitoBean
+	private SourceService sourceService;
 
 	@Test
 	void list_returnsAllSources() throws Exception {
@@ -139,20 +142,60 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
-	void delete_existingSource_returns204() throws Exception {
-		when(sourceRepository.existsById("1")).thenReturn(true);
+	void create_unauthenticated_returns401() throws Exception {
+		mockMvc.perform(post("/sources")
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"Example","rssUrl":"https://example.com/feed"}
+								"""))
+				.andExpect(status().isUnauthorized());
+	}
 
-		mockMvc.perform(delete("/sources/1").with(csrf()))
+	@Test
+	@WithMockUser
+	void subscribe_existingSource_returns200() throws Exception {
+		Source source = new Source();
+		source.setId("1");
+		source.setName("TechCrunch");
+		source.setSubscriberCount(1);
+		when(sourceService.subscribe("1")).thenReturn(source);
+
+		mockMvc.perform(post("/sources/1/subscribe").with(csrf()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.subscriberCount").value(1));
+	}
+
+	@Test
+	@WithMockUser
+	void subscribe_missingSource_returns404() throws Exception {
+		when(sourceService.subscribe("999")).thenReturn(null);
+
+		mockMvc.perform(post("/sources/999/subscribe").with(csrf()))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void subscribe_unauthenticated_returns401() throws Exception {
+		mockMvc.perform(post("/sources/1/subscribe").with(csrf()))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	@WithMockUser
+	void unsubscribe_existingSource_returns204() throws Exception {
+		when(sourceService.unsubscribe("1")).thenReturn(true);
+
+		mockMvc.perform(post("/sources/1/unsubscribe").with(csrf()))
 				.andExpect(status().isNoContent());
 	}
 
 	@Test
 	@WithMockUser
-	void delete_missingSource_returns404() throws Exception {
-		when(sourceRepository.existsById("999")).thenReturn(false);
+	void unsubscribe_missingSource_returns404() throws Exception {
+		when(sourceService.unsubscribe("999")).thenReturn(false);
 
-		mockMvc.perform(delete("/sources/999").with(csrf()))
+		mockMvc.perform(post("/sources/999/unsubscribe").with(csrf()))
 				.andExpect(status().isNotFound());
 	}
 }

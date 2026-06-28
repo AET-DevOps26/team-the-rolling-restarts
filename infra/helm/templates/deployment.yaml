@@ -19,6 +19,11 @@ metadata:
 {{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
 spec:
   replicas: {{ default $.Values.global.replicas $cfg.replicas }}
+  # Recreate (not RollingUpdate) so an upgrade tears the old pod down before starting the new
+  # one. The `deployment` namespace has a tight limits ResourceQuota (2 CPU / 3000Mi); a rolling
+  # update would briefly need 2x a pod's limits and be rejected with "exceeded quota".
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: {{ $cfg.name }}

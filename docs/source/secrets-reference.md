@@ -123,13 +123,24 @@ Helm uses two layers: `values.yaml` (checked in, non-secret config) and `secrets
 
 ### Secrets (`secrets-values.yaml`)
 
-These override the dummy defaults in `values.yaml` and are injected into Kubernetes Secrets.
+These are **required** — `values.yaml` ships them as empty strings and `templates/secrets.yaml`
+wraps each in Helm's `required` function, so `helm` refuses to render unless `secrets-values.yaml`
+provides every one. No credential material is committed to the chart.
 
-| Key | Dev default (in `values.yaml`) | Prod guidance | Consumed by |
-| --- | ------------------------------ | ------------- | ----------- |
-| `mongodb.rootUsername` | `root` | Keep or change | mongodb + both `mongodb-credentials` and `mongodb-user-credentials` Secrets |
-| `mongodb.rootPassword` | `secret` | Strong random password | mongodb + both Secrets |
-| `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | Committed dev key pair (in `values.yaml`) | Fresh RSA pair (override in `secrets-values.yaml`) | `jwt-keys` Secret → user-service JWT signing |
+Generate a working file in one command with `make helm-secrets` (fresh RSA pair + random Mongo
+password), or copy `secrets-values.example.yaml` and fill it in by hand.
+
+| Key | Required | Prod guidance | Consumed by |
+| --- | -------- | ------------- | ----------- |
+| `mongodb.rootUsername` | yes | Keep `root` or change | mongodb + both `mongodb-credentials` and `mongodb-user-credentials` Secrets |
+| `mongodb.rootPassword` | yes | Strong random password | mongodb + both Secrets |
+| `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | yes | Fresh RSA pair | `jwt-keys` Secret → user-service JWT signing |
+
+> **Rotating `mongodb.rootPassword`:** MongoDB only applies the root password on first init (empty
+> data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
+> and the services fail with "Authentication failed". Wipe the volume to re-initialize:
+> `kubectl -n deployment delete deploy mongodb && kubectl -n deployment delete pvc mongodb-data`,
+> then redeploy.
 
 Both services share the same MongoDB instance with data isolation via separate databases:
 
@@ -151,10 +162,23 @@ These are set directly in `values.yaml` or overridden per-environment.
 
 ### Example `infra/helm/secrets-values.yaml` (prod)
 
+All four keys are mandatory — see `secrets-values.example.yaml` for the full template, or run
+`make helm-secrets` to generate this automatically.
+
 ```yaml
 mongodb:
   rootUsername: root
   rootPassword: "a-strong-random-password-here"
+userService:
+  jwtKeys:
+    publicKey: |
+      -----BEGIN PUBLIC KEY-----
+      ...
+      -----END PUBLIC KEY-----
+    privateKey: |
+      -----BEGIN PRIVATE KEY-----
+      ...
+      -----END PRIVATE KEY-----
 ```
 
 ### Helm values file layering
@@ -188,7 +212,7 @@ The Spring services use profiles to switch between dev and production configurat
 | Service | Required env vars |
 | ------- | ----------------- |
 | **api-gateway** | `CORS_ALLOWED_ORIGINS`, `JWT_ISSUER_URI`, `USER_SERVICE_URL`, `CONTENT_SERVICE_URL` |
-| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY` |
+| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY`, `CONTENT_SERVICE_URL` |
 | **content-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER_URI` |
 | **gen-ai** | `LLM_API_KEY` (optional — service starts without it but LLM calls fail) |
 

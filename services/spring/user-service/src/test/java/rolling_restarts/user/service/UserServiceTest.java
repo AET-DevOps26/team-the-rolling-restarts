@@ -120,4 +120,65 @@ class UserServiceTest {
 		assertNotNull(result);
 		assertEquals(List.of(), result.getSelectedTopicIds());
 	}
+
+	@Test
+	void addSubscription_newSource_addsAndReturnsTrue() {
+		String id = "507f1f77bcf86cd799439011";
+		User user = userWithEnabledSources(id, List.of("existing"));
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		boolean added = userService.addSubscription(id, "src-1");
+
+		assertEquals(true, added);
+		assertEquals(List.of("existing", "src-1"), user.getSettings().getEnabledSourceIds());
+	}
+
+	@Test
+	void addSubscription_alreadySubscribed_returnsFalse() {
+		String id = "507f1f77bcf86cd799439011";
+		User user = userWithEnabledSources(id, List.of("src-1"));
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+		boolean added = userService.addSubscription(id, "src-1");
+
+		assertEquals(false, added);
+		verify(userRepository, org.mockito.Mockito.never()).save(any(User.class));
+	}
+
+	@Test
+	void removeSubscription_subscribed_removesAndReturnsTrue() {
+		String id = "507f1f77bcf86cd799439011";
+		User user = userWithEnabledSources(id, List.of("src-1", "src-2"));
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+		when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		boolean removed = userService.removeSubscription(id, "src-1");
+
+		assertEquals(true, removed);
+		assertEquals(List.of("src-2"), user.getSettings().getEnabledSourceIds());
+	}
+
+	@Test
+	void removeSubscription_notSubscribed_returnsFalse() {
+		String id = "507f1f77bcf86cd799439011";
+		User user = userWithEnabledSources(id, List.of("src-2"));
+		when(userRepository.findById(id)).thenReturn(Optional.of(user));
+
+		boolean removed = userService.removeSubscription(id, "src-1");
+
+		assertEquals(false, removed);
+		verify(userRepository, org.mockito.Mockito.never()).save(any(User.class));
+	}
+
+	private static User userWithEnabledSources(String id, List<String> enabledSourceIds) {
+		User user = new User();
+		user.setId(id);
+		UserSettings settings = new UserSettings();
+		settings.setSelectedTopicIds(List.of());
+		settings.setEnabledSourceIds(enabledSourceIds);
+		settings.setSavedArticleIds(List.of());
+		user.setSettings(settings);
+		return user;
+	}
 }
