@@ -12,7 +12,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen flex-1">
       <AppSidebar className="hidden md:flex" topics={topics} sources={sources} />
       <div className="flex min-h-screen flex-1 flex-col">
-        <AppTopbar avatarInitials={user.avatarInitials} />
+        <AppTopbar avatarInitials={user.avatarInitials} topics={topics} sources={sources} />
         <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</div>
       </div>
       <Toaster richColors />

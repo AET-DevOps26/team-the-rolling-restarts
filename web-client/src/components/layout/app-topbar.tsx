@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { logout } from "@/lib/actions/auth";
+import type { Source, Topic } from "@/lib/api/types";
 import { ROUTES } from "@/lib/routes";
 
 const TITLES: Record<string, string> = {
@@ -29,7 +30,15 @@ function titleFromPathname(pathname: string | null): string {
   return TITLES[pathname] ?? "";
 }
 
-export function AppTopbar({ avatarInitials }: { avatarInitials: string }) {
+export function AppTopbar({
+  avatarInitials,
+  topics,
+  sources,
+}: {
+  avatarInitials: string;
+  topics: Topic[];
+  sources: Source[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const title = titleFromPathname(pathname);
@@ -37,7 +46,7 @@ export function AppTopbar({ avatarInitials }: { avatarInitials: string }) {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur">
       <div className="md:hidden">
-        <AppMobileNav />
+        <AppMobileNav topics={topics} sources={sources} />
       </div>
       <h1 className="text-sm font-medium md:text-base">{title}</h1>
       <TopbarSearch />

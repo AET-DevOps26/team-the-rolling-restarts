@@ -12,9 +12,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import type { Source, Topic } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
-export function AppMobileNav() {
+export function AppMobileNav({
+  topics,
+  sources,
+}: {
+  topics: Topic[];
+  sources: Source[];
+}) {
   const [open, setOpen] = useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -30,7 +37,7 @@ export function AppMobileNav() {
         <SheetHeader className="sr-only">
           <SheetTitle>Main menu</SheetTitle>
         </SheetHeader>
-        <AppSidebar className="w-full border-r-0" />
+        <AppSidebar className="w-full border-r-0" topics={topics} sources={sources} />
       </SheetContent>
     </Sheet>
   );
