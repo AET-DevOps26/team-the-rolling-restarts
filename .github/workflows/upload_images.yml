@@ -118,12 +118,14 @@ jobs:
 
       - name: Download generated sources
         if: matrix.needs-generated
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: generated-sources
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
+        with:
+          cache: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
