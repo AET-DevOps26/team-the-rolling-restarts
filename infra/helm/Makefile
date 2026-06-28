@@ -70,8 +70,8 @@ helm-deploy:
 helm-destroy:
 	$(HELM) uninstall $(RELEASE)
 
-## Generate a working secrets-values.yaml: a fresh shared RSA key pair for JWT signing and a
-## random Mongo root password. Refuses to overwrite an existing file (delete it to regenerate).
+## Generate a working secrets-values.yaml with all five required secrets: Mongo credentials,
+## RSA key pair for JWT signing, and a service client secret. Refuses to overwrite.
 ## Override the Mongo user with MONGO_USER=...
 helm-secrets:
 	@if [ -f secrets-values.yaml ]; then \

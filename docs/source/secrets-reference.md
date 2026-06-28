@@ -215,7 +215,7 @@ The Spring services use profiles to switch between dev and production configurat
 | Service | Required env vars |
 | ------- | ----------------- |
 | **api-gateway** | `CORS_ALLOWED_ORIGINS`, `JWT_ISSUER_URI`, `USER_SERVICE_URL`, `CONTENT_SERVICE_URL` |
-| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY`, `CONTENT_SERVICE_URL`, `SERVICE_CLIENT_SECRET` (subscriber-count sync no-ops if unset) |
+| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY`, `CONTENT_SERVICE_URL`, `SERVICE_CLIENT_SECRET` |
 | **content-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER_URI` |
 | **gen-ai** | `LLM_API_KEY` (optional — service starts without it but LLM calls fail) |
 
