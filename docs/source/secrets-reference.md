@@ -118,7 +118,7 @@ app_env:
 
 ## Kubernetes / Helm
 
-Helm uses two layers: `values.yaml` (checked in, non-secret config) and `secrets-values.yaml` (not checked in, credentials only).
+Helm uses multiple values files layered together: `values.yaml` (base config, checked in), `values-prod.yaml` (prod overrides, checked in), `secrets-values.yaml` (credentials, not checked in), and `image-values.yaml` (image tags, set by CI).
 
 **File:** `infra/helm/secrets-values.yaml` (copy from `secrets-values.example.yaml`)
 
@@ -181,6 +181,7 @@ userService:
       -----BEGIN PRIVATE KEY-----
       ...
       -----END PRIVATE KEY-----
+  serviceClientSecret: "a-strong-random-value-here"
 ```
 
 ### Helm values file layering

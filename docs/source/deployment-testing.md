@@ -73,7 +73,7 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 make smoke-test
 ```
 
-Hits health endpoints, content retrieval, registration (valid + invalid), login (valid credentials + wrong password), and the shared-source subscriber lifecycle — two users subscribe to the same source, then unsubscribe one at a time, verifying the source survives until the last subscriber leaves, is then auto-deleted, and disappears from each user's enabled sources. Safe to run repeatedly — uses a unique username per run.
+Hits health endpoints, content retrieval, registration (valid + invalid), login (valid credentials + wrong password), service-scope enforcement (creates a source with a known subscriber count, then hammers the subscribe/unsubscribe endpoints with both unauthenticated and regular-user JWTs and verifies every call is rejected and the subscriber count is unchanged — proving the `source.write` scope gate prevents external abuse), and the shared-source subscriber lifecycle — two users subscribe to the same source, then unsubscribe one at a time, verifying the source survives until the last subscriber leaves, is then auto-deleted, and disappears from each user's enabled sources. Safe to run repeatedly — uses a unique username per run.
 
 ### Integration tests
 
@@ -107,14 +107,33 @@ Images are built and pushed automatically by CI:
 **Manual push** (for testing feature branches or when CI is unavailable):
 
 ```bash
-# Push to the org registry (requires write:packages permission — see GHCR setup below)
-make push-images IMAGE_TAG=<tag-name>
+# Multi-arch build (recommended) — works on both amd64 K8s nodes and arm64 Azure VMs
+make push-images IMAGE_TAG=<tag-name> PLATFORM=linux/amd64,linux/arm64
 
 # Or push to your personal registry (no extra permissions needed)
-make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling-restarts
+make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling-restarts PLATFORM=linux/amd64,linux/arm64
 ```
 
 `IMAGE_TAG` defaults to the current commit SHA if not specified.
+
+#### Cross-architecture builds
+
+The Azure VM uses arm64 (`Standard_B2ps_v2`), while the Kubernetes cluster and most dev machines run amd64. Pass `PLATFORM` to `make push-images` to cross-build:
+
+| Target | `PLATFORM` value |
+| ------ | ---------------- |
+| Both (recommended) | `linux/amd64,linux/arm64` |
+| Azure VM only | `linux/arm64` |
+| K8s / local only | omit `PLATFORM` (defaults to host arch) |
+
+Multi-platform builds require a buildx builder and QEMU. One-time setup:
+
+```bash
+docker run --privileged --rm multiarch/qemu-user-static --reset -p yes
+docker buildx create --name multiarch --use
+```
+
+Cross-building is slower than native builds (QEMU emulates every instruction). Expect 3-5x longer build times, especially for the JVM-based Spring services.
 
 #### GHCR setup (for manual pushes)
 
@@ -250,11 +269,19 @@ make terraform-destroy
 cp infra/helm/secrets-values.example.yaml infra/helm/secrets-values.yaml
 # Edit with real database credentials (auto-detected by Makefile when present)
 
-make helm-deploy                    # install or upgrade
-
-# For production (2 replicas, letsencrypt-prod):
-make helm-deploy ENV=prod
+make helm-deploy                    # dev: deploys to dev.<base-host>, staging TLS
+make helm-deploy ENV=prod           # prod: deploys to <base-host>, letsencrypt-prod, 2 replicas
+make helm-deploy HELM_HOST=custom.example.com  # override the ingress host
 ```
+
+`ENV` controls which values files are layered and which ingress host is used:
+
+| `ENV` | Ingress host | TLS issuer | Replicas |
+| ----- | ------------ | ---------- | -------- |
+| `dev` (default) | `dev.rolling-restarts.stud.k8s.aet.cit.tum.de` | letsencrypt-staging | 1 |
+| `prod` | `rolling-restarts.stud.k8s.aet.cit.tum.de` | letsencrypt-prod | 2 |
+
+`HELM_HOST` overrides the ingress host regardless of `ENV`.
 
 > **Image values are applied automatically.** Every `helm-*` Make target overlays
 > `infra/helm/image-values.yaml` last (`-f values.yaml … -f image-values.yaml`), so you don't pass
@@ -268,10 +295,12 @@ make helm-deploy ENV=prod
 #### K8s smoke test
 
 ```bash
-make smoke-test-k8s
+make smoke-test-k8s                 # dev: tests against dev.<base-host>
+make smoke-test-k8s ENV=prod        # prod: tests against <base-host>
+make smoke-test-k8s K8S_HOST=custom.example.com  # explicit override
 ```
 
-Runs the same checks as `make smoke-test` (health, routing, registration, login, shared-source subscriber lifecycle) against the K8s ingress. Override the host with `make smoke-test-k8s K8S_HOST=your-host.example.com`.
+The smoke test target shares the same `ENV` variable as `helm-deploy`, so `make helm-deploy && make smoke-test-k8s` automatically targets the same host. Runs health, routing, registration, login, service-scope enforcement, and the shared-source subscriber lifecycle.
 
 #### K8s manual checks
 
