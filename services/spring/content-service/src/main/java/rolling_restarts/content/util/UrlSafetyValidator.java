@@ -1,5 +1,6 @@
 package rolling_restarts.content.util;
 
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.URI;
 
@@ -49,12 +50,31 @@ public final class UrlSafetyValidator {
 		}
 	}
 
-	/** True if the address is loopback, link-local, site-local, any-local, or multicast. */
+	/**
+	 * True if the address is non-public and must not be the target of an outbound fetch:
+	 * loopback, any-local, link-local, site-local, multicast, or an IPv6 unique-local address.
+	 *
+	 * <p>{@link InetAddress#isSiteLocalAddress()} only covers IPv4 RFC 1918 ranges and the
+	 * deprecated IPv6 {@code fec0::/10} range — it does NOT match the {@code fc00::/7} unique-local
+	 * range (RFC 4193) that Docker/Kubernetes IPv6 networks actually use, so we check that
+	 * explicitly. IPv4-mapped IPv6 addresses (e.g. {@code ::ffff:127.0.0.1}) are normalised by the
+	 * JDK so the IPv4 predicates above already apply to them.
+	 */
 	public static boolean isInternal(InetAddress addr) {
 		return addr.isLoopbackAddress()
 				|| addr.isAnyLocalAddress()
 				|| addr.isLinkLocalAddress()
 				|| addr.isSiteLocalAddress()
-				|| addr.isMulticastAddress();
+				|| addr.isMulticastAddress()
+				|| isUniqueLocalIpv6(addr);
+	}
+
+	/** Matches the IPv6 unique-local range fc00::/7 (the high 7 bits of the first byte are 1111110). */
+	private static boolean isUniqueLocalIpv6(InetAddress addr) {
+		if (!(addr instanceof Inet6Address)) {
+			return false;
+		}
+		byte[] bytes = addr.getAddress();
+		return bytes.length == 16 && (bytes[0] & 0xFE) == 0xFC;
 	}
 }
