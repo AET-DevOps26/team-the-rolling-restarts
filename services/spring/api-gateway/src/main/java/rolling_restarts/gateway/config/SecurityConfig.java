@@ -44,6 +44,10 @@ public class SecurityConfig {
 								"/api/content/topics",
 								"/api/content/articles", "/api/content/articles/**")
 						.permitAll()
+						.requestMatchers(HttpMethod.POST,
+								"/api/content/sources/*/subscribe",
+								"/api/content/sources/*/unsubscribe")
+						.hasAuthority("SCOPE_source.write")
 						.anyRequest().authenticated())
 				.csrf(csrf -> csrf.disable())
 				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))
