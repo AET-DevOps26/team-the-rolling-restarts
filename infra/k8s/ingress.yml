@@ -10,14 +10,14 @@ spec:
 
   tls:
     - hosts:
-        - rolling-restarts.stud.k8s.aet.cit.tum.de
+        - k8s.rolling-restarts.stud.k8s.aet.cit.tum.de
       secretName: rolling-restarts-tls
 
   rules:
     # Single host, path-based routing (mirrors the nginx reverse-proxy and the
     # Helm ingress): /api,/actuator,/swagger-ui,/v3/api-docs -> api-gateway
     # (the gateway fans /api/ai/** out to gen-ai), everything else -> web client.
-    - host: rolling-restarts.stud.k8s.aet.cit.tum.de
+    - host: k8s.rolling-restarts.stud.k8s.aet.cit.tum.de
       http:
         paths:
           - path: /api/
