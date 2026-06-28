@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { getSource, getTopic } from "@/lib/mock";
+import type { Source, Topic } from "@/lib/api/types";
 
 export type FeedSort = "for-you" | "trending" | "latest";
 
@@ -33,13 +33,17 @@ export function FeedToolbar({
   sort,
   onSortChange,
   filters,
+  topicsById,
+  sourcesById,
 }: {
   sort: FeedSort;
   onSortChange: (next: FeedSort) => void;
   filters: ActiveFilters;
+  topicsById: Map<string, Topic>;
+  sourcesById: Map<string, Source>;
 }) {
-  const topic = filters.topic ? getTopic(filters.topic) : undefined;
-  const source = filters.source ? getSource(filters.source) : undefined;
+  const topic = filters.topic ? topicsById.get(filters.topic) : undefined;
+  const source = filters.source ? sourcesById.get(filters.source) : undefined;
   const hasFilters = Boolean(filters.topic || filters.source);
 
   return (

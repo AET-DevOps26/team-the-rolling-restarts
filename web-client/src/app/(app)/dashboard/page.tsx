@@ -1,22 +1,37 @@
 import { DashboardFeed } from "@/components/feed/dashboard-feed";
+import { getArticles, getMySettings, getSources, getTopics } from "@/lib/api/reads";
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ topic?: string; source?: string }>;
+  searchParams: Promise<{ topic?: string; source?: string; q?: string }>;
 }) {
-  const { topic, source } = await searchParams;
+  const { topic, source, q } = await searchParams;
+  const [articles, topics, sources, settings] = await Promise.all([
+    getArticles({ topicId: topic, sourceId: source, size: 50, sort: "publishedAt,desc" }),
+    getTopics(),
+    getSources(),
+    getMySettings(),
+  ]);
+
   return (
     <main className="flex flex-col gap-6">
       <div className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight">Your feed</h1>
-          <p className="text-sm text-muted-foreground">
-            Stories tailored to your interests.
-          </p>
+          <p className="text-sm text-muted-foreground">Stories tailored to your interests.</p>
         </div>
       </div>
-      <DashboardFeed topic={topic} source={source} />
+      <DashboardFeed
+        articles={articles}
+        topics={topics}
+        sources={sources}
+        savedIds={settings.savedArticleIds}
+        selectedTopicIds={settings.selectedTopicIds}
+        topic={topic}
+        source={source}
+        query={q}
+      />
     </main>
   );
 }

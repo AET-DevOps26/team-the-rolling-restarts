@@ -1,12 +1,6 @@
-const REFERENCE_NOW = new Date("2026-05-14T08:00:00.000Z").getTime();
-
-export function hoursAgoIso(hours: number): string {
-  return new Date(REFERENCE_NOW - hours * 60 * 60 * 1000).toISOString();
-}
-
 export function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
-  const diffMinutes = Math.max(0, Math.round((REFERENCE_NOW - then) / 60000));
+  const diffMinutes = Math.max(0, Math.round((Date.now() - then) / 60000));
   if (diffMinutes < 1) return "just now";
   if (diffMinutes < 60) return `${diffMinutes}m ago`;
   const diffHours = Math.round(diffMinutes / 60);
@@ -17,8 +11,7 @@ export function relativeTime(iso: string): string {
 }
 
 export function dateLabel(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("en-GB", {
+  return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
     year: "numeric",

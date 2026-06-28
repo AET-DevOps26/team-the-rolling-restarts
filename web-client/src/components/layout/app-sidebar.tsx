@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { SOURCES, TOPICS } from "@/lib/mock";
+import type { Source, Topic } from "@/lib/api/types";
 import {
   mainNav,
   type MainNavIcon,
@@ -26,7 +26,15 @@ function isActive(pathname: string | null, href: RouteHref) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebar({ className }: { className?: string }) {
+export function AppSidebar({
+  className,
+  topics,
+  sources,
+}: {
+  className?: string;
+  topics: Topic[];
+  sources: Source[];
+}) {
   const pathname = usePathname();
   return (
     <aside
@@ -69,7 +77,7 @@ export function AppSidebar({ className }: { className?: string }) {
           Topics
         </p>
         <ul className="flex flex-col gap-0.5">
-          {TOPICS.map((topic) => (
+          {topics.map((topic) => (
             <li key={topic.id}>
               <Link
                 href={`/dashboard?topic=${topic.id}`}
@@ -94,7 +102,7 @@ export function AppSidebar({ className }: { className?: string }) {
           Sources
         </p>
         <ul className="flex flex-col gap-0.5">
-          {SOURCES.slice(0, 6).map((source) => (
+          {sources.slice(0, 6).map((source) => (
             <li key={source.id}>
               <Link
                 href={`/dashboard?source=${source.id}`}
@@ -102,7 +110,7 @@ export function AppSidebar({ className }: { className?: string }) {
               >
                 <span>{source.name}</span>
                 <span className="text-xs text-muted-foreground/70">
-                  {source.weeklyCount}
+                  {source.subscriberCount}
                 </span>
               </Link>
             </li>

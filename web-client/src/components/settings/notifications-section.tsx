@@ -32,6 +32,9 @@ export function NotificationsSection() {
           <CardDescription>When and how NewsLens reaches out.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+            Saved locally only — server sync coming soon.
+          </p>
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium">Email digest</p>
