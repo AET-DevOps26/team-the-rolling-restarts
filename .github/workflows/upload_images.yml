@@ -50,6 +50,12 @@ jobs:
           openapi-python-client generate --path api/openapi.yaml \
             --output-path services/gen-ai/generated --overwrite
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Docker login
         uses: docker/login-action@v4.2.0
         with:
@@ -83,13 +89,14 @@ jobs:
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
           echo "api_base_url=https://api.rolling-restarts.stud.k8s.aet.cit.tum.de" >> $GITHUB_OUTPUT
 
-      # ---------------- WEB CLIENT (temporarily disabled) ----------------
+      # ---------------- WEB CLIENT ----------------
       - name: Build web-client
         uses: docker/build-push-action@v7.2.0
         with:
           context: ./web-client
           file: ./web-client/Dockerfile
           target: production
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=${{ steps.meta.outputs.api_base_url }}
@@ -103,6 +110,7 @@ jobs:
         with:
           context: ./services/spring
           file: ./services/spring/api-gateway/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/api-gateway:${{ steps.meta.outputs.sha }}
@@ -114,6 +122,7 @@ jobs:
         with:
           context: ./services/spring
           file: ./services/spring/user-service/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/user-service:${{ steps.meta.outputs.sha }}
@@ -125,17 +134,19 @@ jobs:
         with:
           context: ./services/spring
           file: ./services/spring/content-service/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.sha }}
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/content-service:${{ steps.meta.outputs.channel }}
 
-      # ---------------- GEN AI (temporarily disabled) ----------------
+      # ---------------- GEN AI ----------------
       - name: Build gen-ai
         uses: docker/build-push-action@v7.2.0
         with:
           context: ./services/gen-ai
           file: ./services/gen-ai/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/${{ steps.meta.outputs.project }}/gen-ai:${{ steps.meta.outputs.sha }}
