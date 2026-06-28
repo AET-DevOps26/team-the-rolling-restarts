@@ -69,6 +69,9 @@ export default function ForgotPasswordPage() {
       <form onSubmit={handleSubmit} noValidate>
         <CardContent>
           <FieldGroup>
+            <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+              Password reset isn&apos;t available yet — this is a preview of the flow.
+            </p>
             <Field>
               <FieldLabel htmlFor="forgot-email">Email</FieldLabel>
               <Input
