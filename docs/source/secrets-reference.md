@@ -19,6 +19,7 @@ These must be changed from defaults in production. The dev defaults below work o
 | `MONGO_ROOT_PASSWORD` | `secret` | Strong random password (24+ chars) | mongodb, user-service, content-service |
 | `MONGO_ROOT_USERNAME` | `root` | Keep or change | mongodb, user-service, content-service |
 | `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
+| `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
 | `LLM_API_KEY` | _(empty)_ | OpenAI / provider API key | gen-ai |
 
 ### Configuration
@@ -135,6 +136,7 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 | `mongodb.rootUsername` | yes | Keep `root` or change | mongodb + both `mongodb-credentials` and `mongodb-user-credentials` Secrets |
 | `mongodb.rootPassword` | yes | Strong random password | mongodb + both Secrets |
 | `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | yes | Fresh RSA pair | `jwt-keys` Secret → user-service JWT signing |
+| `userService.serviceClientSecret` | yes | Strong random value (`openssl rand -hex 32`) | `service-credentials` Secret → user-service's client_credentials token for content-service subscribe/unsubscribe |
 
 > **Rotating `mongodb.rootPassword`:** MongoDB only applies the root password on first init (empty
 > data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
@@ -212,7 +214,7 @@ The Spring services use profiles to switch between dev and production configurat
 | Service | Required env vars |
 | ------- | ----------------- |
 | **api-gateway** | `CORS_ALLOWED_ORIGINS`, `JWT_ISSUER_URI`, `USER_SERVICE_URL`, `CONTENT_SERVICE_URL` |
-| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY`, `CONTENT_SERVICE_URL` |
+| **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY`, `CONTENT_SERVICE_URL`, `SERVICE_CLIENT_SECRET` (subscriber-count sync no-ops if unset) |
 | **content-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER_URI` |
 | **gen-ai** | `LLM_API_KEY` (optional — service starts without it but LLM calls fail) |
 
