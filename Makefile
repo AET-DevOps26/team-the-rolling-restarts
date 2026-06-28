@@ -55,7 +55,7 @@ help:
 	  '' \
 	  'Kubernetes / Helm:' \
 	  '  make helm-setup        - seed image-values.yaml from example (first time)' \
-	  '  make helm-secrets      - generate secrets-values.yaml (RSA key + random Mongo password)' \
+	  '  make helm-secrets      - generate secrets-values.yaml (RSA key, random Mongo password, service secret)' \
 	  '  make helm-deploy       - install or upgrade the Helm release (ENV=prod for production TLS)' \
 	  '  make helm-destroy      - uninstall the Helm release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \

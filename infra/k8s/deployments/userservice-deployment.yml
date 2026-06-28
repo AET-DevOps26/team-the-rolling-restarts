@@ -47,6 +47,13 @@ spec:
                 secretKeyRef:
                   name: jwt-keys
                   key: private-key
+            # Shared secret for the client_credentials machine token user-service uses to call
+            # content-service's subscribe/unsubscribe endpoints (scope source.write).
+            - name: SERVICE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: service-credentials
+                  key: client-secret
 
           readinessProbe:
             httpGet:

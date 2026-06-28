@@ -98,6 +98,9 @@ jobs:
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
+          # Optional: enables user-service -> content-service subscriber-count sync. If unset,
+          # the chart renders an empty secret and the sync no-ops (security is unaffected).
+          SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
         run: |
           umask 077
           python3 -c '
@@ -122,6 +125,9 @@ jobs:
                   }
               }
           }
+          service_secret = os.environ.get("SERVICE_CLIENT_SECRET", "")
+          if service_secret:
+              data["userService"]["serviceClientSecret"] = QuotedStr(service_secret)
           yaml.dump(data, sys.stdout, default_flow_style=False)
           ' > infra/helm/secrets-values.yaml
 

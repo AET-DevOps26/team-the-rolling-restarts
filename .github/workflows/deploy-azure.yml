@@ -221,6 +221,9 @@ jobs:
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
+          # Optional: secret for user-service -> content-service subscriber-count sync. If unset,
+          # compose falls back to a dev default; security is unaffected either way.
+          SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
         run: |
           umask 077
           # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
@@ -246,6 +249,7 @@ jobs:
           MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
           JWT_RSA_PUBLIC_KEY=${JWT_RSA_PUBLIC_KEY_ONELINE}
           JWT_RSA_PRIVATE_KEY=${JWT_RSA_PRIVATE_KEY_ONELINE}
+          SERVICE_CLIENT_SECRET=${SERVICE_CLIENT_SECRET}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
