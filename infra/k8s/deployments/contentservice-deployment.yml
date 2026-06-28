@@ -5,7 +5,7 @@ metadata:
   labels:
     app: content-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: content-service
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: content-service
-          image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:latest
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/content-service:wip
           imagePullPolicy: Always
 
           ports:
@@ -58,10 +58,15 @@ spec:
             failureThreshold: 30
             periodSeconds: 10
 
+          # The target cluster enforces a ResourceQuota on LIMITS (total
+          # limits.cpu=2, limits.memory=3000Mi), so limits — not just requests —
+          # must stay small. These three JVM services dominate the budget:
+          # 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
+          # Keep in sync with infra/helm/values.yaml (contentService.resources).
           resources:
             requests:
-              cpu: "200m"
+              cpu: "100m"
               memory: "256Mi"
             limits:
-              cpu: "1"
-              memory: "1Gi"
+              cpu: "350m"
+              memory: "512Mi"

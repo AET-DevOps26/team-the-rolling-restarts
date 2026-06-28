@@ -5,7 +5,7 @@ metadata:
   labels:
     app: gen-ai
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: gen-ai
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: gen-ai
-          image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:1eb2b0a
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
           imagePullPolicy: Always
 
           ports:
@@ -42,10 +42,11 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
 
+          # Keep in sync with infra/helm/values.yaml (genAi.resources).
           resources:
             requests:
               cpu: "100m"
-              memory: "128Mi"
+              memory: "256Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "300m"
+              memory: "384Mi"
