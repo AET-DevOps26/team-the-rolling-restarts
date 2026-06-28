@@ -137,6 +137,8 @@ jobs:
           FILES="-f infra/helm/values.yaml"
           if [[ "${{ env.PROFILE }}" == "prod" ]]; then
             FILES="$FILES -f infra/helm/values-prod.yaml"
+          else
+            FILES="$FILES -f infra/helm/values-dev.yaml"
           fi
           FILES="$FILES -f infra/helm/secrets-values.yaml"
           FILES="$FILES -f infra/helm/image-values.yaml"
