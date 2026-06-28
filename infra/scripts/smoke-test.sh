@@ -126,6 +126,66 @@ else
 fi
 echo ""
 
+echo "=== Service-Scope Enforcement (content-service) ==="
+# Without the source.write scope gate, an attacker could repeatedly hit
+# /sources/{id}/unsubscribe to drive the subscriberCount to zero and delete a shared source,
+# or spam /subscribe to inflate it. Verify that the gate holds and the count is unchanged.
+if [ -n "$token" ]; then
+  # Set up a source with a known subscriber via user-service so there is a count to attack.
+  scope_user_tok=$(register_login "scopetest$$")
+  scope_src_body=$(api_json POST "$base_url/api/content/sources" "$token" \
+    "{\"name\":\"ScopeGuard$$\",\"rssUrl\":\"https://example.com/scope-guard-$$\"}")
+  scope_src_id=$(echo "$scope_src_body" | jq -r '.id // empty' 2>/dev/null || true)
+  if [ -z "$scope_src_id" ]; then
+    scope_src_id=$(api_json GET "$base_url/api/content/sources" "" \
+      | jq -r --arg u "https://example.com/scope-guard-$$" 'map(select(.rssUrl == $u))[0].id // empty' 2>/dev/null || true)
+  fi
+
+  if [ -n "$scope_src_id" ] && [ -n "$scope_user_tok" ]; then
+    # Subscribe through user-service so the count is 1.
+    api_json POST "$base_url/api/users/users/me/subscriptions/$scope_src_id" "$scope_user_tok" >/dev/null
+    count_before=$(api_json GET "$base_url/api/content/sources/$scope_src_id" "" \
+      | jq -r '.subscriberCount // empty' 2>/dev/null || true)
+    check "Source has subscribers before abuse test" "1" "$count_before"
+
+    # Attempt to unsubscribe repeatedly with an ordinary user JWT (no source.write scope).
+    for i in 1 2 3; do
+      check "Unsubscribe attempt $i with user JWT returns 403" "403" \
+        "$(http -X POST "$base_url/api/content/sources/$scope_src_id/unsubscribe" \
+          -H "Authorization: Bearer $token")"
+    done
+
+    # Attempt unauthenticated unsubscribe.
+    check "Unsubscribe without token returns 401" "401" \
+      "$(http -X POST "$base_url/api/content/sources/$scope_src_id/unsubscribe")"
+
+    # Verify the count hasn't moved and the source still exists.
+    count_after=$(api_json GET "$base_url/api/content/sources/$scope_src_id" "" \
+      | jq -r '.subscriberCount // empty' 2>/dev/null || true)
+    check "Subscriber count unchanged after abuse attempts" "$count_before" "$count_after"
+    check "Source still exists after abuse attempts" "200" \
+      "$(http "$base_url/api/content/sources/$scope_src_id")"
+
+    # Same for subscribe inflation.
+    check "Subscribe with user JWT returns 403" "403" \
+      "$(http -X POST "$base_url/api/content/sources/$scope_src_id/subscribe" \
+        -H "Authorization: Bearer $token")"
+    check "Subscribe without token returns 401" "401" \
+      "$(http -X POST "$base_url/api/content/sources/$scope_src_id/subscribe")"
+    count_final=$(api_json GET "$base_url/api/content/sources/$scope_src_id" "" \
+      | jq -r '.subscriberCount // empty' 2>/dev/null || true)
+    check "Subscriber count still unchanged after subscribe abuse" "$count_before" "$count_final"
+
+    # Clean up: unsubscribe via user-service (legitimate path).
+    api_json DELETE "$base_url/api/users/users/me/subscriptions/$scope_src_id" "$scope_user_tok" >/dev/null
+  else
+    check "Service-scope tests (skipped - no source or token)" "ok" "skipped"
+  fi
+else
+  check "Service-scope tests (skipped - no token)" "ok" "skipped"
+fi
+echo ""
+
 echo "=== Shared Source Subscriber Lifecycle ==="
 # Two users subscribe to the SAME source, then both unsubscribe. The source is shared
 # (one fetch for all subscribers) and must only be deleted once the last subscriber leaves,
@@ -145,12 +205,6 @@ if [ -n "$tokenA" ] && [ -n "$tokenB" ]; then
       | jq -r --arg u "$buzz_url" 'map(select(.rssUrl == $u))[0].id // empty' 2>/dev/null || true)
   fi
   check "Shared source created (has id)" "true" "$([ -n "$source_id" ] && echo true || echo false)"
-
-  # An end-user JWT must NOT be able to mutate the shared subscriber count directly: the
-  # content-service subscribe/unsubscribe endpoints require the service-only 'source.write' scope.
-  # Subscriptions go through user-service (below), which uses a client_credentials service token.
-  check "Direct content-service subscribe forbidden for end user (403)" "403" \
-    "$(http -X POST "$base_url/api/content/sources/$source_id/subscribe" -H "Authorization: Bearer $tokenA")"
 
   # Both users subscribe to the same source.
   api_json POST "$base_url/api/users/users/me/subscriptions/$source_id" "$tokenA" >/dev/null
