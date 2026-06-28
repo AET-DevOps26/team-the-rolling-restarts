@@ -4,10 +4,13 @@ These raw manifests mirror the Helm chart in [infra/helm/helm.md](../helm/helm.m
 
 ## Default Workflow
 
-Use the `infra/k8s` directory as the working directory and apply everything recursively from there:
+Use the `infra/k8s` directory as the working directory. First create your real
+`secrets.yml` from the tracked template (it is gitignored — never commit it),
+then apply everything recursively:
 
 ```bash
 cd infra/k8s
+cp secrets.yml.example secrets.yml   # then fill in real values (see the comments inside)
 kubectl apply -R -f .
 ```
 
@@ -23,7 +26,7 @@ kubectl delete -R -f .
 
 - [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim).
 - [services/](services) contains one service manifest per workload, including `mongodb-service.yml`.
-- [secrets.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml) defines the `mongodb-credentials` and `mongodb-user-credentials` Secrets consumed by MongoDB and the Spring services. Ships with dev defaults — change them (or swap in a real secret store) before any non-local deployment.
+- [secrets.yml.example](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml.example) is the tracked template for the `mongodb-credentials`, `mongodb-user-credentials`, and `jwt-keys` Secrets consumed by MongoDB and the Spring services. Copy it to `secrets.yml` (gitignored) and fill in real values — the file's comments explain each field. Use a sealed-secret or external secret store for any non-local deployment.
 - [ingress.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/ingress.yml) defines the external routing rules.
 
 ## Stack Setup Notes

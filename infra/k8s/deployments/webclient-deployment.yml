@@ -5,7 +5,7 @@ metadata:
   labels:
     app: web-client
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: web-client
@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: web-client
-          image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:1eb2b0a
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:wip
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
@@ -40,10 +40,11 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
 
+          # Keep in sync with infra/helm/values.yaml (webClient.resources).
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "128Mi"
             limits:
-              cpu: "500m"
-              memory: "512Mi"
+              cpu: "200m"
+              memory: "256Mi"
