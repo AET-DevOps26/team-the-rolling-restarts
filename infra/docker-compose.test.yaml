@@ -3,7 +3,15 @@ services:
     profiles: !reset ["manual"]
     ports: !reset []
 
-  spring-api:
+  api-gateway:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  user-service:
+    profiles: !reset ["manual"]
+    ports: !reset []
+
+  content-service:
     profiles: !reset ["manual"]
     ports: !reset []
 
@@ -11,9 +19,6 @@ services:
     ports: !reset []
 
   mongodb:
-    ports: !reset []
-
-  postgres:
     ports: !reset []
 
   grafana-lgtm:
@@ -28,31 +33,27 @@ services:
       target: development
     command: sh -c "npm run lint && npm run build"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://spring-api:8080}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api-gateway:8080}
     networks:
       - frontend
 
-  spring-api-test:
+  spring-test:
     profiles: ["test"]
     image: gradle:jdk-25-and-25
     working_dir: /workspace
-    command: ./gradlew test --no-daemon
+    command: >-
+      sh -c "./gradlew test --no-daemon -PexcludeTags=smoke;
+      rc=$$?;
+      find /workspace -maxdepth 3 -name build -type d -exec chown -R ${COMPOSE_UID:-1000}:${COMPOSE_GID:-1000} {} + 2>/dev/null;
+      exit $$rc"
     depends_on:
       mongodb:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      gen-ai:
-        condition: service_healthy
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      GEN_AI_BASE_URL: http://gen-ai:8000
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DATABASE:-mydatabase}?authSource=admin
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
     volumes:
-      - ../services/spring-api:/workspace
+      - ../services/spring:/workspace
       - spring-gradle-cache:/home/gradle/.gradle
     networks:
       - backend

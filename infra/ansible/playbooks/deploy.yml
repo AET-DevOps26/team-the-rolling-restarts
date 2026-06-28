@@ -1,0 +1,15 @@
+---
+- name: Configure and deploy team project on Azure VM
+  hosts: azure_vm
+  become: true
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: docker
+      tags: [docker]
+    - role: app
+      tags: [app, deploy]

@@ -1,0 +1,55 @@
+{{/* Render the external ingress only when explicitly enabled. */}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer }}
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.host }}
+      secretName: {{ .Values.ingress.tlsSecret }}
+  rules:
+    - host: {{ .Values.host }}
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /actuator
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /swagger-ui
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /v3/api-docs
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.apiGateway.name }}
+                port:
+                  number: {{ .Values.apiGateway.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.webClient.name }}
+                port:
+                  number: {{ .Values.webClient.port }}
+{{- end }}

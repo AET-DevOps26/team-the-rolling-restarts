@@ -1,0 +1,4 @@
+global:
+  replicas: 2
+ingress:
+  clusterIssuer: letsencrypt-prod

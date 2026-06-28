@@ -1,0 +1,37 @@
+# use `az account list --output table` to view after login
+subscription_id    = "00000000-0000-0000-0000-000000000000"
+resource_group_name = "rg-rolling-restarts-dev"
+# Look up suitable location on Azure
+location           = "westeurope"
+environment        = "dev"
+project_name       = "rolling-restarts"
+vm_size            = "Standard_B2s"
+# For Arm64 VM sizes (for example B2ps_v2), set this to "server-arm64".
+vm_image_sku       = "server"
+admin_username     = "azureuser"
+# Set up own ssh key pair and adjust public_key_path
+public_key_path    = "~/.ssh/id_ed25519.pub"
+# allowed_ssh_cidr is auto-detected from your current public IP when left unset (recommended
+# for dynamic home IPs). Uncomment to pin a fixed CIDR, e.g. a static IP or office range.
+# allowed_ssh_cidr = "203.0.113.10/32"
+
+# Customize if needed for your network plan.
+vnet_cidr   = "10.42.0.0/16"
+subnet_cidr = "10.42.1.0/24"
+
+# Least-privilege: open only the nginx reverse proxy (single entry point — serves the web
+# client and proxies the API). Backend/DB/Grafana ports stay loopback-only on the VM.
+application_ports = [80]
+
+# Container registry used by the deploy-azure CI/CD workflow.
+# Basic is the cheapest tier and is plenty for testing.
+acr_sku = "Basic"
+# ACR name is auto-derived (stable per subscription) so the GitHub
+# ACR_NAME / ACR_LOGIN_SERVER variables stay constant across destroy/recreate.
+# Set this to pin an exact name instead (5-50 lowercase alphanumeric, globally
+# unique), e.g. acr_name = "rollingrestartsdevacr".
+acr_name = ""
+# Optional: object ID of the CI/CD service principal to auto-grant AcrPush.
+# Get it with: az ad sp show --id <appId> --query id -o tsv
+# Leave empty ("") to assign the role manually.
+deploy_principal_id = ""

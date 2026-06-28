@@ -6,45 +6,131 @@ services:
       context: ../web-client
       dockerfile: Dockerfile
       target: production
-    ports:
-      - "${WEB_CLIENT_PORT:-3000}:3000"
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ""
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
       NODE_ENV: production
+    networks:
+      - frontend
+
+  reverse-proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      spring-api:
+      api-gateway:
+        condition: service_healthy
+      web-client:
         condition: service_started
     networks:
       - frontend
 
-  spring-api:
+  api-gateway:
     build:
-      context: ../services/spring-api
-      dockerfile: Dockerfile
-    ports:
-      - "${SPRING_API_PORT:-8080}:8080"
+      context: ../services/spring
+      dockerfile: api-gateway/Dockerfile
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/api-gateway:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     environment:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
-      GEN_AI_BASE_URL: http://gen-ai:8000
-      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/${MONGO_DATABASE:-mydatabase}?authSource=admin
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-mydatabase}
-      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-myuser}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      USER_SERVICE_URL: http://user-service:8081
+      CONTENT_SERVICE_URL: http://content-service:8082
+      GEN_AI_URL: http://gen-ai:8000
+      JWT_ISSUER_URI: http://user-service:8081
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/wget
+        - -q
+        - --spider
+        - http://localhost:8080/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
-      mongodb:
+      user-service:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      gen-ai:
+      content-service:
         condition: service_healthy
     networks:
       - frontend
+      - backend
+
+  user-service:
+    build:
+      context: ../services/spring
+      dockerfile: user-service/Dockerfile
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/user-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${USER_SERVICE_PORT:-8081}:8081"
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/users?authSource=admin
+      JWT_ISSUER: http://user-service:8081
+      JWT_RSA_PUBLIC_KEY: ${JWT_RSA_PUBLIC_KEY}
+      JWT_RSA_PRIVATE_KEY: ${JWT_RSA_PRIVATE_KEY}
+      CONTENT_SERVICE_URL: http://content-service:8082
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/wget
+        - -q
+        - --spider
+        - http://localhost:8081/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - backend
+
+  content-service:
+    build:
+      context: ../services/spring
+      dockerfile: content-service/Dockerfile
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/content-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    ports:
+      - "${CONTENT_SERVICE_PORT:-8082}:8082"
+    environment:
+      SPRING_DOCKER_COMPOSE_ENABLED: "false"
+      SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
+      JWT_ISSUER_URI: http://user-service:8081
+    healthcheck:
+      test:
+        - CMD
+        - /usr/bin/wget
+        - -q
+        - --spider
+        - http://localhost:8082/actuator/health
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    networks:
       - backend
 
   gen-ai:
     build:
       context: ../services/gen-ai
       dockerfile: Dockerfile
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/gen-ai:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     ports:
       - "${GEN_AI_PORT:-8000}:8000"
     environment:
@@ -67,6 +153,7 @@ services:
 
   mongodb:
     image: mongo:8
+    restart: unless-stopped
     ports:
       - "${MONGO_PORT:-27017}:27017"
     environment:
@@ -86,29 +173,9 @@ services:
     networks:
       - backend
 
-  postgres:
-    image: postgres:17-alpine
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-mydatabase}
-      POSTGRES_USER: ${POSTGRES_USER:-myuser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U ${POSTGRES_USER:-myuser} -d ${POSTGRES_DB:-mydatabase}
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - backend
-
   grafana-lgtm:
     image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+    restart: unless-stopped
     ports:
       - "${LGTM_GRAFANA_PORT:-3001}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
@@ -118,7 +185,6 @@ services:
 
 volumes:
   mongodb-data:
-  postgres-data:
 
 networks:
   frontend:

@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gen-ai
+  labels:
+    app: gen-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gen-ai
+  template:
+    metadata:
+      labels:
+        app: gen-ai
+    spec:
+      containers:
+        - name: gen-ai
+          image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: LOG_LEVEL
+              value: "INFO"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+
+          # Keep in sync with infra/helm/values.yaml (genAi.resources).
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "300m"
+              memory: "384Mi"

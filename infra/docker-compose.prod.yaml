@@ -1,0 +1,47 @@
+# Production overlay (used on the Azure VM). On top of pre-built images, this clamps every
+# host-published port EXCEPT the reverse-proxy (APP_PORT, default 80) to the loopback
+# interface (127.0.0.1), so the backend services, database, and Grafana are NOT reachable on
+# the VM's public IP — "only the proxy port is public" becomes true by construction instead
+# of relying on the Azure NSG as the sole barrier. They stay reachable on the VM itself (and via SSH tunnel, e.g. MongoDB
+# Compass), and container-to-container traffic over the docker network is unaffected.
+#
+# `!override` REPLACES the base `ports:` list — without it, Compose would APPEND, leaving the
+# original public 0.0.0.0 binding in place and defeating the point.
+services:
+  web-client:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
+
+  api-gateway:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/api-gateway:${IMAGE_TAG:-latest}
+
+  user-service:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/user-service:${IMAGE_TAG:-latest}
+    ports: !override
+      - "127.0.0.1:${USER_SERVICE_PORT:-8081}:8081"
+
+  content-service:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/content-service:${IMAGE_TAG:-latest}
+    ports: !override
+      - "127.0.0.1:${CONTENT_SERVICE_PORT:-8082}:8082"
+
+  gen-ai:
+    build: !reset null
+    image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/gen-ai:${IMAGE_TAG:-latest}
+    ports: !override
+      - "127.0.0.1:${GEN_AI_PORT:-8000}:8000"
+
+  # mongodb and grafana-lgtm are defined only in the base file; re-declare them here solely
+  # to clamp their published ports to loopback (reachable on the VM / via SSH tunnel, not public).
+  mongodb:
+    ports: !override
+      - "127.0.0.1:${MONGO_PORT:-27017}:27017"
+
+  grafana-lgtm:
+    ports: !override
+      - "127.0.0.1:${LGTM_GRAFANA_PORT:-3001}:3000"
+      - "127.0.0.1:${LGTM_OTLP_GRPC_PORT:-4317}:4317"
+      - "127.0.0.1:${LGTM_OTLP_HTTP_PORT:-4318}:4318"

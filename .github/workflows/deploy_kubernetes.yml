@@ -1,0 +1,182 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_run:
+    workflows: [build-and-package]
+    types: [completed]
+  # Manual runs are a coarse fallback: there is no build artifact, so they deploy
+  # the example image values (latest/wip tags) to dev. The real production path is
+  # a workflow_run from main, which carries the SHA-pinned image-values artifact.
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-k8s-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    # Only deploy from the long-lived branches. build-and-package runs on every
+    # push (any branch), so without this gate every feature-branch build would
+    # deploy to and clobber the shared dev cluster.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       contains(fromJSON('["main", "dev", "task/kubernetes_CD"]'), github.event.workflow_run.head_branch))
+
+    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
+
+    env:
+      HELM_RELEASE: newsgenai
+      HELM_CHART: ./infra/helm
+      PROFILE: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
+
+    steps:
+      # CI gate: build-and-package runs on push regardless of CI, so before deploying we require
+      # that the CI workflow for this exact commit has finished and passed. (Skipped for manual
+      # workflow_dispatch runs, which deploy the example image values.)
+      - name: Require CI to pass for this commit
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          echo "Waiting for the CI workflow to finish for $SHA ..."
+          for i in $(seq 1 60); do
+            run=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&event=push&per_page=1" \
+                  --jq '.workflow_runs[0] | "\(.status):\(.conclusion)"' 2>/dev/null || echo "")
+            status="${run%%:*}"; conclusion="${run##*:}"
+            if [ -z "$run" ] || [ "$run" = "null:null" ]; then
+              echo "  CI run not found yet (attempt $i/60)…"
+            elif [ "$status" = "completed" ]; then
+              echo "  CI concluded: $conclusion"
+              [ "$conclusion" = "success" ] && exit 0
+              echo "::error::CI did not pass (conclusion=$conclusion) — aborting deploy."
+              exit 1
+            else
+              echo "  CI status: $status (attempt $i/60)…"
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out waiting for CI to finish for $SHA."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Download image-values artifact
+        if: github.event_name == 'workflow_run'
+        uses: actions/download-artifact@v4
+        with:
+          name: image-values
+          path: infra/helm
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fallback to example image values
+        if: github.event_name == 'workflow_dispatch'
+        run: cp infra/helm/image-values.example.yaml infra/helm/image-values.yaml
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Generate secrets values
+        env:
+          MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
+          MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
+          JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
+          JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
+        run: |
+          umask 077
+          python3 -c '
+          import os, yaml, sys
+
+          # Force the Mongo credentials to be emitted as quoted scalars so a value
+          # that looks like a number/bool/null (e.g. "1e10", "yes") cannot be
+          # coerced to the wrong type by Helm. PEM keys use default handling
+          # (PyYAML round-trips multi-line scalars correctly).
+          class QuotedStr(str): pass
+          yaml.add_representer(QuotedStr, lambda d, v: d.represent_scalar("tag:yaml.org,2002:str", v, style="\""))
+
+          data = {
+              "mongodb": {
+                  "rootUsername": QuotedStr(os.environ["MONGO_ROOT_USERNAME"]),
+                  "rootPassword": QuotedStr(os.environ["MONGO_ROOT_PASSWORD"]),
+              },
+              "userService": {
+                  "jwtKeys": {
+                      "publicKey": os.environ["JWT_RSA_PUBLIC_KEY"],
+                      "privateKey": os.environ["JWT_RSA_PRIVATE_KEY"],
+                  }
+              }
+          }
+          yaml.dump(data, sys.stdout, default_flow_style=False)
+          ' > infra/helm/secrets-values.yaml
+
+      - name: Build values file list
+        id: values
+        run: |
+          FILES="-f infra/helm/values.yaml"
+          if [[ "${{ env.PROFILE }}" == "prod" ]]; then
+            FILES="$FILES -f infra/helm/values-prod.yaml"
+          fi
+          FILES="$FILES -f infra/helm/secrets-values.yaml"
+          FILES="$FILES -f infra/helm/image-values.yaml"
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            ${{ steps.values.outputs.files }} \
+            --wait --timeout 10m
+
+      # On any failure (e.g. a helm --wait timeout), dump enough cluster state to
+      # see WHY a pod isn't Ready — phase, events, and the logs of every container
+      # that isn't ready — instead of just "context deadline exceeded".
+      - name: Diagnose on failure
+        if: failure()
+        run: |
+          echo "::group::Pods"
+          kubectl get pods -o wide || true
+          echo "::endgroup::"
+          echo "::group::Recent events"
+          kubectl get events --sort-by=.lastTimestamp | tail -40 || true
+          echo "::endgroup::"
+          echo "::group::PVCs"
+          kubectl get pvc || true
+          echo "::endgroup::"
+          for d in api-gateway user-service content-service gen-ai web-client mongodb; do
+            echo "::group::describe deployment/$d"
+            kubectl describe deployment "$d" 2>/dev/null | sed -n '/Conditions:/,/Events:/p' || true
+            echo "::endgroup::"
+          done
+          # Logs of any pod that is not Ready (current + previous in case it crash-looped).
+          for p in $(kubectl get pods --no-headers 2>/dev/null | awk '$2 !~ /^([1-9][0-9]*)\/\1$/ {print $1}'); do
+            echo "::group::logs $p (current)"
+            kubectl logs "$p" --all-containers --tail=80 2>/dev/null || true
+            echo "::endgroup::"
+            echo "::group::logs $p (previous)"
+            kubectl logs "$p" --all-containers --previous --tail=80 2>/dev/null || true
+            echo "::endgroup::"
+          done
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/api-gateway --timeout=120s
+          kubectl rollout status deployment/user-service --timeout=120s
+          kubectl rollout status deployment/content-service --timeout=120s
+          kubectl rollout status deployment/web-client --timeout=120s
+          kubectl rollout status deployment/gen-ai --timeout=120s
+          echo "All deployments rolled out successfully."

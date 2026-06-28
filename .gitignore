@@ -262,3 +262,24 @@ dmypy.json
 .ruff_cache/
 # macOS
 *.DS_Store
+**/generated
+
+# Terraform local artifacts
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+infra/terraform/azure-vm/terraform.tfvars
+
+# Ansible local/sensitive files
+infra/ansible/inventories/production.ini
+infra/ansible/group_vars/all.yml
+infra/ansible/.vault_pass.txt
+docs/site/
+docs/source/gen-ai-service.md
+infra/helm/image-values.yaml
+infra/helm/secrets-values.yaml
+
+# Raw k8s manifest secrets (copy from secrets.yml.example)
+infra/k8s/secrets.yml

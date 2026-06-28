@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rolling-restarts
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+
+  tls:
+    - hosts:
+        - k8s.rolling-restarts.stud.k8s.aet.cit.tum.de
+      secretName: rolling-restarts-tls
+
+  rules:
+    # Single host, path-based routing (mirrors the nginx reverse-proxy and the
+    # Helm ingress): /api,/actuator,/swagger-ui,/v3/api-docs -> api-gateway
+    # (the gateway fans /api/ai/** out to gen-ai), everything else -> web client.
+    - host: k8s.rolling-restarts.stud.k8s.aet.cit.tum.de
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /actuator
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /swagger-ui
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /v3/api-docs
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web-client
+                port:
+                  number: 3000

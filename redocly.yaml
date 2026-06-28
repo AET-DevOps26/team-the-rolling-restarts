@@ -1,0 +1,8 @@
+extends:
+  - recommended
+rules:
+  # Public endpoints (list articles/sources/topics, login, register) legitimately have no security.
+  security-defined: warn
+  # springdoc does not emit a 4xx for every operation, and the generated info block has no license.
+  operation-4xx-response: off
+  info-license: off
