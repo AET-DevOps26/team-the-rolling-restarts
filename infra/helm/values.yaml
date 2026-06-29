@@ -38,11 +38,11 @@ webClient:
       periodSeconds: 20
   resources:
     requests:
-      cpu: 50m
-      memory: 128Mi
+      cpu: 10m
+      memory: 64Mi
     limits:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 100m
+      memory: 128Mi
 
 # API Gateway routes traffic to user-service and content-service.
 apiGateway:
@@ -75,16 +75,13 @@ apiGateway:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
-  # The `deployment` namespace enforces a ResourceQuota on LIMITS (total limits.cpu=2,
-  # limits.memory=3000Mi), so limits — not just requests — must stay small. These three JVM
-  # services dominate the budget: 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 50m
+      memory: 200Mi
     limits:
-      cpu: 350m
-      memory: 512Mi
+      cpu: 200m
+      memory: 300Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -114,9 +111,13 @@ userService:
     - name: SERVICE_CLIENT_SECRET
       secretName: service-credentials
       secretKey: client-secret
-  # RSA key pair for signing JWTs. No default is committed — both MUST be provided at deploy time
-  # via secrets-values.yaml (see secrets-values.example.yaml). Rendering fails if either is empty.
-  # Generate with: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048
+  resources:
+    requests:
+      cpu: 50m
+      memory: 200Mi
+    limits:
+      cpu: 200m
+      memory: 300Mi
   jwtKeys:
     publicKey: ""
     privateKey: ""
@@ -133,16 +134,6 @@ userService:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
-  # The `deployment` namespace enforces a ResourceQuota on LIMITS (total limits.cpu=2,
-  # limits.memory=3000Mi), so limits — not just requests — must stay small. These three JVM
-  # services dominate the budget: 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 350m
-      memory: 512Mi
 
 # Content service manages RSS feeds and articles (MongoDB).
 contentService:
@@ -171,16 +162,13 @@ contentService:
       initialDelaySeconds: 30
       periodSeconds: 20
       timeoutSeconds: 5
-  # The `deployment` namespace enforces a ResourceQuota on LIMITS (total limits.cpu=2,
-  # limits.memory=3000Mi), so limits — not just requests — must stay small. These three JVM
-  # services dominate the budget: 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 50m
+      memory: 200Mi
     limits:
-      cpu: 350m
-      memory: 512Mi
+      cpu: 200m
+      memory: 300Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -203,11 +191,11 @@ genAi:
       periodSeconds: 20
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 30m
+      memory: 64Mi
     limits:
-      cpu: 300m
-      memory: 384Mi
+      cpu: 150m
+      memory: 200Mi
 
 # Database services
 mongodb:
@@ -222,11 +210,11 @@ mongodb:
   storage: 1Gi
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 50m
+      memory: 128Mi
     limits:
-      cpu: 250m
-      memory: 512Mi
+      cpu: 150m
+      memory: 256Mi
 
 ingress:
   enabled: true
