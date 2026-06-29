@@ -36,6 +36,15 @@ class UrlSafetyValidatorTest {
 	}
 
 	@Test
+	void isInternal_blocksSharedAddressSpace() throws Exception {
+		// RFC 6598 100.64.0.0/10 — Carrier-Grade NAT, used by cloud VPCs and some K8s CNIs.
+		assertThat(UrlSafetyValidator.isInternal(InetAddress.getByName("100.64.0.1"))).isTrue();
+		assertThat(UrlSafetyValidator.isInternal(InetAddress.getByName("100.127.255.254"))).isTrue();
+		// Just outside the /10 range — should be allowed.
+		assertThat(UrlSafetyValidator.isInternal(InetAddress.getByName("100.128.0.1"))).isFalse();
+	}
+
+	@Test
 	void isInternal_allowsPublicAddresses() throws Exception {
 		assertThat(UrlSafetyValidator.isInternal(InetAddress.getByName("8.8.8.8"))).isFalse();            // public v4
 		assertThat(UrlSafetyValidator.isInternal(InetAddress.getByName("2001:4860:4860::8888"))).isFalse(); // public v6

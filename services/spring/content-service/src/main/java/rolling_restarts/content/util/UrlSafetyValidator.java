@@ -66,7 +66,17 @@ public final class UrlSafetyValidator {
 				|| addr.isLinkLocalAddress()
 				|| addr.isSiteLocalAddress()
 				|| addr.isMulticastAddress()
-				|| isUniqueLocalIpv6(addr);
+				|| isUniqueLocalIpv6(addr)
+				|| isSharedAddressSpace(addr);
+	}
+
+	/** Matches RFC 6598 Shared Address Space 100.64.0.0/10 (Carrier-Grade NAT / cloud VPCs). */
+	private static boolean isSharedAddressSpace(InetAddress addr) {
+		byte[] bytes = addr.getAddress();
+		if (bytes.length != 4) {
+			return false;
+		}
+		return (bytes[0] & 0xFF) == 100 && (bytes[1] & 0xC0) == 64;
 	}
 
 	/** Matches the IPv6 unique-local range fc00::/7 (the high 7 bits of the first byte are 1111110). */
