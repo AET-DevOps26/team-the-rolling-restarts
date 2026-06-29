@@ -1,5 +1,6 @@
 package rolling_restarts.gateway.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,7 +41,7 @@ class SubscriberScopeTest {
 		// test context) but must not 403.
 		int status = mockMvc.perform(post("/api/content/sources/abc123/subscribe").with(csrf()))
 				.andReturn().getResponse().getStatus();
-		assert status != 403 : "Expected the request to pass the scope gate, got 403";
+		assertThat(status).as("Expected the request to pass the scope gate").isNotEqualTo(403);
 	}
 
 	@Test
@@ -61,6 +62,6 @@ class SubscriberScopeTest {
 	void unsubscribe_withServiceScope_isNotForbidden() throws Exception {
 		int status = mockMvc.perform(post("/api/content/sources/abc123/unsubscribe").with(csrf()))
 				.andReturn().getResponse().getStatus();
-		assert status != 403 : "Expected the request to pass the scope gate, got 403";
+		assertThat(status).as("Expected the request to pass the scope gate").isNotEqualTo(403);
 	}
 }
