@@ -5,7 +5,7 @@
        azure-cicd-setup azure-provider-register azure-vm-docker azure-gh-vars azure-cicd-help \
        helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets \
        docs-serve \
-       security-scan
+       security-scan score
 
 HELM_DIR    ?= infra/helm
 COMPOSE_ENV  ?= infra/.env
@@ -67,6 +67,7 @@ help:
 	  'Security:' \
 	  '  make security-scan        - run all security/quality scanners and write SARIF to output/' \
 	  '  make security-scan IMAGE_CHANNEL=dev - scan against a specific published image channel' \
+	  '  make score               - open the guestlecture TUI viewer against local scan results' \
 	  '' \
 	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'
 
@@ -146,6 +147,15 @@ smoke-test:
 
 security-scan:
 	@infra/scripts/security-scan.sh
+
+SCORE_DIR = output/AET-DevOps26
+
+score:
+	@if [ ! -d "$(SCORE_DIR)" ] || [ -z "$$(ls $(SCORE_DIR)/team-the-rolling-restarts/*.json 2>/dev/null)" ]; then \
+	  echo "No scan results found. Run 'make security-scan' first."; exit 1; fi
+	docker run --interactive --rm --tty \
+	  --volume "$(CURDIR)/$(SCORE_DIR):/data" \
+	  ghcr.io/pstoeckle/guestlecture:v0.1.3 /data
 
 VM_IP ?= $(shell cd $(TF_DIR) && terraform output -raw vm_public_ip 2>/dev/null)
 
