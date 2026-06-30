@@ -139,8 +139,10 @@ security-scan.sh
 
 ## Makefile integration
 
-New `security-scan` target, added to the root `Makefile`'s `.PHONY` list and a new "Security"
-section in `help`, alongside the existing `smoke-test`/`preflight` style:
+Exactly **one** new target — `security-scan` — added to the root `Makefile`'s `.PHONY` list and a
+new "Security" section in `help`, alongside the existing `smoke-test`/`preflight` style. No
+per-tool targets (no `security-scan-trivy`, `security-scan-gitleaks`, etc.) — the nine tools are
+internal functions inside the single script, not separate Make entry points:
 
 ```makefile
 security-scan:
