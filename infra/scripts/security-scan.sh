@@ -452,6 +452,8 @@ echo ""
 
 build_local_images
 
+trap 'echo ""; echo "Interrupted — killing scanners…"; kill 0; exit 130' INT TERM
+
 echo "Running scanners in parallel…"
 run_gitleaks         > /dev/null 2>&1 &
 run_trivy_fs         > /dev/null 2>&1 &
