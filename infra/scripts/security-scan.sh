@@ -127,6 +127,26 @@ build_local_images() {
   done
 }
 
+run_trivy_fs() {
+  local out="${OUTPUT_DIR}/trivy_fs_report.json"
+  info "Running trivy fs (source filesystem vulnerability scanning)..."
+  docker run --rm \
+      -v "${REPO_ROOT}:/repo:ro" \
+      aquasec/trivy:latest \
+      fs -f sarif -o /dev/stdout --quiet \
+      --skip-dirs .git,node_modules,web-client/node_modules,web-client/.next \
+      /repo > "$out" 2>/dev/null || true
+  if jq empty "$out" 2>/dev/null; then
+    local count; count=$(sarif_count "$out")
+    TOOL_STATUS[trivy_fs]="ok"; TOOL_RESULTS[trivy_fs]="$count"
+    ok "trivy fs — ${count} findings"
+  else
+    sarif_error "$out" "Trivy" "trivy fs scan failed to run."
+    TOOL_STATUS[trivy_fs]="failed"; TOOL_RESULTS[trivy_fs]="?"
+    fail "trivy fs failed to run"
+  fi
+}
+
 run_trivy() {
   info "Running trivy (container image vulnerability scanning)..."
   local services=(web-client api-gateway user-service content-service gen-ai)
@@ -493,6 +513,7 @@ echo ""
 build_local_images
 pull_published_images
 run_gitleaks
+run_trivy_fs
 run_trivy
 run_dockle
 run_hadolint
