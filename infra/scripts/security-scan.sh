@@ -57,16 +57,252 @@ sarif_count() {
 # --- Placeholder functions (implemented in later tasks) ---
 build_local_images()    { info "build_local_images: not yet implemented"; }
 pull_published_images() { info "pull_published_images: not yet implemented"; }
-run_gitleaks()          { info "run_gitleaks: not yet implemented"; }
 run_trivy()             { info "run_trivy: not yet implemented"; }
 run_dockle()            { info "run_dockle: not yet implemented"; }
-run_hadolint()          { info "run_hadolint: not yet implemented"; }
-run_kics()              { info "run_kics: not yet implemented"; }
-run_zizmor()            { info "run_zizmor: not yet implemented"; }
-run_npm_audit()         { info "run_npm_audit: not yet implemented"; }
-run_codeowners_check()  { info "run_codeowners_check: not yet implemented"; }
-run_typos()             { info "run_typos: not yet implemented"; }
 print_summary()         { info "print_summary: not yet implemented"; }
+
+run_codeowners_check() {
+  local out="${OUTPUT_DIR}/codeowners_report.json"
+  info "Checking for CODEOWNERS file..."
+  local found=0
+  for path in CODEOWNERS .github/CODEOWNERS docs/CODEOWNERS; do
+    [ -f "${REPO_ROOT}/${path}" ] && found=1 && break
+  done
+  if [ "$found" -eq 1 ]; then
+    cat > "$out" <<SARIF
+{
+  "version": "2.1.0",
+  "\$schema": "http://json.schemastore.org/sarif-2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "CODEOWNERS Check", "version": "1.0.0",
+      "shortDescription": {"text": "Checks for the presence of a CODEOWNERS file in the repository."}}},
+    "results": []
+  }]
+}
+SARIF
+    TOOL_STATUS[codeowners]="ok"; TOOL_RESULTS[codeowners]=0
+    ok "CODEOWNERS found — 0 findings"
+  else
+    cat > "$out" <<SARIF
+{
+  "version": "2.1.0",
+  "\$schema": "http://json.schemastore.org/sarif-2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "CODEOWNERS Check", "version": "1.0.0",
+      "shortDescription": {"text": "Checks for the presence of a CODEOWNERS file in the repository."}}},
+    "results": [{
+      "ruleId": "CODEOWNERS_NOT_FOUND",
+      "level": "error",
+      "message": {"text": "No CODEOWNERS file found in the repository."}
+    }]
+  }]
+}
+SARIF
+    TOOL_STATUS[codeowners]="ok"; TOOL_RESULTS[codeowners]=1
+    fail "No CODEOWNERS file found — 1 finding"
+  fi
+}
+
+run_gitleaks() {
+  local out="${OUTPUT_DIR}/gitleaks_report.json"
+  info "Running gitleaks (secret scanning)..."
+  if docker run --rm \
+      -v "${REPO_ROOT}:/repo" \
+      zricethezav/gitleaks:latest \
+      detect --source /repo --no-git -f sarif -r /repo/gitleaks_tmp.json \
+      --exit-code 0 2>/dev/null; then
+    mv "${REPO_ROOT}/gitleaks_tmp.json" "$out"
+    local count; count=$(sarif_count "$out")
+    TOOL_STATUS[gitleaks]="ok"; TOOL_RESULTS[gitleaks]="$count"
+    ok "gitleaks — ${count} findings"
+  else
+    sarif_error "$out" "gitleaks" "gitleaks scan failed to run."
+    TOOL_STATUS[gitleaks]="failed"; TOOL_RESULTS[gitleaks]="?"
+    fail "gitleaks failed to run"
+  fi
+  rm -f "${REPO_ROOT}/gitleaks_tmp.json"
+}
+
+run_hadolint() {
+  info "Running hadolint (Dockerfile linting)..."
+  local dockerfiles=(
+    "web-client/Dockerfile"
+    "services/gen-ai/Dockerfile"
+    "services/spring/api-gateway/Dockerfile"
+    "services/spring/user-service/Dockerfile"
+    "services/spring/content-service/Dockerfile"
+  )
+  for df in "${dockerfiles[@]}"; do
+    local out="${OUTPUT_DIR}/hadolint_$(echo "${df}" | sed 's|/|_|g').json"
+    if [ ! -f "${REPO_ROOT}/${df}" ]; then
+      sarif_error "$out" "Hadolint" "Dockerfile not found: ${df}"
+      TOOL_STATUS["hadolint_${df}"]="failed"; TOOL_RESULTS["hadolint_${df}"]="?"
+      fail "hadolint: ${df} not found"
+      continue
+    fi
+    # hadolint exits non-zero when findings exist; capture output regardless
+    docker run --rm \
+        -v "${REPO_ROOT}/${df}:/Dockerfile:ro" \
+        hadolint/hadolint:latest \
+        hadolint -f sarif /Dockerfile > "$out" 2>/dev/null || true
+    if jq empty "$out" 2>/dev/null; then
+      local count; count=$(sarif_count "$out")
+      TOOL_STATUS["hadolint_${df}"]="ok"; TOOL_RESULTS["hadolint_${df}"]="$count"
+      ok "hadolint ${df} — ${count} findings"
+    else
+      sarif_error "$out" "Hadolint" "hadolint failed for ${df}"
+      TOOL_STATUS["hadolint_${df}"]="failed"; TOOL_RESULTS["hadolint_${df}"]="?"
+      fail "hadolint failed for ${df}"
+    fi
+  done
+}
+
+run_kics() {
+  local out="${OUTPUT_DIR}/kics_report.json"
+  info "Running KICS (IaC security scanning)..."
+  local tmpdir; tmpdir=$(mktemp -d)
+  # kics exits non-zero when findings exist; run without checking exit code
+  docker run --rm \
+      -v "${REPO_ROOT}:/repo:ro" \
+      -v "${tmpdir}:/out" \
+      checkmarx/kics:latest \
+      scan -p /repo --report-formats sarif --output-path /out \
+      --output-name kics_report --no-progress \
+      --exclude-paths "/repo/.git,/repo/node_modules,/repo/web-client/node_modules" \
+      2>/dev/null || true
+  # kics writes kics_report.sarif; rename to .json to match reference naming
+  if [ -f "${tmpdir}/kics_report.sarif" ]; then
+    mv "${tmpdir}/kics_report.sarif" "$out"
+    local count; count=$(sarif_count "$out")
+    TOOL_STATUS[kics]="ok"; TOOL_RESULTS[kics]="$count"
+    ok "kics — ${count} findings"
+  else
+    sarif_error "$out" "KICS" "kics scan failed to run."
+    TOOL_STATUS[kics]="failed"; TOOL_RESULTS[kics]="?"
+    fail "kics failed to run"
+  fi
+  rm -rf "$tmpdir"
+}
+
+run_zizmor() {
+  local out="${OUTPUT_DIR}/zizmor_report.json"
+  info "Running zizmor (GitHub Actions workflow security)..."
+  # zizmor requires individual file arguments, not a directory
+  local workflow_files=()
+  while IFS= read -r -d '' f; do
+    workflow_files+=("/workflows/$(basename "$f")")
+  done < <(find "${REPO_ROOT}/.github/workflows" -maxdepth 1 \( -name "*.yml" -o -name "*.yaml" \) -print0 2>/dev/null)
+  if [ "${#workflow_files[@]}" -eq 0 ]; then
+    sarif_error "$out" "zizmor" "No workflow files found in .github/workflows."
+    TOOL_STATUS[zizmor]="failed"; TOOL_RESULTS[zizmor]="?"
+    fail "zizmor: no workflow files found"
+    return
+  fi
+  # zizmor exits non-zero when findings exist; capture output regardless
+  docker run --rm \
+      -v "${REPO_ROOT}/.github/workflows:/workflows:ro" \
+      ghcr.io/zizmorcore/zizmor:latest \
+      --format sarif "${workflow_files[@]}" > "$out" 2>/dev/null || true
+  if jq empty "$out" 2>/dev/null; then
+    local count; count=$(sarif_count "$out")
+    TOOL_STATUS[zizmor]="ok"; TOOL_RESULTS[zizmor]="$count"
+    ok "zizmor — ${count} findings"
+  else
+    sarif_error "$out" "zizmor" "zizmor scan failed to run."
+    TOOL_STATUS[zizmor]="failed"; TOOL_RESULTS[zizmor]="?"
+    fail "zizmor failed to run"
+  fi
+}
+
+run_typos() {
+  local out="${OUTPUT_DIR}/typos_report.json"
+  info "Running typos (spell checking)..."
+  # typos exits non-zero when typos are found; capture output regardless
+  docker run --rm \
+      -v "${REPO_ROOT}:/repo:ro" \
+      -w /repo \
+      python:3.12-slim \
+      sh -c "pip install typos -q && typos --format sarif ." > "$out" 2>/dev/null || true
+  if jq empty "$out" 2>/dev/null; then
+    local count; count=$(sarif_count "$out")
+    TOOL_STATUS[typos]="ok"; TOOL_RESULTS[typos]="$count"
+    ok "typos — ${count} findings"
+  else
+    sarif_error "$out" "typos" "typos scan failed to run."
+    TOOL_STATUS[typos]="failed"; TOOL_RESULTS[typos]="?"
+    fail "typos failed to run"
+  fi
+}
+
+run_npm_audit() {
+  info "Running npm audit (dependency vulnerability check)..."
+  local package_files=("package.json" "web-client/package.json")
+  for pkg in "${package_files[@]}"; do
+    # Flatten path: package.json -> npm_audit_package.json.json,
+    #               web-client/package.json -> npm_audit_web-client_package.json.json
+    local flat; flat=$(echo "$pkg" | tr '/' '_')
+    local out="${OUTPUT_DIR}/npm_audit_${flat}.json"
+    local pkg_dir; pkg_dir="${REPO_ROOT}/$(dirname "$pkg")"
+
+    if [ ! -f "${REPO_ROOT}/${pkg}" ]; then
+      sarif_error "$out" "npm audit" "We could NOT run npm audit for ${pkg}."
+      TOOL_STATUS["npm_${pkg}"]="failed"; TOOL_RESULTS["npm_${pkg}"]="?"
+      fail "npm audit: ${pkg} not found"
+      continue
+    fi
+
+    local audit_json
+    audit_json=$(docker run --rm \
+      -v "${pkg_dir}:/app:ro" \
+      -w /app \
+      node:lts-slim \
+      sh -c "npm audit --json 2>/dev/null || true" 2>/dev/null)
+
+    if [ -z "$audit_json" ]; then
+      sarif_error "$out" "npm audit" "We could NOT run npm audit for ${pkg}."
+      TOOL_STATUS["npm_${pkg}"]="failed"; TOOL_RESULTS["npm_${pkg}"]="?"
+      fail "npm audit: no output for ${pkg}"
+      continue
+    fi
+
+    # Parse vulnerability counts from npm audit JSON output
+    local total critical high moderate low info
+    total=$(echo "$audit_json" | jq '.metadata.vulnerabilities.total // 0' 2>/dev/null || echo 0)
+    critical=$(echo "$audit_json" | jq '.metadata.vulnerabilities.critical // 0' 2>/dev/null || echo 0)
+    high=$(echo "$audit_json" | jq '.metadata.vulnerabilities.high // 0' 2>/dev/null || echo 0)
+
+    local level="note"
+    [ "$high" -gt 0 ] || [ "$critical" -gt 0 ] && level="error"
+    [ "$total" -gt 0 ] && [ "$level" = "note" ] && level="warning"
+
+    local msg
+    if [ "$total" -eq 0 ]; then
+      msg="No vulnerabilities found in ${pkg}."
+    else
+      msg="${total} vulnerabilities found in ${pkg} (critical: ${critical}, high: ${high})."
+    fi
+
+    cat > "$out" <<SARIF
+{
+  "version": "2.1.0",
+  "\$schema": "http://json.schemastore.org/sarif-2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "npm audit", "version": "1.0.0",
+      "shortDescription": {"text": "Checks for vulnerabilities in npm dependencies."}}},
+    "results": [{
+      "ruleId": "NPM_AUDIT",
+      "level": "${level}",
+      "message": {"text": "${msg}"}
+    }]
+  }]
+}
+SARIF
+    local count; count=$(sarif_count "$out")
+    TOOL_STATUS["npm_${pkg}"]="ok"; TOOL_RESULTS["npm_${pkg}"]="$count"
+    if [ "$total" -eq 0 ]; then ok "npm audit ${pkg} — 0 findings"
+    else fail "npm audit ${pkg} — ${total} vulnerabilities"; fi
+  done
+}
 
 # --- Main ---
 mkdir -p "${OUTPUT_DIR}"
