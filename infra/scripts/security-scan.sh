@@ -67,7 +67,39 @@ pull_published_images() {
     fi
   done
 }
-print_summary()         { info "print_summary: not yet implemented"; }
+print_summary() {
+  echo ""
+  echo "════════════════════════════════════════════"
+  echo " Security scan summary"
+  echo "════════════════════════════════════════════"
+  printf "%-40s %-8s %s\n" "Tool / Target" "Status" "Findings"
+  echo "────────────────────────────────────────────"
+
+  # Print one row per SARIF output file
+  for f in "${OUTPUT_DIR}"/*.json; do
+    [ -f "$f" ] || continue
+    local name; name=$(basename "$f" .json)
+    local count; count=$(sarif_count "$f")
+    local status_icon="${GREEN}OK${RESET}"
+    # Flag files that contain a SCAN_ERROR or CODEOWNERS_NOT_FOUND result
+    local has_error; has_error=$(jq '[.runs[].results[].ruleId] | map(select(. == "SCAN_ERROR")) | length' "$f" 2>/dev/null || echo 0)
+    [ "$has_error" -gt 0 ] && status_icon="${RED}ERR${RESET}"
+    printf "%-40s ${status_icon}    %s\n" "$name" "$count"
+  done
+
+  echo "────────────────────────────────────────────"
+  local total_files; total_files=$(ls "${OUTPUT_DIR}"/*.json 2>/dev/null | wc -l)
+  local total_findings; total_findings=$(
+    for f in "${OUTPUT_DIR}"/*.json; do
+      jq '[.runs[].results | length] | add // 0' "$f" 2>/dev/null
+    done | awk '{s+=$1} END {print s+0}'
+  )
+  printf "%-40s %-8s %s\n" "TOTAL (${total_files} files)" "" "${total_findings}"
+  echo ""
+  echo "Output directory: ${OUTPUT_DIR}"
+  echo "View with: docker run -it --rm -v \"\$(pwd)/output/AET-DevOps26:/data\" ghcr.io/pstoeckle/guestlecture:v0.1.3 /data"
+  echo ""
+}
 
 build_local_images() {
   info "Building local images for trivy/dockle scanning..."
