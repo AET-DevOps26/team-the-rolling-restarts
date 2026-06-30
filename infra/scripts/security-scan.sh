@@ -453,16 +453,16 @@ echo ""
 build_local_images
 
 echo "Running scanners in parallel…"
-run_gitleaks         &
-run_trivy_fs         &
-run_trivy            &
-run_dockle           &
-run_hadolint         &
-run_kics             &
-run_zizmor           &
-run_npm_audit        &
-run_codeowners_check &
-run_typos            &
+run_gitleaks         > /dev/null 2>&1 &
+run_trivy_fs         > /dev/null 2>&1 &
+run_trivy            > /dev/null 2>&1 &
+run_dockle           > /dev/null 2>&1 &
+run_hadolint         > /dev/null 2>&1 &
+run_kics             > /dev/null 2>&1 &
+run_zizmor           > /dev/null 2>&1 &
+run_npm_audit        > /dev/null 2>&1 &
+run_codeowners_check > /dev/null 2>&1 &
+run_typos            > /dev/null 2>&1 &
 wait
 
 print_summary
