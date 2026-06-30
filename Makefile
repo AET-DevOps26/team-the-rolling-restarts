@@ -4,7 +4,8 @@
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
        azure-cicd-setup azure-provider-register azure-vm-docker azure-gh-vars azure-cicd-help \
        helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets \
-       docs-serve
+       docs-serve \
+       security-scan
 
 HELM_DIR    ?= infra/helm
 COMPOSE_ENV  ?= infra/.env
@@ -62,6 +63,10 @@ help:
 	  '' \
 	  'Documentation:' \
 	  '  make docs-serve        - serve MkDocs locally at http://localhost:8000' \
+	  '' \
+	  'Security:' \
+	  '  make security-scan        - run all security/quality scanners and write SARIF to output/' \
+	  '  make security-scan IMAGE_CHANNEL=dev - scan against a specific published image channel' \
 	  '' \
 	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'
 
@@ -138,6 +143,9 @@ compose-test:
 
 smoke-test:
 	@infra/scripts/smoke-test.sh "http://localhost:$(or $(APP_PORT),8080)"
+
+security-scan:
+	@infra/scripts/security-scan.sh
 
 VM_IP ?= $(shell cd $(TF_DIR) && terraform output -raw vm_public_ip 2>/dev/null)
 
