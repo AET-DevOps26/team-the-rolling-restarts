@@ -167,10 +167,11 @@ run_trivy() {
       fail "trivy (published): ${svc} image not available"
       continue
     fi
-    if docker run --rm \
+    docker run --rm \
         -v /var/run/docker.sock:/var/run/docker.sock \
         aquasec/trivy:latest \
-        image -f sarif -o /dev/stdout --quiet "$img" > "$out" 2>/dev/null; then
+        image -f sarif -o /dev/stdout --quiet "$img" > "$out" 2>/dev/null || true
+    if jq empty "$out" 2>/dev/null; then
       local count; count=$(sarif_count "$out")
       TOOL_STATUS["trivy_pub_${svc}"]="ok"; TOOL_RESULTS["trivy_pub_${svc}"]="$count"
       ok "trivy (published/${IMAGE_CHANNEL}) ${svc} — ${count} findings"
@@ -398,7 +399,7 @@ run_typos() {
       -v "${REPO_ROOT}:/repo:ro" \
       -w /repo \
       python:3.12-slim \
-      sh -c "pip install typos -q && typos --format sarif ." > "$out" 2>/dev/null || true
+      sh -c "pip install typos -q > /dev/null 2>&1 && typos --format sarif ." > "$out" 2>/dev/null || true
   if jq empty "$out" 2>/dev/null; then
     local count; count=$(sarif_count "$out")
     TOOL_STATUS[typos]="ok"; TOOL_RESULTS[typos]="$count"
@@ -414,9 +415,9 @@ run_npm_audit() {
   info "Running npm audit (dependency vulnerability check)..."
   local package_files=("package.json" "web-client/package.json")
   for pkg in "${package_files[@]}"; do
-    # Flatten path: package.json -> npm_audit_package.json.json,
-    #               web-client/package.json -> npm_audit_web-client_package.json.json
-    local flat; flat=$(echo "$pkg" | tr '/' '_')
+    # Flatten path: package.json -> npm_audit_package.json,
+    #               web-client/package.json -> npm_audit_web-client_package.json
+    local flat; flat=$(echo "${pkg%.json}" | tr '/' '_')
     local out="${OUTPUT_DIR}/npm_audit_${flat}.json"
     local pkg_dir; pkg_dir="${REPO_ROOT}/$(dirname "$pkg")"
 
