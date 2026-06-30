@@ -55,11 +55,100 @@ sarif_count() {
 }
 
 # --- Placeholder functions (implemented in later tasks) ---
-build_local_images()    { info "build_local_images: not yet implemented"; }
 pull_published_images() { info "pull_published_images: not yet implemented"; }
-run_trivy()             { info "run_trivy: not yet implemented"; }
-run_dockle()            { info "run_dockle: not yet implemented"; }
 print_summary()         { info "print_summary: not yet implemented"; }
+
+build_local_images() {
+  info "Building local images for trivy/dockle scanning..."
+  local -A builds=(
+    ["web-client"]="./web-client|./web-client/Dockerfile|production"
+    ["api-gateway"]="./services/spring|./services/spring/api-gateway/Dockerfile|"
+    ["user-service"]="./services/spring|./services/spring/user-service/Dockerfile|"
+    ["content-service"]="./services/spring|./services/spring/content-service/Dockerfile|"
+    ["gen-ai"]="./services/gen-ai|./services/gen-ai/Dockerfile|"
+  )
+  for svc in web-client api-gateway user-service content-service gen-ai; do
+    local spec="${builds[$svc]}"
+    local ctx; ctx=$(echo "$spec" | cut -d'|' -f1)
+    local file; file=$(echo "$spec" | cut -d'|' -f2)
+    local target; target=$(echo "$spec" | cut -d'|' -f3)
+    local tag="rolling-restarts/${svc}:local"
+    local build_args=(-t "$tag" -f "$file" --quiet)
+    [ -n "$target" ] && build_args+=(--target "$target")
+    build_args+=("$ctx")
+    if docker build "${build_args[@]}" > /dev/null 2>&1; then
+      ok "Built ${tag}"
+    else
+      fail "Failed to build ${tag} (will skip trivy/dockle for this service)"
+    fi
+  done
+}
+
+run_trivy() {
+  info "Running trivy (container image vulnerability scanning)..."
+  local services=(web-client api-gateway user-service content-service gen-ai)
+
+  # --- Local images ---
+  for svc in "${services[@]}"; do
+    local img="rolling-restarts/${svc}:local"
+    local out="${OUTPUT_DIR}/trivy_image_${svc}.json"
+    if ! docker image inspect "$img" > /dev/null 2>&1; then
+      sarif_error "$out" "Trivy" "Image ${img} not available (build may have failed)."
+      TOOL_STATUS["trivy_local_${svc}"]="failed"; TOOL_RESULTS["trivy_local_${svc}"]="?"
+      fail "trivy (local): ${svc} image not available"
+      continue
+    fi
+    # trivy exits non-zero when vulnerabilities found; capture output regardless
+    docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        aquasec/trivy:latest \
+        image -f sarif -o /dev/stdout --quiet "$img" > "$out" 2>/dev/null || true
+    if jq empty "$out" 2>/dev/null; then
+      local count; count=$(sarif_count "$out")
+      TOOL_STATUS["trivy_local_${svc}"]="ok"; TOOL_RESULTS["trivy_local_${svc}"]="$count"
+      ok "trivy (local) ${svc} — ${count} findings"
+    else
+      sarif_error "$out" "Trivy" "trivy scan failed for local image ${svc}."
+      TOOL_STATUS["trivy_local_${svc}"]="failed"; TOOL_RESULTS["trivy_local_${svc}"]="?"
+      fail "trivy (local) failed for ${svc}"
+    fi
+  done
+
+  # TODO: published images — implemented in Task 4
+}
+
+run_dockle() {
+  info "Running dockle (container image best-practice check)..."
+  local services=(web-client api-gateway user-service content-service gen-ai)
+
+  # --- Local images ---
+  for svc in "${services[@]}"; do
+    local img="rolling-restarts/${svc}:local"
+    local out="${OUTPUT_DIR}/dockle_${svc}.json"
+    if ! docker image inspect "$img" > /dev/null 2>&1; then
+      sarif_error "$out" "Dockle" "Image ${img} not available (build may have failed)."
+      TOOL_STATUS["dockle_local_${svc}"]="failed"; TOOL_RESULTS["dockle_local_${svc}"]="?"
+      fail "dockle (local): ${svc} image not available"
+      continue
+    fi
+    # dockle may exit non-zero on findings; capture output regardless
+    docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        goodwithtech/dockle:latest \
+        -f sarif --exit-code 0 "$img" > "$out" 2>/dev/null || true
+    if jq empty "$out" 2>/dev/null; then
+      local count; count=$(sarif_count "$out")
+      TOOL_STATUS["dockle_local_${svc}"]="ok"; TOOL_RESULTS["dockle_local_${svc}"]="$count"
+      ok "dockle (local) ${svc} — ${count} findings"
+    else
+      sarif_error "$out" "Dockle" "dockle scan failed for local image ${svc}."
+      TOOL_STATUS["dockle_local_${svc}"]="failed"; TOOL_RESULTS["dockle_local_${svc}"]="?"
+      fail "dockle (local) failed for ${svc}"
+    fi
+  done
+
+  # TODO: published images — implemented in Task 4
+}
 
 run_codeowners_check() {
   local out="${OUTPUT_DIR}/codeowners_report.json"
