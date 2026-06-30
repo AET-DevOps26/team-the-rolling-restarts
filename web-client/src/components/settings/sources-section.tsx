@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -23,16 +23,17 @@ export function SourcesSection({
   enabledSourceIds: string[];
 }) {
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(enabledSourceIds));
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
-  function toggle(sourceId: string, next: boolean) {
+  async function toggle(sourceId: string, next: boolean) {
     setEnabled((current) => {
       const updated = new Set(current);
       if (next) updated.add(sourceId);
       else updated.delete(sourceId);
       return updated;
     });
-    startTransition(async () => {
+    setPending(true);
+    try {
       const res = next ? await subscribe(sourceId) : await unsubscribe(sourceId);
       if (!res.ok) {
         setEnabled((current) => {
@@ -43,7 +44,9 @@ export function SourcesSection({
         });
         toast.error(res.error);
       }
-    });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

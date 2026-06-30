@@ -25,7 +25,7 @@ export async function getSource(id: string): Promise<Source | null> {
   }
 }
 
-// Returns the page's articles already normalized to the required Article type.
+// Returns articles from the paged response, typed as Article via the backend contract.
 export async function getArticles(params: {
   page?: number;
   size?: number;

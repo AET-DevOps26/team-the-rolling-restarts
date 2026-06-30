@@ -3,8 +3,8 @@ import type { components } from "@/generated/api";
 type Schemas = components["schemas"];
 
 // springdoc marks every response field optional, but the backend Java records
-// always populate them. Expose ergonomic required types for the entities the UI
-// renders, and normalize at the read layer (reads.ts).
+// always populate them. Expose ergonomic required types; callers rely on the
+// backend contract (reads.ts uses compile-time assertions, not runtime validation).
 export type Article = Required<Schemas["Article"]>;
 export type Source = Required<Schemas["Source"]>;
 export type Topic = Required<Schemas["Topic"]>;

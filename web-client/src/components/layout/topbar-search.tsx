@@ -9,7 +9,13 @@ import { Input } from "@/components/ui/input";
 export function TopbarSearch() {
   const router = useRouter();
   const params = useSearchParams();
-  const [value, setValue] = useState(params.get("q") ?? "");
+  const q = params.get("q") ?? "";
+  const [value, setValue] = useState(q);
+  const [prevQ, setPrevQ] = useState(q);
+  if (q !== prevQ) {
+    setPrevQ(q);
+    setValue(q);
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

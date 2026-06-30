@@ -18,13 +18,26 @@ function baseUrl(): string {
   return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 }
 
+function normalizeHeaders(init?: HeadersInit): Record<string, string> {
+  if (!init) return {};
+  if (init instanceof Headers) {
+    const out: Record<string, string> = {};
+    init.forEach((value, key) => {
+      out[key] = value;
+    });
+    return out;
+  }
+  if (Array.isArray(init)) return Object.fromEntries(init);
+  return { ...init };
+}
+
 export type ApiFetchOptions = RequestInit & { auth?: boolean };
 
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { auth = true, headers: extraHeaders, ...rest } = options;
   const headers: Record<string, string> = {
     Accept: "application/json",
-    ...(extraHeaders as Record<string, string>),
+    ...normalizeHeaders(extraHeaders),
   };
 
   if (auth) {

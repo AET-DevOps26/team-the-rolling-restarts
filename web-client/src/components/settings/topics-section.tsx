@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -24,13 +24,16 @@ export function TopicsSection({
   selectedTopicIds: string[];
 }) {
   const [selected, setSelected] = useState<string[]>(selectedTopicIds);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
-  function save() {
-    startTransition(async () => {
+  async function save() {
+    setPending(true);
+    try {
       const res = await updateSelectedTopics(selected);
       toast[res.ok ? "success" : "error"](res.ok ? "Topics saved" : res.error);
-    });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

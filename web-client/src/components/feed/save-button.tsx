@@ -1,7 +1,7 @@
 "use client";
 
 import { Bookmark } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,13 @@ import { saveArticle, unsaveArticle } from "@/lib/actions/content";
 
 export function SaveButton({ articleId, saved }: { articleId: string; saved: boolean }) {
   const [isSaved, setIsSaved] = useState(saved);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
-  function toggle() {
+  async function toggle() {
     const next = !isSaved;
     setIsSaved(next);
-    startTransition(async () => {
+    setPending(true);
+    try {
       const res = next ? await saveArticle(articleId) : await unsaveArticle(articleId);
       if (!res.ok) {
         setIsSaved(!next);
@@ -22,7 +23,9 @@ export function SaveButton({ articleId, saved }: { articleId: string; saved: boo
       } else {
         toast.success(next ? "Saved" : "Removed from saved");
       }
-    });
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
