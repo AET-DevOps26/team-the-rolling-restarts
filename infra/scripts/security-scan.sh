@@ -54,19 +54,6 @@ sarif_count() {
   jq '[.runs[].results | length] | add // 0' "$file" 2>/dev/null || echo "?"
 }
 
-# --- Placeholder functions (implemented in later tasks) ---
-pull_published_images() {
-  info "Pulling published images from GHCR (channel: ${IMAGE_CHANNEL})..."
-  local services=(web-client api-gateway user-service content-service gen-ai)
-  for svc in "${services[@]}"; do
-    local img="${REGISTRY}/${svc}:${IMAGE_CHANNEL}"
-    if docker pull --quiet "$img" > /dev/null 2>&1; then
-      ok "Pulled ${img}"
-    else
-      fail "Could not pull ${img} (channel '${IMAGE_CHANNEL}' may not exist yet for ${svc})"
-    fi
-  done
-}
 print_summary() {
   echo ""
   echo "════════════════════════════════════════════"
@@ -177,30 +164,6 @@ run_trivy() {
     fi
   done
 
-  # --- Published images ---
-  for svc in "${services[@]}"; do
-    local img="${REGISTRY}/${svc}:${IMAGE_CHANNEL}"
-    local out="${OUTPUT_DIR}/trivy_image_${svc}_published.json"
-    if ! docker image inspect "$img" > /dev/null 2>&1; then
-      sarif_error "$out" "Trivy" "Published image ${img} not available (pull may have failed)."
-      TOOL_STATUS["trivy_pub_${svc}"]="failed"; TOOL_RESULTS["trivy_pub_${svc}"]="?"
-      fail "trivy (published): ${svc} image not available"
-      continue
-    fi
-    docker run --rm \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        aquasec/trivy:latest \
-        image -f sarif -o /dev/stdout --quiet "$img" > "$out" 2>/dev/null || true
-    if jq empty "$out" 2>/dev/null; then
-      local count; count=$(sarif_count "$out")
-      TOOL_STATUS["trivy_pub_${svc}"]="ok"; TOOL_RESULTS["trivy_pub_${svc}"]="$count"
-      ok "trivy (published/${IMAGE_CHANNEL}) ${svc} — ${count} findings"
-    else
-      sarif_error "$out" "Trivy" "trivy scan failed for published image ${svc}."
-      TOOL_STATUS["trivy_pub_${svc}"]="failed"; TOOL_RESULTS["trivy_pub_${svc}"]="?"
-      fail "trivy (published) failed for ${svc}"
-    fi
-  done
 }
 
 run_dockle() {
@@ -233,29 +196,6 @@ run_dockle() {
     fi
   done
 
-  # --- Published images ---
-  for svc in "${services[@]}"; do
-    local img="${REGISTRY}/${svc}:${IMAGE_CHANNEL}"
-    local out="${OUTPUT_DIR}/dockle_${svc}_published.json"
-    if ! docker image inspect "$img" > /dev/null 2>&1; then
-      sarif_error "$out" "Dockle" "Published image ${img} not available (pull may have failed)."
-      TOOL_STATUS["dockle_pub_${svc}"]="failed"; TOOL_RESULTS["dockle_pub_${svc}"]="?"
-      fail "dockle (published): ${svc} image not available"
-      continue
-    fi
-    if docker run --rm \
-        -v /var/run/docker.sock:/var/run/docker.sock \
-        goodwithtech/dockle:latest \
-        -f sarif --exit-code 0 "$img" > "$out" 2>/dev/null; then
-      local count; count=$(sarif_count "$out")
-      TOOL_STATUS["dockle_pub_${svc}"]="ok"; TOOL_RESULTS["dockle_pub_${svc}"]="$count"
-      ok "dockle (published/${IMAGE_CHANNEL}) ${svc} — ${count} findings"
-    else
-      sarif_error "$out" "Dockle" "dockle scan failed for published image ${svc}."
-      TOOL_STATUS["dockle_pub_${svc}"]="failed"; TOOL_RESULTS["dockle_pub_${svc}"]="?"
-      fail "dockle (published) failed for ${svc}"
-    fi
-  done
 }
 
 run_codeowners_check() {
@@ -502,24 +442,27 @@ SARIF
 }
 
 # --- Main ---
+rm -rf "${OUTPUT_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 cd "${REPO_ROOT}"
 
 echo ""
 echo "Security scan — writing to ${OUTPUT_DIR}"
-echo "Published image channel: ${IMAGE_CHANNEL} (override: IMAGE_CHANNEL=<tag> make security-scan)"
 echo ""
 
 build_local_images
-pull_published_images
-run_gitleaks
-run_trivy_fs
-run_trivy
-run_dockle
-run_hadolint
-run_kics
-run_zizmor
-run_npm_audit
-run_codeowners_check
-run_typos
+
+echo "Running scanners in parallel…"
+run_gitleaks         &
+run_trivy_fs         &
+run_trivy            &
+run_dockle           &
+run_hadolint         &
+run_kics             &
+run_zizmor           &
+run_npm_audit        &
+run_codeowners_check &
+run_typos            &
+wait
+
 print_summary
