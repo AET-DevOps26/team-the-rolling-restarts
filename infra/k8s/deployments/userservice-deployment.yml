@@ -54,9 +54,6 @@ spec:
                 secretKeyRef:
                   name: service-credentials
                   key: client-secret
-                  # Optional: if the service-credentials Secret is absent, user-service starts
-                  # anyway and the subscriber-count sync no-ops (security is unaffected).
-                  optional: true
 
           readinessProbe:
             httpGet:
