@@ -118,7 +118,7 @@ app_env:
 
 ## Kubernetes / Helm
 
-Helm uses multiple values files layered together: `values.yaml` (base config, checked in), `values-prod.yaml` (prod overrides, checked in), `secrets-values.yaml` (credentials, not checked in), and `image-values.yaml` (image tags, set by CI).
+Helm uses multiple values files layered together: `values.yaml` (base config, checked in), `values-prod.yaml` (prod overrides, checked in), `values-dev.yaml` (dev/manual-deploy overrides, checked in), `secrets-values.yaml` (credentials, not checked in), and `image-values.yaml` (image tags, set by CI).
 
 **File:** `infra/helm/secrets-values.yaml` (copy from `secrets-values.example.yaml`)
 
@@ -189,6 +189,7 @@ userService:
 ```text
 values.yaml                 # Base config (checked in)
 ├── values-prod.yaml        # Prod overrides: replicas=2, letsencrypt-prod (checked in)
+├── values-dev.yaml         # Dev overrides: dev. host prefix, 1 replica (checked in; ENV=dev path)
 ├── secrets-values.yaml     # Database credentials (NOT checked in)
 └── image-values.yaml       # Container image tags, set by CI (checked in)
 ```
