@@ -9,16 +9,6 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT_DIR="${REPO_ROOT}/output/AET-DevOps26/team-the-rolling-restarts"
 REGISTRY="ghcr.io/aet-devops26/team-the-rolling-restarts"
 
-# Derive the published image channel from the current git branch (matches upload_images.yml logic).
-# Override: IMAGE_CHANNEL=main make security-scan
-_branch="$(git -C "${REPO_ROOT}" branch --show-current 2>/dev/null || echo wip)"
-case "$_branch" in
-  main) _default_channel=main ;;
-  dev)  _default_channel=dev  ;;
-  *)    _default_channel=wip  ;;
-esac
-IMAGE_CHANNEL="${IMAGE_CHANNEL:-${_default_channel}}"
-
 # Track overall pass/fail per tool for the summary
 declare -A TOOL_STATUS   # "ok" | "failed"
 declare -A TOOL_RESULTS  # finding count (from jq) or "?" on failure
@@ -69,7 +59,7 @@ print_summary() {
     local count; count=$(sarif_count "$f")
     local status_icon="${GREEN}OK${RESET}"
     # Flag files that contain a SCAN_ERROR or CODEOWNERS_NOT_FOUND result
-    local has_error; has_error=$(jq '[.runs[].results[].ruleId] | map(select(. == "SCAN_ERROR")) | length' "$f" 2>/dev/null || echo 0)
+    local has_error; has_error=$(jq '[.runs[].results[].ruleId] | map(select(. == "SCAN_ERROR" or . == "CODEOWNERS_NOT_FOUND")) | length' "$f" 2>/dev/null || echo 0)
     [ "$has_error" -gt 0 ] && status_icon="${RED}ERR${RESET}"
     printf "%-40s ${status_icon}    %s\n" "$name" "$count"
   done
@@ -121,7 +111,7 @@ run_trivy_fs() {
       -v "${REPO_ROOT}:/repo:ro" \
       aquasec/trivy:latest \
       fs -f sarif -o /dev/stdout --quiet \
-      --skip-dirs .git,node_modules,web-client/node_modules,web-client/.next \
+      --skip-dirs .git,node_modules,web-client/node_modules,web-client/.next,output \
       /repo > "$out" 2>/dev/null || true
   if jq empty "$out" 2>/dev/null; then
     local count; count=$(sarif_count "$out")
@@ -247,7 +237,7 @@ run_gitleaks() {
       -v "${REPO_ROOT}:/repo" \
       zricethezav/gitleaks:latest \
       detect --source /repo --no-git -f sarif -r /repo/gitleaks_tmp.json \
-      --exit-code 0 2>/dev/null; then
+      --ignore-path output --exit-code 0 2>/dev/null; then
     mv "${REPO_ROOT}/gitleaks_tmp.json" "$out"
     local count; count=$(sarif_count "$out")
     TOOL_STATUS[gitleaks]="ok"; TOOL_RESULTS[gitleaks]="$count"
@@ -305,7 +295,7 @@ run_kics() {
       checkmarx/kics:latest \
       scan -p /repo --report-formats sarif --output-path /out \
       --output-name kics_report --no-progress \
-      --exclude-paths "/repo/.git,/repo/node_modules,/repo/web-client/node_modules" \
+      --exclude-paths "/repo/.git,/repo/node_modules,/repo/web-client/node_modules,/repo/output" \
       2>/dev/null || true
   # kics writes kics_report.sarif; rename to .json to match reference naming
   if [ -f "${tmpdir}/kics_report.sarif" ]; then
@@ -359,7 +349,7 @@ run_typos() {
       -v "${REPO_ROOT}:/repo:ro" \
       -w /repo \
       python:3.12-slim \
-      sh -c "pip install typos -q > /dev/null 2>&1 && typos --format sarif ." > "$out" 2>/dev/null || true
+      sh -c "pip install typos -q > /dev/null 2>&1 && typos --format sarif --exclude 'output/**' ." > "$out" 2>/dev/null || true
   if jq empty "$out" 2>/dev/null; then
     local count; count=$(sarif_count "$out")
     TOOL_STATUS[typos]="ok"; TOOL_RESULTS[typos]="$count"
@@ -412,14 +402,23 @@ run_npm_audit() {
     [ "$high" -gt 0 ] || [ "$critical" -gt 0 ] && level="error"
     [ "$total" -gt 0 ] && [ "$level" = "note" ] && level="warning"
 
-    local msg
     if [ "$total" -eq 0 ]; then
-      msg="No vulnerabilities found in ${pkg}."
+      cat > "$out" <<SARIF
+{
+  "version": "2.1.0",
+  "\$schema": "http://json.schemastore.org/sarif-2.1.0",
+  "runs": [{
+    "tool": {"driver": {"name": "npm audit", "version": "1.0.0",
+      "shortDescription": {"text": "Checks for vulnerabilities in npm dependencies."}}},
+    "results": []
+  }]
+}
+SARIF
+      TOOL_STATUS["npm_${pkg}"]="ok"; TOOL_RESULTS["npm_${pkg}"]=0
+      ok "npm audit ${pkg} — 0 findings"
     else
-      msg="${total} vulnerabilities found in ${pkg} (critical: ${critical}, high: ${high})."
-    fi
-
-    cat > "$out" <<SARIF
+      local msg="${total} vulnerabilities found in ${pkg} (critical: ${critical}, high: ${high})."
+      cat > "$out" <<SARIF
 {
   "version": "2.1.0",
   "\$schema": "http://json.schemastore.org/sarif-2.1.0",
@@ -434,10 +433,9 @@ run_npm_audit() {
   }]
 }
 SARIF
-    local count; count=$(sarif_count "$out")
-    TOOL_STATUS["npm_${pkg}"]="ok"; TOOL_RESULTS["npm_${pkg}"]="$count"
-    if [ "$total" -eq 0 ]; then ok "npm audit ${pkg} — 0 findings"
-    else fail "npm audit ${pkg} — ${total} vulnerabilities"; fi
+      TOOL_STATUS["npm_${pkg}"]="ok"; TOOL_RESULTS["npm_${pkg}"]=$(sarif_count "$out")
+      fail "npm audit ${pkg} — ${total} vulnerabilities"
+    fi
   done
 }
 

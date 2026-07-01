@@ -82,7 +82,7 @@ services:
       CONTENT_SERVICE_URL: http://content-service:8082
       # Secret for the client_credentials token used to call content-service's subscribe/unsubscribe
       # endpoints (scope source.write). Override SERVICE_CLIENT_SECRET in production.
-      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET:-dev-service-secret}
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET}
     healthcheck:
       test:
         - CMD
