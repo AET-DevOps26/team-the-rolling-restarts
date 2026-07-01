@@ -170,6 +170,11 @@ SERVICES = web-client api-gateway user-service content-service gen-ai
 
 push-images:
 ifdef PLATFORM
+	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
+	  echo "Error: PLATFORM=$(PLATFORM) includes arm64, but web-client cannot be built under QEMU arm64 (Next.js SWC sends SIGILL)."; \
+	  echo "For arm64 images use the CI workflow (upload_images.yml), which builds web-client natively per-arch and merges manifests."; \
+	  exit 1; \
+	fi
 	@echo "Cross-building for $(PLATFORM) — using docker buildx"
 	docker buildx build --platform $(PLATFORM) --push \
 	  --build-arg NEXT_PUBLIC_API_BASE_URL="" \
