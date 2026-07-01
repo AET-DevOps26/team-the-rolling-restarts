@@ -168,7 +168,7 @@ PLATFORM ?=
 
 SERVICES = web-client api-gateway user-service content-service gen-ai
 
-push-images:
+push-images: generate
 ifdef PLATFORM
 	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
 	  echo "Error: PLATFORM=$(PLATFORM) includes arm64, but web-client cannot be built under QEMU arm64 (Next.js SWC sends SIGILL)."; \

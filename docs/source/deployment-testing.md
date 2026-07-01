@@ -300,7 +300,7 @@ make smoke-test-k8s ENV=prod        # prod: tests against <base-host>
 make smoke-test-k8s K8S_HOST=custom.example.com  # explicit override
 ```
 
-The smoke test target shares the same `ENV` variable as `helm-deploy`, so `make helm-deploy && make smoke-test-k8s` automatically targets the same host. Runs health, routing, registration, login, service-scope enforcement, and the shared-source subscriber lifecycle.
+The smoke test target shares the same `ENV` variable as `helm-deploy`, so `make helm-deploy && make smoke-test-k8s` automatically targets the same host — but only when neither command uses a custom host override. If you deployed with `HELM_HOST=custom.example.com`, you must pass the same value as `K8S_HOST=custom.example.com` to smoke-test-k8s, otherwise the test falls back to the `ENV`-derived default and validates the wrong ingress. Runs health, routing, registration, login, service-scope enforcement, and the shared-source subscriber lifecycle.
 
 #### K8s manual checks
 
