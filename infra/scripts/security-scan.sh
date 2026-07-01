@@ -84,7 +84,7 @@ print_summary() {
   printf "%-40s %-8s %s\n" "TOTAL (${total_files} files)" "" "${total_findings}"
   echo ""
   echo "Output directory: ${OUTPUT_DIR}"
-  echo "View with: docker run -it --rm -v \"\$(pwd)/output/AET-DevOps26:/data\" ghcr.io/pstoeckle/guestlecture:v0.1.3 /data"
+  echo "View with: make score"
   echo ""
 }
 
