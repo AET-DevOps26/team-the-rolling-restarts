@@ -39,7 +39,7 @@ help:
 	  '  make compose-logs      - follow container logs' \
 	  '  make compose-test      - run integration tests via Docker Compose' \
 	  '  make smoke-test        - run endpoint smoke tests against localhost' \
-	  '  make push-images       - build and push all images (PLATFORM=linux/arm64 for cross-arch)' \
+	  '  make push-images       - build and push all images (PLATFORM=linux/amd64,linux/arm64 for multi-arch; web-client skipped for arm64)' \
 	  '' \
 	  'Azure VM:' \
 	  '  make smoke-test-vm     - run smoke tests against the Azure VM' \
