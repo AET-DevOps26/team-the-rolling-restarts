@@ -22,6 +22,10 @@ check() {
   fi
 }
 
+skip() {
+  printf '  \033[33m-\033[0m %s (skipped)\n' "$1"
+}
+
 http() {
   curl $curl_extra -so /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$@" 2>/dev/null
 }
@@ -106,8 +110,8 @@ if [ -n "$token" ]; then
   has_sz=$(echo "$sources_body" | jq -r '[.[] | select(.name == "Süddeutsche Zeitung")] | length' 2>/dev/null || echo 0)
   check "Source 'Süddeutsche Zeitung' exists in list" "1" "$has_sz"
 else
-  check "Create RSS source (skipped - no token)" "ok" "skipped"
-  check "Source exists in list (skipped - no token)" "1" "skipped"
+  skip "Create RSS source (no token)"
+  skip "Source exists in list (no token)"
 fi
 echo ""
 
@@ -121,8 +125,8 @@ if [ -n "$token" ]; then
   me_username=$(echo "$me_body" | jq -r '.username // empty' 2>/dev/null || true)
   check "GET /users/me returns correct username" "smoke$$" "$me_username"
 else
-  check "GET /users/me with token returns 200" "200" "skipped (no token)"
-  check "GET /users/me returns correct username" "smoke$$" "skipped (no token)"
+  skip "GET /users/me with token (no token)"
+  skip "GET /users/me returns correct username (no token)"
 fi
 echo ""
 
@@ -179,10 +183,10 @@ if [ -n "$token" ]; then
     # Clean up: unsubscribe via user-service (legitimate path).
     api_json DELETE "$base_url/api/users/users/me/subscriptions/$scope_src_id" "$scope_user_tok" >/dev/null
   else
-    check "Service-scope tests (skipped - no source or token)" "ok" "skipped"
+    skip "Service-scope tests (no source or token)"
   fi
 else
-  check "Service-scope tests (skipped - no token)" "ok" "skipped"
+  skip "Service-scope tests (no token)"
 fi
 echo ""
 
@@ -235,7 +239,7 @@ if [ -n "$tokenA" ] && [ -n "$tokenB" ]; then
     | jq -r --arg s "$source_id" '(.enabledSourceIds // []) | index($s) == null' 2>/dev/null || true)
   check "Source removed from user B's enabled sources" "true" "$b_gone"
 else
-  check "Shared source subscriber lifecycle (skipped - no tokens)" "ok" "skipped"
+  skip "Shared source subscriber lifecycle (no tokens)"
 fi
 echo ""
 
