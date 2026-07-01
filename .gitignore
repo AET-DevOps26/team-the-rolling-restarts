@@ -285,4 +285,4 @@ infra/helm/secrets-values.yaml
 infra/k8s/secrets.yml
 
 # Generated security scan SARIF output (make security-scan)
-output/
+output/AET-DevOps26/
