@@ -84,6 +84,7 @@ services:
         qOIio09BWfoa794j5gqNAa4SP71cmVpsJ9TAe6tP0SLMnaoXUacu7Lv1RMa72xxp
         +MtKDLHcW7CT4ZMd9ho7OD0=
         -----END PRIVATE KEY-----
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET:-dev-service-secret}
     volumes:
       - ../services/spring:/workspace
       - spring-gradle-cache:/gradle-cache

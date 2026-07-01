@@ -86,6 +86,15 @@ jobs:
           echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
+      - name: Validate required secrets
+        env:
+          SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
+        run: |
+          if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
+            echo "::error::SERVICE_CLIENT_SECRET secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+
       - name: Generate secrets values
         env:
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
@@ -124,12 +133,7 @@ jobs:
       - name: Build values file list
         id: values
         run: |
-          FILES="-f infra/helm/values.yaml"
-          if [[ "${{ env.PROFILE }}" == "prod" ]]; then
-            FILES="$FILES -f infra/helm/values-prod.yaml"
-          else
-            FILES="$FILES -f infra/helm/values-dev.yaml"
-          fi
+          FILES="-f infra/helm/values.yaml -f infra/helm/values-prod.yaml"
           FILES="$FILES -f infra/helm/secrets-values.yaml"
           FILES="$FILES -f infra/helm/image-values.yaml"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"

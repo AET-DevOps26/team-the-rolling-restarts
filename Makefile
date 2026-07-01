@@ -4,7 +4,8 @@
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
        azure-cicd-setup azure-provider-register azure-vm-docker azure-gh-vars azure-cicd-help \
        helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets \
-       docs-serve
+       docs-serve \
+       security-scan score
 
 HELM_DIR    ?= infra/helm
 COMPOSE_ENV  ?= infra/.env
@@ -38,7 +39,7 @@ help:
 	  '  make compose-logs      - follow container logs' \
 	  '  make compose-test      - run integration tests via Docker Compose' \
 	  '  make smoke-test        - run endpoint smoke tests against localhost' \
-	  '  make push-images       - build and push all images (PLATFORM=linux/arm64 for cross-arch)' \
+	  '  make push-images       - build and push all images (PLATFORM=linux/amd64,linux/arm64 for multi-arch; web-client skipped for arm64)' \
 	  '' \
 	  'Azure VM:' \
 	  '  make smoke-test-vm     - run smoke tests against the Azure VM' \
@@ -62,6 +63,11 @@ help:
 	  '' \
 	  'Documentation:' \
 	  '  make docs-serve        - serve MkDocs locally at http://localhost:8000' \
+	  '' \
+	  'Security:' \
+	  '  make security-scan        - run all security/quality scanners and write SARIF to output/' \
+	  '  make security-scan IMAGE_CHANNEL=dev - scan against a specific published image channel' \
+	  '  make score               - open the guestlecture TUI viewer against local scan results' \
 	  '' \
 	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'
 
@@ -139,6 +145,18 @@ compose-test:
 smoke-test:
 	@infra/scripts/smoke-test.sh "http://localhost:$(or $(APP_PORT),8080)"
 
+security-scan:
+	@infra/scripts/security-scan.sh
+
+SCORE_DIR = output/AET-DevOps26
+
+score:
+	@if [ ! -d "$(SCORE_DIR)" ] || [ -z "$$(ls $(SCORE_DIR)/team-the-rolling-restarts/*.json 2>/dev/null)" ]; then \
+	  echo "No scan results found. Run 'make security-scan' first."; exit 1; fi
+	docker run --interactive --rm --tty \
+	  --volume "$(CURDIR)/$(SCORE_DIR):/data" \
+	  ghcr.io/pstoeckle/guestlecture:v0.1.3 /data
+
 VM_IP ?= $(shell cd $(TF_DIR) && terraform output -raw vm_public_ip 2>/dev/null)
 
 smoke-test-vm:
@@ -162,33 +180,27 @@ smoke-test-k8s:
 
 # --- Images ---
 
-# Cross-architecture builds: make push-images PLATFORM=linux/arm64
-# Requires: docker buildx, QEMU (apt install qemu-user-static / docker run --privileged multiarch/qemu-user-static --reset)
+# Cross-architecture builds: make push-images PLATFORM=linux/amd64,linux/arm64
+# web-client is skipped when PLATFORM includes arm64 (Next.js SWC crashes under QEMU — CI handles it).
+# Requires: docker buildx, QEMU (docker run --privileged multiarch/qemu-user-static --reset)
 PLATFORM ?=
-
-SERVICES = web-client api-gateway user-service content-service gen-ai
 
 push-images: generate
 ifdef PLATFORM
-	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
-	  echo "Error: PLATFORM=$(PLATFORM) includes arm64, but web-client cannot be built under QEMU arm64 (Next.js SWC sends SIGILL)."; \
-	  echo "For arm64 images use the CI workflow (upload_images.yml), which builds web-client natively per-arch and merges manifests."; \
-	  exit 1; \
-	fi
 	@echo "Cross-building for $(PLATFORM) — using docker buildx"
-	docker buildx build --platform $(PLATFORM) --push \
-	  --build-arg NEXT_PUBLIC_API_BASE_URL="" \
-	  -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
-	  -f web-client/Dockerfile web-client
-	docker buildx build --platform $(PLATFORM) --push \
-	  -t $(REGISTRY)/api-gateway:$(IMAGE_TAG) \
-	  -f services/spring/api-gateway/Dockerfile services/spring
-	docker buildx build --platform $(PLATFORM) --push \
-	  -t $(REGISTRY)/user-service:$(IMAGE_TAG) \
-	  -f services/spring/user-service/Dockerfile services/spring
-	docker buildx build --platform $(PLATFORM) --push \
-	  -t $(REGISTRY)/content-service:$(IMAGE_TAG) \
-	  -f services/spring/content-service/Dockerfile services/spring
+	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
+	  echo "Note: skipping web-client for arm64 (SWC/QEMU incompatible — CI builds it natively)."; \
+	else \
+	  docker buildx build --platform $(PLATFORM) --push \
+	    --build-arg NEXT_PUBLIC_API_BASE_URL="" \
+	    -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
+	    -f web-client/Dockerfile web-client; \
+	fi
+	@for svc in api-gateway user-service content-service; do \
+	  docker buildx build --platform $(PLATFORM) --push \
+	    -t $(REGISTRY)/$$svc:$(IMAGE_TAG) \
+	    -f services/spring/$$svc/Dockerfile services/spring || exit 1; \
+	done
 	docker buildx build --platform $(PLATFORM) --push \
 	  -t $(REGISTRY)/gen-ai:$(IMAGE_TAG) \
 	  -f services/gen-ai/Dockerfile services/gen-ai
