@@ -180,33 +180,27 @@ smoke-test-k8s:
 
 # --- Images ---
 
-# Cross-architecture builds: make push-images PLATFORM=linux/arm64
-# Requires: docker buildx, QEMU (apt install qemu-user-static / docker run --privileged multiarch/qemu-user-static --reset)
+# Cross-architecture builds: make push-images PLATFORM=linux/amd64,linux/arm64
+# web-client is skipped when PLATFORM includes arm64 (Next.js SWC crashes under QEMU — CI handles it).
+# Requires: docker buildx, QEMU (docker run --privileged multiarch/qemu-user-static --reset)
 PLATFORM ?=
-
-SERVICES = web-client api-gateway user-service content-service gen-ai
 
 push-images: generate
 ifdef PLATFORM
-	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
-	  echo "Error: PLATFORM=$(PLATFORM) includes arm64, but web-client cannot be built under QEMU arm64 (Next.js SWC sends SIGILL)."; \
-	  echo "For arm64 images use the CI workflow (upload_images.yml), which builds web-client natively per-arch and merges manifests."; \
-	  exit 1; \
-	fi
 	@echo "Cross-building for $(PLATFORM) — using docker buildx"
-	docker buildx build --platform $(PLATFORM) --push \
-	  --build-arg NEXT_PUBLIC_API_BASE_URL="" \
-	  -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
-	  -f web-client/Dockerfile web-client
-	docker buildx build --platform $(PLATFORM) --push \
-	  -t $(REGISTRY)/api-gateway:$(IMAGE_TAG) \
-	  -f services/spring/api-gateway/Dockerfile services/spring
-	docker buildx build --platform $(PLATFORM) --push \
-	  -t $(REGISTRY)/user-service:$(IMAGE_TAG) \
-	  -f services/spring/user-service/Dockerfile services/spring
-	docker buildx build --platform $(PLATFORM) --push \
-	  -t $(REGISTRY)/content-service:$(IMAGE_TAG) \
-	  -f services/spring/content-service/Dockerfile services/spring
+	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
+	  echo "Note: skipping web-client for arm64 (SWC/QEMU incompatible — CI builds it natively)."; \
+	else \
+	  docker buildx build --platform $(PLATFORM) --push \
+	    --build-arg NEXT_PUBLIC_API_BASE_URL="" \
+	    -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
+	    -f web-client/Dockerfile web-client; \
+	fi
+	@for svc in api-gateway user-service content-service; do \
+	  docker buildx build --platform $(PLATFORM) --push \
+	    -t $(REGISTRY)/$$svc:$(IMAGE_TAG) \
+	    -f services/spring/$$svc/Dockerfile services/spring || exit 1; \
+	done
 	docker buildx build --platform $(PLATFORM) --push \
 	  -t $(REGISTRY)/gen-ai:$(IMAGE_TAG) \
 	  -f services/gen-ai/Dockerfile services/gen-ai
