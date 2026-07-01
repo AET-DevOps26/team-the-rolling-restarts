@@ -221,11 +221,13 @@ jobs:
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
-          # Optional: secret for user-service -> content-service subscriber-count sync. If unset,
-          # compose falls back to a dev default; security is unaffected either way.
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
         run: |
           umask 077
+          if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
+            echo "::error::SERVICE_CLIENT_SECRET secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
           # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
           # RSA PEMs are collapsed to a single line. user-service strips the PEM markers and all
           # whitespace before decoding (AuthorizationServerConfig.loadKeyPair), so this is lossless.
