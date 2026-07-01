@@ -66,6 +66,7 @@
   ansible.builtin.command:
     cmd: docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} pull
     chdir: "{{ project_root }}"
+  become_user: "{{ ansible_user }}"
   tags: [app, deploy]
 
 - name: Force-recreate containers to pick up env/config changes
