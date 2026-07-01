@@ -23,7 +23,7 @@ it is on port 80. The gateway forwards requests based on path prefix.
 ### User service (via `/api/users/`)
 
 - `POST /api/users/auth/register` — register a new user
-- `POST /api/users/oauth2/token` — OAuth2 token endpoint (login)
+- `POST /api/users/auth/login` — authenticate and obtain a JWT
 - `GET  /api/users/users/me` — current user profile
 - `PUT  /api/users/users/me` — update profile
 - `GET  /api/users/users/me/settings` — user preferences
@@ -48,8 +48,8 @@ it is on port 80. The gateway forwards requests based on path prefix.
   document the real gateway URL and the API paths listed above.
 - **Mock data** — `src/lib/mock/` can be replaced with real API calls once the
   services are running.
-- **Auth flow** — wire up login/signup forms to the OAuth2 token endpoint and
-  store the JWT for subsequent requests.
+- **Auth flow** — wire up login/signup forms to `/api/users/auth/login` and
+  `/api/users/auth/register`, and store the JWT for subsequent requests.
 - **Generated types** — the API is code-first: `api/openapi.yaml` is generated
   from the Spring controllers, and `web-client/src/generated/api.ts` is generated
   from that contract (`make generate`, or `npx openapi-typescript api/openapi.yaml

@@ -29,7 +29,8 @@ import rolling_restarts.user.repository.UserRepository;
 @AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(properties = {
 	"spring.autoconfigure.exclude=org.springframework.boot.mongo.autoconfigure.MongoAutoConfiguration,org.springframework.boot.mongo.autoconfigure.MongoReactiveAutoConfiguration",
-	"spring.mongodb.uri=mongodb://localhost:27017/test"
+	"spring.mongodb.uri=mongodb://localhost:27017/test",
+	"service.client.secret=test-secret"
 })
 class OpenApiDocGenerationTest {
 

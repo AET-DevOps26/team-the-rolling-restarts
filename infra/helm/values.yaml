@@ -63,6 +63,8 @@ apiGateway:
       value: http://gen-ai:8000
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
+    # CORS_ALLOWED_ORIGINS is injected by templates/deployment.yaml as https://<.Values.host>
+    # so it always matches the ingress origin (and the dev host override) without drifting.
   probes:
     path: /actuator/health
     readiness:
@@ -106,12 +108,22 @@ userService:
     - name: JWT_RSA_PRIVATE_KEY
       secretName: jwt-keys
       secretKey: private-key
-  # RSA key pair for signing JWTs. No default is committed — both MUST be provided at deploy time
-  # via secrets-values.yaml (see secrets-values.example.yaml). Rendering fails if either is empty.
-  # Generate with: openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048
+    - name: SERVICE_CLIENT_SECRET
+      secretName: service-credentials
+      secretKey: client-secret
+  resources:
+    requests:
+      cpu: 50m
+      memory: 200Mi
+    limits:
+      cpu: 200m
+      memory: 300Mi
   jwtKeys:
     publicKey: ""
     privateKey: ""
+  # Shared secret for the client_credentials token user-service uses to call content-service's
+  # subscribe/unsubscribe endpoints (scope source.write). No default — set in secrets-values.yaml.
+  serviceClientSecret: ""
   probes:
     path: /actuator/health
     readiness:
@@ -122,13 +134,6 @@ userService:
       initialDelaySeconds: 20
       periodSeconds: 20
       timeoutSeconds: 2
-  resources:
-    requests:
-      cpu: 50m
-      memory: 200Mi
-    limits:
-      cpu: 200m
-      memory: 300Mi
 
 # Content service manages RSS feeds and articles (MongoDB).
 contentService:
@@ -206,10 +211,10 @@ mongodb:
   resources:
     requests:
       cpu: 50m
-      memory: 128Mi
-    limits:
-      cpu: 150m
       memory: 256Mi
+    limits:
+      cpu: 200m
+      memory: 512Mi
 
 ingress:
   enabled: true

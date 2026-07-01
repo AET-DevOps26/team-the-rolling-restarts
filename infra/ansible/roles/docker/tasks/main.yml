@@ -19,6 +19,10 @@
     append: true
   tags: [docker]
 
+- name: Reset SSH connection so docker group takes effect in the current session
+  ansible.builtin.meta: reset_connection
+  tags: [docker]
+
 - name: Enable Docker service
   ansible.builtin.systemd:
     name: "{{ docker_service_name }}"

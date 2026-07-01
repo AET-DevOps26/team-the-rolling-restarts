@@ -39,7 +39,7 @@ help:
 	  '  make compose-logs      - follow container logs' \
 	  '  make compose-test      - run integration tests via Docker Compose' \
 	  '  make smoke-test        - run endpoint smoke tests against localhost' \
-	  '  make push-images       - build and push all images to registry' \
+	  '  make push-images       - build and push all images (PLATFORM=linux/arm64 for cross-arch)' \
 	  '' \
 	  'Azure VM:' \
 	  '  make smoke-test-vm     - run smoke tests against the Azure VM' \
@@ -56,7 +56,7 @@ help:
 	  '' \
 	  'Kubernetes / Helm:' \
 	  '  make helm-setup        - seed image-values.yaml from example (first time)' \
-	  '  make helm-secrets      - generate secrets-values.yaml (RSA key + random Mongo password)' \
+	  '  make helm-secrets      - generate secrets-values.yaml (RSA key, random Mongo password, service secret)' \
 	  '  make helm-deploy       - install or upgrade the Helm release (ENV=prod for production TLS)' \
 	  '  make helm-destroy      - uninstall the Helm release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
@@ -165,7 +165,13 @@ smoke-test-vm:
 	@echo ""
 	@infra/scripts/smoke-test.sh "http://$(VM_IP)$(if $(filter-out 80,$(or $(APP_PORT),8080)),:$(APP_PORT),)"
 
-K8S_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
+K8S_BASE_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
+ENV ?= dev
+ifeq ($(ENV),prod)
+K8S_HOST ?= $(K8S_BASE_HOST)
+else
+K8S_HOST ?= dev.$(K8S_BASE_HOST)
+endif
 
 smoke-test-k8s:
 	@echo "Targeting K8s ingress at $(K8S_HOST)"
@@ -174,9 +180,40 @@ smoke-test-k8s:
 
 # --- Images ---
 
-push-images:
+# Cross-architecture builds: make push-images PLATFORM=linux/arm64
+# Requires: docker buildx, QEMU (apt install qemu-user-static / docker run --privileged multiarch/qemu-user-static --reset)
+PLATFORM ?=
+
+SERVICES = web-client api-gateway user-service content-service gen-ai
+
+push-images: generate
+ifdef PLATFORM
+	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
+	  echo "Error: PLATFORM=$(PLATFORM) includes arm64, but web-client cannot be built under QEMU arm64 (Next.js SWC sends SIGILL)."; \
+	  echo "For arm64 images use the CI workflow (upload_images.yml), which builds web-client natively per-arch and merges manifests."; \
+	  exit 1; \
+	fi
+	@echo "Cross-building for $(PLATFORM) — using docker buildx"
+	docker buildx build --platform $(PLATFORM) --push \
+	  --build-arg NEXT_PUBLIC_API_BASE_URL="" \
+	  -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
+	  -f web-client/Dockerfile web-client
+	docker buildx build --platform $(PLATFORM) --push \
+	  -t $(REGISTRY)/api-gateway:$(IMAGE_TAG) \
+	  -f services/spring/api-gateway/Dockerfile services/spring
+	docker buildx build --platform $(PLATFORM) --push \
+	  -t $(REGISTRY)/user-service:$(IMAGE_TAG) \
+	  -f services/spring/user-service/Dockerfile services/spring
+	docker buildx build --platform $(PLATFORM) --push \
+	  -t $(REGISTRY)/content-service:$(IMAGE_TAG) \
+	  -f services/spring/content-service/Dockerfile services/spring
+	docker buildx build --platform $(PLATFORM) --push \
+	  -t $(REGISTRY)/gen-ai:$(IMAGE_TAG) \
+	  -f services/gen-ai/Dockerfile services/gen-ai
+else
 	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml build
 	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml push
+endif
 
 # Resource group used by azure-nuke. Defaults to the Terraform default; override
 # (make azure-nuke AZURE_RG=...) if you changed resource_group_name.

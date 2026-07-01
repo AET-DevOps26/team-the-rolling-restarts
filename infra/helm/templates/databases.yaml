@@ -48,6 +48,11 @@ spec:
                 secretKeyRef:
                   name: mongodb-credentials
                   key: root-password
+          startupProbe:
+            tcpSocket:
+              port: {{ .Values.mongodb.port }}
+            failureThreshold: 30
+            periodSeconds: 10
           readinessProbe:
             tcpSocket:
               port: {{ .Values.mongodb.port }}

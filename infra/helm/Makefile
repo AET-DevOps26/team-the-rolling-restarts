@@ -16,7 +16,16 @@ endif
 ifeq ($(ENV),prod)
 VALUES_FILES ?= -f values.yaml -f values-prod.yaml $(SECRETS) -f image-values.yaml
 else
-VALUES_FILES ?= -f values.yaml $(SECRETS) -f image-values.yaml
+# Manual/dev deploys layer values-dev.yaml (a `dev.`-prefixed host) so they don't collide with the
+# CD-managed production release on the shared ingress.
+VALUES_FILES ?= -f values.yaml -f values-dev.yaml $(SECRETS) -f image-values.yaml
+endif
+
+# Override the ingress host: make helm-deploy HELM_HOST=my-host.example.com
+ifdef HELM_HOST
+HOST_SET = --set host=$(HELM_HOST)
+else
+HOST_SET =
 endif
 
 help:
@@ -28,39 +37,41 @@ help:
 	  '  make helm-upgrade             - upgrade an existing release' \
 	  '  make helm-deploy              - upgrade or install in one step' \
 	  '  make helm-destroy             - uninstall the release' \
-	  '  make helm-secrets             - generate secrets-values.yaml (RSA key + random Mongo password)' \
+	  '  make helm-secrets             - generate secrets-values.yaml (RSA key, random Mongo password, service secret)' \
 	  '' \
-	  'Set ENV=prod for production TLS (default: staging)' \
+	  'Default ENV=dev: staging TLS + a dev.-prefixed host (values-dev.yaml) so a manual deploy' \
+	  'does not collide with the CD release on the shared ingress. Set ENV=prod for the prod host + TLS.' \
+	  'Override the ingress host: HELM_HOST=my-host.example.com' \
 	  'secrets-values.yaml is auto-included if present (override: SECRETS=)'
 
 ## Lint the chart before rendering or installing.
 helm-lint:
-	$(HELM) lint $(CHART) $(VALUES_FILES)
+	$(HELM) lint $(CHART) $(VALUES_FILES) $(HOST_SET)
 helm-setup:
 	cp image-values.example.yaml image-values.yaml
 
 ## Render the chart locally without touching the cluster.
 helm-template:
-	$(HELM) template $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) template $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Install the chart into a namespace.
 helm-install:
-	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Upgrade an existing release.
 helm-upgrade:
-	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Install or upgrade in one command.
 helm-deploy:
-	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES)
+	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Remove the release from the cluster.
 helm-destroy:
 	$(HELM) uninstall $(RELEASE)
 
-## Generate a working secrets-values.yaml: a fresh shared RSA key pair for JWT signing and a
-## random Mongo root password. Refuses to overwrite an existing file (delete it to regenerate).
+## Generate a working secrets-values.yaml with all five required secrets: Mongo credentials,
+## RSA key pair for JWT signing, and a service client secret. Refuses to overwrite.
 ## Override the Mongo user with MONGO_USER=...
 helm-secrets:
 	@if [ -f secrets-values.yaml ]; then \
@@ -78,6 +89,7 @@ helm-secrets:
 	  openssl pkey -in "$$tmp" -pubout | sed 's/^/      /'; \
 	  echo "    privateKey: |"; \
 	  sed 's/^/      /' "$$tmp"; \
+	  echo "  serviceClientSecret: $$(openssl rand -hex 32)"; \
 	} > secrets-values.yaml; \
 	rm -f "$$tmp"; \
 	echo "Wrote secrets-values.yaml (gitignored). Mongo user: $(MONGO_USER)."
