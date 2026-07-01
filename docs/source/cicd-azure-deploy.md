@@ -142,6 +142,7 @@ They are sensitive and are masked in logs.
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
 | `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) the user-service auth server publishes via JWKS. Stored as a single-line PEM (newlines stripped). If unset, user-service generates an ephemeral key that is lost on every restart, invalidating all issued tokens. |
 | `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) the user-service auth server signs JWTs with. Single-line PEM; pair it with `JWT_RSA_PUBLIC_KEY`. |
+| `SERVICE_CLIENT_SECRET` | Shared secret for the `client_credentials` token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). Generate with `openssl rand -hex 32`. The deploy workflow fails fast if this is unset. |
 
 The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
 Azure control plane, so no host/user/SSH-key secrets are needed.

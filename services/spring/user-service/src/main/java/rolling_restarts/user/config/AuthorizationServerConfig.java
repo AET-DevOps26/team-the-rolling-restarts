@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
 import org.springframework.security.oauth2.core.oidc.OidcScopes;
@@ -120,13 +121,23 @@ public class AuthorizationServerConfig {
 	}
 
 	/**
-	 * The Authorization Server requires at least one registered client to initialize its
-	 * protocol endpoints (JWKS, OIDC discovery). Registers the web-client SPA as a public
-	 * client using authorization_code + PKCE (no secret).
+	 * Registers the OAuth2 clients:
+	 *
+	 * <ul>
+	 *   <li><b>web-client</b> — the SPA, a public client using authorization_code + PKCE (no secret).</li>
+	 *   <li><b>user-service</b> — a confidential service client using the client_credentials grant,
+	 *       scoped to {@code source.write}. user-service uses this to call content-service's
+	 *       subscribe/unsubscribe endpoints with a dedicated machine token instead of forwarding the
+	 *       end user's JWT, so content-service can authorise those mutations on a service scope that
+	 *       ordinary user tokens never carry.</li>
+	 * </ul>
 	 */
 	@Bean
 	public RegisteredClientRepository registeredClientRepository(
-			@Value("${jwt.web-client-redirect-uri:http://127.0.0.1:3000/login/oauth2/code/web-client}") String redirectUri) {
+			PasswordEncoder passwordEncoder,
+			@Value("${jwt.web-client-redirect-uri:http://127.0.0.1:3000/login/oauth2/code/web-client}") String redirectUri,
+			@Value("${service.client.id:user-service}") String serviceClientId,
+			@Value("${service.client.secret:}") String serviceClientSecret) {
 		RegisteredClient webClient = RegisteredClient.withId(UUID.randomUUID().toString())
 				.clientId("web-client")
 				.clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
@@ -137,7 +148,25 @@ public class AuthorizationServerConfig {
 				.scope(OidcScopes.PROFILE)
 				.clientSettings(ClientSettings.builder().requireProofKey(true).build())
 				.build();
-		return new InMemoryRegisteredClientRepository(webClient);
+
+		if (serviceClientSecret == null || serviceClientSecret.isBlank()) {
+			// No service secret configured: don't register the machine client. Security is
+			// unaffected — content-service still rejects any token lacking the source.write scope —
+			// but the best-effort subscriber-count sync from user-service will no-op (logged by
+			// ContentServiceClient). Set SERVICE_CLIENT_SECRET to enable it.
+			log.warn("service.client.secret is not set — service-to-service subscriber-count updates "
+					+ "are DISABLED (set env SERVICE_CLIENT_SECRET to enable)");
+			return new InMemoryRegisteredClientRepository(webClient);
+		}
+		RegisteredClient serviceClient = RegisteredClient.withId(UUID.randomUUID().toString())
+				.clientId(serviceClientId)
+				.clientSecret(passwordEncoder.encode(serviceClientSecret))
+				.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+				.authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+				.scope("source.write")
+				.build();
+
+		return new InMemoryRegisteredClientRepository(webClient, serviceClient);
 	}
 
 	@Bean

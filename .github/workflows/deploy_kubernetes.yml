@@ -4,13 +4,11 @@ on:
   workflow_run:
     workflows: [build-and-package]
     types: [completed]
-  # Manual runs are a coarse fallback: there is no build artifact, so they deploy
-  # the example image values (latest/wip tags) to dev. The real production path is
-  # a workflow_run from main, which carries the SHA-pinned image-values artifact.
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
-  group: deploy-k8s-${{ github.ref }}
+  group: deploy-k8s
   cancel-in-progress: false
 
 jobs:
@@ -19,20 +17,16 @@ jobs:
     permissions:
       contents: read
       actions: read
-    # Only deploy from the long-lived branches. build-and-package runs on every
-    # push (any branch), so without this gate every feature-branch build would
-    # deploy to and clobber the shared dev cluster.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       contains(fromJSON('["main", "dev", "task/kubernetes_CD"]'), github.event.workflow_run.head_branch))
+      github.event.workflow_run.conclusion == 'success'
 
-    environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'dev' }}
+    environment: production
 
     env:
       HELM_RELEASE: newsgenai
       HELM_CHART: ./infra/helm
-      PROFILE: ${{ github.event.workflow_run.head_branch == 'main' && 'prod' || 'dev' }}
+      PROFILE: prod
 
     steps:
       # CI gate: build-and-package runs on push regardless of CI, so before deploying we require
@@ -98,6 +92,7 @@ jobs:
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
+          SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
         run: |
           umask 077
           python3 -c '
@@ -122,6 +117,7 @@ jobs:
                   }
               }
           }
+          data["userService"]["serviceClientSecret"] = QuotedStr(os.environ.get("SERVICE_CLIENT_SECRET", ""))
           yaml.dump(data, sys.stdout, default_flow_style=False)
           ' > infra/helm/secrets-values.yaml
 
@@ -131,6 +127,8 @@ jobs:
           FILES="-f infra/helm/values.yaml"
           if [[ "${{ env.PROFILE }}" == "prod" ]]; then
             FILES="$FILES -f infra/helm/values-prod.yaml"
+          else
+            FILES="$FILES -f infra/helm/values-dev.yaml"
           fi
           FILES="$FILES -f infra/helm/secrets-values.yaml"
           FILES="$FILES -f infra/helm/image-values.yaml"

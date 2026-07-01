@@ -42,6 +42,9 @@ services:
       CONTENT_SERVICE_URL: http://content-service:8082
       GEN_AI_URL: http://gen-ai:8000
       JWT_ISSUER_URI: http://user-service:8081
+      # Comma-separated allowed CORS origins. Declared here so a value set in .env reaches the
+      # container; empty by default (gateway fails closed). The dev override sets '*'.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     healthcheck:
       test:
         - CMD
@@ -77,6 +80,9 @@ services:
       JWT_RSA_PUBLIC_KEY: ${JWT_RSA_PUBLIC_KEY}
       JWT_RSA_PRIVATE_KEY: ${JWT_RSA_PRIVATE_KEY}
       CONTENT_SERVICE_URL: http://content-service:8082
+      # Secret for the client_credentials token used to call content-service's subscribe/unsubscribe
+      # endpoints (scope source.write). Override SERVICE_CLIENT_SECRET in production.
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET:-dev-service-secret}
     healthcheck:
       test:
         - CMD

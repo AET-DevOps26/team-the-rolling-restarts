@@ -1,0 +1,8 @@
+# Overrides for a MANUAL / dev deploy (the default `ENV=dev` path in the Makefile).
+#
+# Uses a `dev.`-prefixed host so a hand-rolled `make helm-deploy` into a personal namespace does
+# not collide with the CD-managed release (the nginx ingress controller enforces host+path
+# uniqueness cluster-wide, and the production release already owns the base host). The ingress
+# host, TLS host, and the gateway's CORS origin all derive from `host`, so this is the only value
+# that needs overriding.
+host: dev.rolling-restarts.stud.k8s.aet.cit.tum.de

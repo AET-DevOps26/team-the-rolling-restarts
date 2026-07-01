@@ -117,7 +117,7 @@ jobs:
           echo "registry_base=$REGISTRY_BASE" >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build & push web-client
         uses: docker/build-push-action@v7.2.0
@@ -221,8 +221,13 @@ jobs:
           MONGO_ROOT_PASSWORD: ${{ secrets.MONGO_ROOT_PASSWORD }}
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
+          SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
         run: |
           umask 077
+          if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
+            echo "::error::SERVICE_CLIENT_SECRET secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
           # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
           # RSA PEMs are collapsed to a single line. user-service strips the PEM markers and all
           # whitespace before decoding (AuthorizationServerConfig.loadKeyPair), so this is lossless.
@@ -246,6 +251,7 @@ jobs:
           MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
           JWT_RSA_PUBLIC_KEY=${JWT_RSA_PUBLIC_KEY_ONELINE}
           JWT_RSA_PRIVATE_KEY=${JWT_RSA_PRIVATE_KEY_ONELINE}
+          SERVICE_CLIENT_SECRET=${SERVICE_CLIENT_SECRET}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
