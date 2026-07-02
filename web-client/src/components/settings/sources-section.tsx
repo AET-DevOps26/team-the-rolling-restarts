@@ -39,48 +39,14 @@ export function SourcesSection({
   enabledSourceIds: string[];
 }) {
   const router = useRouter();
-  const [enabled, setEnabled] = useState<Set<string>>(() => new Set(enabledSourceIds));
-  const [pending, setPending] = useState(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [rssUrl, setRssUrl] = useState("");
   const [fetchState, setFetchState] = useState<FetchState>(null);
 
-  // Re-seed the toggles whenever the server sends refreshed subscriptions (e.g. after adding a
-  // source), otherwise a newly added source stays visually "off" until a full page reload.
-  const enabledKey = enabledSourceIds.join(",");
-  useEffect(() => {
-    setEnabled(new Set(enabledSourceIds));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabledKey]);
-
   // Bumped whenever a new poll starts (or the component unmounts) so stale polls exit early.
   const pollTokenRef = useRef(0);
   useEffect(() => () => void (pollTokenRef.current += 1), []);
-
-  async function toggle(sourceId: string, next: boolean) {
-    setEnabled((current) => {
-      const updated = new Set(current);
-      if (next) updated.add(sourceId);
-      else updated.delete(sourceId);
-      return updated;
-    });
-    setPending(true);
-    try {
-      const res = next ? await subscribe(sourceId) : await unsubscribe(sourceId);
-      if (!res.ok) {
-        setEnabled((current) => {
-          const reverted = new Set(current);
-          if (next) reverted.delete(sourceId);
-          else reverted.add(sourceId);
-          return reverted;
-        });
-        toast.error(res.error);
-      }
-    } finally {
-      setPending(false);
-    }
-  }
 
   async function pollStatus(sourceId: string, sourceName: string) {
     const token = (pollTokenRef.current += 1);
@@ -180,37 +146,80 @@ export function SourcesSection({
               No sources yet — add an RSS feed above to start building your feed.
             </p>
           ) : (
-            <ul className="flex flex-col divide-y divide-border">
-              {sources.map((source) => (
-                <li key={source.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                  <Avatar className="size-9">
-                    <AvatarFallback>{source.initials}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium">{source.name}</p>
-                      <SourceStatusBadge source={source} />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {source.subscriberCount} subscriber{source.subscriberCount === 1 ? "" : "s"}
-                    </p>
-                    {source.fetchStatus === "FAILED" && source.fetchError && (
-                      <p className="mt-0.5 text-xs text-destructive">{source.fetchError}</p>
-                    )}
-                  </div>
-                  <Switch
-                    checked={enabled.has(source.id)}
-                    disabled={pending}
-                    onCheckedChange={(next) => toggle(source.id, next)}
-                    aria-label={`Toggle ${source.name}`}
-                  />
-                </li>
-              ))}
-            </ul>
+            <SourceToggleList
+              key={enabledSourceIds.join(",")}
+              sources={sources}
+              enabledSourceIds={enabledSourceIds}
+            />
           )}
         </CardContent>
       </Card>
     </section>
+  );
+}
+
+function SourceToggleList({
+  sources,
+  enabledSourceIds,
+}: {
+  sources: Source[];
+  enabledSourceIds: string[];
+}) {
+  const [enabled, setEnabled] = useState<Set<string>>(() => new Set(enabledSourceIds));
+  const [pending, setPending] = useState(false);
+
+  async function toggle(sourceId: string, next: boolean) {
+    setEnabled((current) => {
+      const updated = new Set(current);
+      if (next) updated.add(sourceId);
+      else updated.delete(sourceId);
+      return updated;
+    });
+    setPending(true);
+    try {
+      const res = next ? await subscribe(sourceId) : await unsubscribe(sourceId);
+      if (!res.ok) {
+        setEnabled((current) => {
+          const reverted = new Set(current);
+          if (next) reverted.delete(sourceId);
+          else reverted.add(sourceId);
+          return reverted;
+        });
+        toast.error(res.error);
+      }
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <ul className="flex flex-col divide-y divide-border">
+      {sources.map((source) => (
+        <li key={source.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+          <Avatar className="size-9">
+            <AvatarFallback>{source.initials}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-sm font-medium">{source.name}</p>
+              <SourceStatusBadge source={source} />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {source.subscriberCount} subscriber{source.subscriberCount === 1 ? "" : "s"}
+            </p>
+            {source.fetchStatus === "FAILED" && source.fetchError && (
+              <p className="mt-0.5 text-xs text-destructive">{source.fetchError}</p>
+            )}
+          </div>
+          <Switch
+            checked={enabled.has(source.id)}
+            disabled={pending}
+            onCheckedChange={(next) => toggle(source.id, next)}
+            aria-label={`Toggle ${source.name}`}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
 
