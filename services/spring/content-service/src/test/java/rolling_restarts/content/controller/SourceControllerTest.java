@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import rolling_restarts.content.config.SecurityConfig;
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.service.RssFetcherService;
 import rolling_restarts.content.service.SourceService;
 
 @WebMvcTest(SourceController.class)
@@ -37,6 +38,9 @@ class SourceControllerTest {
 
 	@MockitoBean
 	private SourceService sourceService;
+
+	@MockitoBean
+	private RssFetcherService rssFetcherService;
 
 	@Test
 	void list_returnsAllSources() throws Exception {

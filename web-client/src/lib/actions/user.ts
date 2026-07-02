@@ -17,6 +17,7 @@ export async function updateProfile(_prev: ActionResult | undefined, formData: F
       body: JSON.stringify(body),
     });
     revalidatePath("/settings");
+    revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof ApiError ? e.message : "Could not update profile" };

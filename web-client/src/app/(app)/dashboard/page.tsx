@@ -28,6 +28,7 @@ export default async function DashboardPage({
         sources={sources}
         savedIds={settings.savedArticleIds}
         selectedTopicIds={settings.selectedTopicIds}
+        enabledSourceIds={settings.enabledSourceIds}
         topic={topic}
         source={source}
         query={q}

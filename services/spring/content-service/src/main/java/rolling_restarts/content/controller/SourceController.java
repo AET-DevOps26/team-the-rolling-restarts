@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.service.RssFetcherService;
 import rolling_restarts.content.service.SourceService;
 import rolling_restarts.content.util.UrlSafetyValidator;
 
@@ -32,10 +33,13 @@ public class SourceController {
 
 	private final SourceRepository sourceRepository;
 	private final SourceService sourceService;
+	private final RssFetcherService rssFetcherService;
 
-	public SourceController(SourceRepository sourceRepository, SourceService sourceService) {
+	public SourceController(SourceRepository sourceRepository, SourceService sourceService,
+			RssFetcherService rssFetcherService) {
 		this.sourceRepository = sourceRepository;
 		this.sourceService = sourceService;
+		this.rssFetcherService = rssFetcherService;
 	}
 
 	@GetMapping
@@ -73,12 +77,19 @@ public class SourceController {
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> {
 					Source source = new Source();
+					// Stable id keyed off the feed URL so re-adding a removed source reuses its id
+					// (and reclaims its previously fetched articles).
+					source.setId(Source.idForRssUrl(request.rssUrl()));
 					source.setName(request.name());
 					source.setRssUrl(request.rssUrl());
 					if (request.name() != null && request.name().length() >= 2) {
 						source.setInitials(request.name().substring(0, 2).toUpperCase());
 					}
-					return ResponseEntity.status(HttpStatus.CREATED).body(sourceRepository.save(source));
+					Source saved = sourceRepository.save(source);
+					// Populate the source's articles off the request thread; clients poll the
+					// source's fetchStatus to learn when it is ready (or why it failed).
+					rssFetcherService.fetchSourceAsync(saved.getId());
+					return ResponseEntity.status(HttpStatus.CREATED).body(saved);
 				});
 	}
 

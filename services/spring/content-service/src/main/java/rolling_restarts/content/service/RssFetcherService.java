@@ -19,12 +19,19 @@ import com.rometools.rome.io.XmlReader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import rolling_restarts.content.model.Article;
+import rolling_restarts.content.model.FetchStatus;
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.ArticleRepository;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.util.RssHtmlUtils;
 import rolling_restarts.content.util.UrlSafetyValidator;
 
 @Service
@@ -37,6 +44,7 @@ public class RssFetcherService {
 
 	private final SourceRepository sourceRepository;
 	private final ArticleRepository articleRepository;
+	private final MongoTemplate mongoTemplate;
 
 	// Redirects are disabled so a public URL cannot 30x-bounce us to an internal address after
 	// the up-front SSRF validation.
@@ -45,20 +53,57 @@ public class RssFetcherService {
 			.followRedirects(HttpClient.Redirect.NEVER)
 			.build();
 
-	public RssFetcherService(SourceRepository sourceRepository, ArticleRepository articleRepository) {
+	public RssFetcherService(SourceRepository sourceRepository, ArticleRepository articleRepository,
+			MongoTemplate mongoTemplate) {
 		this.sourceRepository = sourceRepository;
 		this.articleRepository = articleRepository;
+		this.mongoTemplate = mongoTemplate;
 	}
 
 	public void fetchAllActiveSources() {
 		List<Source> sources = sourceRepository.findByActiveTrue();
 		for (Source source : sources) {
-			try {
-				fetchSource(source);
-			} catch (Exception e) {
-				log.error("Failed to fetch RSS feed for source {}: {}", source.getName(), e.getMessage());
-			}
+			fetchAndRecord(source);
 		}
+	}
+
+	/**
+	 * Fetches a single source's feed off the request thread. Used to populate articles
+	 * immediately after a source is created without blocking the create response.
+	 */
+	@Async
+	public void fetchSourceAsync(String sourceId) {
+		sourceRepository.findById(sourceId).ifPresent(this::fetchAndRecord);
+	}
+
+	/**
+	 * Fetches a source and records the outcome ({@link FetchStatus#SUCCESS} or
+	 * {@link FetchStatus#FAILED} with a short error message) so clients can surface progress.
+	 */
+	private void fetchAndRecord(Source source) {
+		Update update = new Update();
+		try {
+			fetchSource(source);
+			update.set("fetchStatus", FetchStatus.SUCCESS)
+					.set("fetchError", null)
+					.set("lastFetchedAt", Instant.now());
+		} catch (Exception e) {
+			log.error("Failed to fetch RSS feed for source {}: {}", source.getName(), e.getMessage());
+			update.set("fetchStatus", FetchStatus.FAILED)
+					.set("fetchError", summarizeError(e));
+		}
+		// Update only the fetch-related fields so a concurrent subscribe/unsubscribe (which mutates
+		// subscriberCount via an atomic $inc) is never clobbered by a stale full-document write.
+		mongoTemplate.updateFirst(
+				Query.query(Criteria.where("_id").is(source.getId())), update, Source.class);
+	}
+
+	private static String summarizeError(Exception e) {
+		String message = e.getMessage();
+		if (message == null || message.isBlank()) {
+			message = e.getClass().getSimpleName();
+		}
+		return message.length() > 300 ? message.substring(0, 300) : message;
 	}
 
 	private void fetchSource(Source source) throws Exception {
@@ -90,9 +135,25 @@ public class RssFetcherService {
 					.filter(url -> url != null)
 					.toList();
 
-			Set<String> existingUrls = articleRepository.findByExternalUrlIn(entryUrls).stream()
+			List<Article> existingArticles = articleRepository.findByExternalUrlIn(entryUrls);
+			Set<String> existingUrls = existingArticles.stream()
 					.map(Article::getExternalUrl)
 					.collect(Collectors.toSet());
+
+			// A shared source is deleted when its last subscriber leaves; re-adding the same feed
+			// mints a new source id. Existing articles (deduped globally by URL) would otherwise stay
+			// pinned to the dead id and never appear for the re-created source, so re-point them here.
+			List<Article> reassigned = new ArrayList<>();
+			for (Article existing : existingArticles) {
+				if (!source.getId().equals(existing.getSourceId())) {
+					existing.setSourceId(source.getId());
+					reassigned.add(existing);
+				}
+			}
+			if (!reassigned.isEmpty()) {
+				articleRepository.saveAll(reassigned);
+				log.info("Re-pointed {} existing articles to source {}", reassigned.size(), source.getName());
+			}
 
 			Instant now = Instant.now();
 			List<Article> newArticles = new ArrayList<>();
@@ -105,7 +166,9 @@ public class RssFetcherService {
 
 				Article article = new Article();
 				article.setHeadline(entry.getTitle());
-				article.setSnippet(entry.getDescription() != null ? entry.getDescription().getValue() : "");
+				String rawDescription = entry.getDescription() != null ? entry.getDescription().getValue() : "";
+				article.setImageUrl(RssHtmlUtils.extractImageUrl(rawDescription));
+				article.setSnippet(RssHtmlUtils.toPlainText(rawDescription));
 				article.setBody(List.of());
 				article.setSourceId(source.getId());
 				article.setAuthor(entry.getAuthor());
@@ -121,8 +184,8 @@ public class RssFetcherService {
 			if (!newArticles.isEmpty()) {
 				articleRepository.saveAll(newArticles);
 			}
-			source.setLastFetchedAt(now);
-			sourceRepository.save(source);
+			// lastFetchedAt / fetchStatus are persisted by fetchAndRecord via an atomic partial
+			// update so the source's subscriberCount is never overwritten here.
 			log.info("Fetched {} new articles from {}", newArticles.size(), source.getName());
 		}
 	}

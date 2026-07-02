@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -20,6 +20,13 @@ import type { UserProfile } from "@/lib/api/types";
 
 export function ProfileSection({ user }: { user: UserProfile }) {
   const [state, formAction, pending] = useActionState(updateProfile, undefined);
+  const [name, setName] = useState(user.name ?? "");
+  const [email, setEmail] = useState(user.email ?? "");
+
+  useEffect(() => {
+    setName(user.name ?? "");
+    setEmail(user.email ?? "");
+  }, [user.name, user.email]);
 
   useEffect(() => {
     if (state?.ok) toast.success("Profile saved");
@@ -45,11 +52,22 @@ export function ProfileSection({ user }: { user: UserProfile }) {
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="profile-name">Name</FieldLabel>
-                <Input id="profile-name" name="name" defaultValue={user.name ?? ""} />
+                <Input
+                  id="profile-name"
+                  name="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="profile-email">Email</FieldLabel>
-                <Input id="profile-email" name="email" type="email" defaultValue={user.email} />
+                <Input
+                  id="profile-email"
+                  name="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </Field>
             </FieldGroup>
             {state && !state.ok && (

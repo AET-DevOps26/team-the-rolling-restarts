@@ -17,6 +17,8 @@ components:
           type: string
         id:
           type: string
+        imageUrl:
+          type: string
         publishedAt:
           format: date-time
           type: string
@@ -156,6 +158,14 @@ components:
           type: boolean
         createdAt:
           format: date-time
+          type: string
+        fetchError:
+          type: string
+        fetchStatus:
+          enum:
+          - PENDING
+          - SUCCESS
+          - FAILED
           type: string
         id:
           type: string

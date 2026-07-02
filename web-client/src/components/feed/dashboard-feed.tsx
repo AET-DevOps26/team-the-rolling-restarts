@@ -34,6 +34,7 @@ export function DashboardFeed({
   sources,
   savedIds,
   selectedTopicIds,
+  enabledSourceIds,
   topic,
   source,
   query,
@@ -43,6 +44,7 @@ export function DashboardFeed({
   sources: Source[];
   savedIds: string[];
   selectedTopicIds: string[];
+  enabledSourceIds: string[];
   topic?: string;
   source?: string;
   query?: string;
@@ -52,9 +54,10 @@ export function DashboardFeed({
   const topicsById = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
   const sourcesById = useMemo(() => new Map(sources.map((s) => [s.id, s])), [sources]);
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
+  const enabledSources = useMemo(() => new Set(enabledSourceIds), [enabledSourceIds]);
 
   const visible = useMemo(() => {
-    let list = articles;
+    let list = articles.filter((a) => enabledSources.has(a.sourceId));
     if (query) {
       const needle = query.toLowerCase();
       list = list.filter(
@@ -64,7 +67,7 @@ export function DashboardFeed({
       );
     }
     return applySort(list, sort, selectedTopicIds);
-  }, [articles, query, sort, selectedTopicIds]);
+  }, [articles, enabledSources, query, sort, selectedTopicIds]);
 
   const topicName = topic ? topicsById.get(topic)?.name ?? topic : undefined;
   const sourceName = source ? sourcesById.get(source)?.name ?? source : undefined;
@@ -87,7 +90,13 @@ export function DashboardFeed({
       />
       {visible.length === 0 ? (
         <EmptyFeed
-          message={filterMessage ? `No matches for ${filterMessage}.` : "No articles available yet."}
+          message={
+            filterMessage
+              ? `No matches for ${filterMessage}.`
+              : enabledSourceIds.length === 0
+                ? "Subscribe to sources in Settings to build your feed."
+                : "No articles available yet."
+          }
         />
       ) : (
         <div className="flex flex-col gap-4">

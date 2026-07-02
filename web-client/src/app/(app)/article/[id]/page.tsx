@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { RelatedArticles } from "@/components/article/related-articles";
 import { SaveButton } from "@/components/feed/save-button";
+import { ArticleThumbnailFromArticle } from "@/components/feed/article-thumbnail";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,7 @@ import {
   getSources,
   getTopics,
 } from "@/lib/api/reads";
-import { colorFromId } from "@/lib/format/color";
+import { articlePlainSnippet } from "@/lib/format/html";
 import { dateLabel } from "@/lib/format/time";
 import { ROUTES } from "@/lib/routes";
 
@@ -75,13 +76,15 @@ export default async function ArticleDetailPage({
           </Button>
         </div>
       </div>
-      <div aria-hidden className="h-64 w-full rounded-lg" style={{ background: colorFromId(article.sourceId) }} />
+      <div className="h-64 w-full overflow-hidden rounded-lg">
+        <ArticleThumbnailFromArticle article={article} className="h-full w-full" />
+      </div>
       <div className="flex flex-col gap-4 text-base leading-relaxed">
         {article.body.length > 0 ? (
           article.body.map((paragraph, i) => <p key={i}>{paragraph}</p>)
         ) : (
           <p className="text-muted-foreground">
-            {article.snippet}{" "}
+            {articlePlainSnippet(article)}{" "}
             {article.externalUrl && (
               <a
                 href={article.externalUrl}

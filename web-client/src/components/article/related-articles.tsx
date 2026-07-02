@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { ArticleThumbnailFromArticle } from "@/components/feed/article-thumbnail";
 import type { Article, Source, Topic } from "@/lib/api/types";
-import { colorFromId } from "@/lib/format/color";
 import { articleHref } from "@/lib/routes";
 
 export function RelatedArticles({
@@ -29,7 +29,9 @@ export function RelatedArticles({
                 href={articleHref(article.id)}
                 className="flex h-full flex-col gap-2 rounded-lg border border-border bg-card p-4 transition hover:shadow-sm"
               >
-                <div aria-hidden className="h-24 rounded-md" style={{ background: colorFromId(article.sourceId) }} />
+                <div className="h-24 overflow-hidden rounded-md">
+                  <ArticleThumbnailFromArticle article={article} className="h-full w-full" />
+                </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{source?.name ?? "Source"}</span>
                   <span aria-hidden>·</span>
