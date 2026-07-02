@@ -130,6 +130,12 @@ public class UserService {
 		return settings;
 	}
 
+	public boolean hasSubscription(String userId, String sourceId) {
+		User user = findById(userId);
+		UserSettings settings = ensureSettings(user);
+		return settings.getEnabledSourceIds().contains(sourceId);
+	}
+
 	/**
 	 * Adds {@code sourceId} to the user's enabled sources.
 	 *

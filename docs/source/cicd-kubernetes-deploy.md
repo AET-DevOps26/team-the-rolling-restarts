@@ -53,13 +53,11 @@ Manual `workflow_dispatch` runs skip this check.
 
 ## Environment selection
 
-The workflow dynamically selects the GitHub Environment and Helm values based
-on the branch that triggered the build:
+The workflow is triggered only when `build-and-package` runs on the `main` branch (`branches: [main]` filter on the `workflow_run` trigger), so it always deploys to production:
 
-| Branch | GitHub Environment | Helm profile | Values files |
-| --- | --- | --- | --- |
-| `main` | `production` | `prod` | `values.yaml` + `values-prod.yaml` + `secrets-values.yaml` + `image-values.yaml` |
-| any other | `dev` | `dev` | `values.yaml` + `secrets-values.yaml` + `image-values.yaml` |
+| GitHub Environment | Helm profile | Values files |
+| --- | --- | --- |
+| `production` | `prod` | `values.yaml` + `values-prod.yaml` + `secrets-values.yaml` + `image-values.yaml` |
 
 The `values-prod.yaml` overlay increases replica counts and switches to the
 production TLS cluster issuer.
@@ -82,6 +80,7 @@ They are sensitive and are masked in logs.
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
 | `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) for JWT signing. Shared across all user-service replicas. |
 | `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) for JWT signing. Must match the public key. |
+| `SERVICE_CLIENT_SECRET` | Shared secret for the `client_credentials` token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). Generate with `openssl rand -hex 32`. |
 
 ### Generating the JWT key pair
 
@@ -111,8 +110,7 @@ gh secret set KUBECONFIG_BASE64 < <(base64 -w0 < /path/to/kubeconfig)
 
 ## Required GitHub variables
 
-No variables are required. The workflow derives the environment and Helm
-profile from the branch automatically.
+No variables are required. The workflow always targets the `production` environment and the `prod` Helm profile.
 
 ## How secrets are injected
 
@@ -127,6 +125,7 @@ The generated file overrides:
   StatefulSet init and the connection URI secrets.
 - `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` — mounted
   as a Kubernetes Secret and consumed by user-service for JWT signing.
+- `userService.serviceClientSecret` — mounted as the `service-credentials` Kubernetes Secret and used by user-service to obtain a `client_credentials` token for calling content-service's subscribe/unsubscribe endpoints.
 
 ## Resource quotas
 

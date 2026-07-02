@@ -33,7 +33,7 @@ vm_image_sku = "server-arm64"
 
 Least-privilege note:
 
-- Keep `application_ports = [8080]` — the nginx reverse proxy is the single public entry point (it serves the web client at `/` and proxies `/api` to the gateway).
+- Keep `application_ports = [80]` — the nginx reverse proxy is the single public entry point (it serves the web client at `/` and proxies `/api` to the gateway). On the VM, `APP_PORT` defaults to `80` (set in `docker-compose.prod.yaml` and `all.yml.example`).
 - Backend service ports (8081/8082/8000), MongoDB (27017), and Grafana (3001) are bound to the VM's loopback by `docker-compose.prod.yaml`, so they are never exposed publicly. Reach them via an SSH tunnel rather than opening NSG ports.
 
 Capture connection details:
@@ -43,6 +43,20 @@ terraform output vm_public_ip
 terraform output admin_username
 terraform output ssh_command
 ```
+
+## Image architecture
+
+The validated VM profile (`Standard_B2ps_v2`) is **arm64**. Container images must be built for the matching architecture or the containers will fail to start with `exec format error`.
+
+```bash
+# Build and push arm64 images (or multi-arch for both K8s and VM)
+make push-images IMAGE_TAG=<tag> PLATFORM=linux/amd64,linux/arm64
+
+# Or arm64-only if you only target the VM
+make push-images IMAGE_TAG=<tag> PLATFORM=linux/arm64
+```
+
+See [Cross-architecture builds](deployment-testing.md#cross-architecture-builds) for the one-time QEMU/buildx setup.
 
 ## 2) Configure and deploy on VM (Ansible)
 

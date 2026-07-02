@@ -157,7 +157,7 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void subscribe_existingSource_returns200() throws Exception {
 		Source source = new Source();
 		source.setId("1");
@@ -171,7 +171,7 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void subscribe_missingSource_returns404() throws Exception {
 		when(sourceService.subscribe("999")).thenReturn(null);
 
@@ -187,6 +187,15 @@ class SourceControllerTest {
 
 	@Test
 	@WithMockUser
+	void subscribe_withoutServiceScope_returns403() throws Exception {
+		// An ordinary authenticated end user (no source.write scope) must not be able to mutate
+		// the shared subscriber count — this is the IDOR fix.
+		mockMvc.perform(post("/sources/1/subscribe").with(csrf()))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void unsubscribe_existingSource_returns204() throws Exception {
 		when(sourceService.unsubscribe("1")).thenReturn(true);
 
@@ -195,11 +204,18 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void unsubscribe_missingSource_returns404() throws Exception {
 		when(sourceService.unsubscribe("999")).thenReturn(false);
 
 		mockMvc.perform(post("/sources/999/unsubscribe").with(csrf()))
 				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	@WithMockUser
+	void unsubscribe_withoutServiceScope_returns403() throws Exception {
+		mockMvc.perform(post("/sources/1/unsubscribe").with(csrf()))
+				.andExpect(status().isForbidden());
 	}
 }

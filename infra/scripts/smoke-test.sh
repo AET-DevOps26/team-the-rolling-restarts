@@ -22,6 +22,10 @@ check() {
   fi
 }
 
+skip() {
+  printf '  \033[33m-\033[0m %s (skipped)\n' "$1"
+}
+
 http() {
   curl $curl_extra -so /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$@" 2>/dev/null
 }
@@ -106,8 +110,8 @@ if [ -n "$token" ]; then
   has_sz=$(echo "$sources_body" | jq -r '[.[] | select(.name == "Süddeutsche Zeitung")] | length' 2>/dev/null || echo 0)
   check "Source 'Süddeutsche Zeitung' exists in list" "1" "$has_sz"
 else
-  check "Create RSS source (skipped - no token)" "ok" "skipped"
-  check "Source exists in list (skipped - no token)" "1" "skipped"
+  skip "Create RSS source (no token)"
+  skip "Source exists in list (no token)"
 fi
 echo ""
 
@@ -121,8 +125,68 @@ if [ -n "$token" ]; then
   me_username=$(echo "$me_body" | jq -r '.username // empty' 2>/dev/null || true)
   check "GET /users/me returns correct username" "smoke$$" "$me_username"
 else
-  check "GET /users/me with token returns 200" "200" "skipped (no token)"
-  check "GET /users/me returns correct username" "smoke$$" "skipped (no token)"
+  skip "GET /users/me with token (no token)"
+  skip "GET /users/me returns correct username (no token)"
+fi
+echo ""
+
+echo "=== Service-Scope Enforcement (content-service) ==="
+# Without the source.write scope gate, an attacker could repeatedly hit
+# /sources/{id}/unsubscribe to drive the subscriberCount to zero and delete a shared source,
+# or spam /subscribe to inflate it. Verify that the gate holds and the count is unchanged.
+if [ -n "$token" ]; then
+  # Set up a source with a known subscriber via user-service so there is a count to attack.
+  scope_user_tok=$(register_login "scopetest$$")
+  scope_src_body=$(api_json POST "$base_url/api/content/sources" "$token" \
+    "{\"name\":\"ScopeGuard$$\",\"rssUrl\":\"https://example.com/scope-guard-$$\"}")
+  scope_src_id=$(echo "$scope_src_body" | jq -r '.id // empty' 2>/dev/null || true)
+  if [ -z "$scope_src_id" ]; then
+    scope_src_id=$(api_json GET "$base_url/api/content/sources" "" \
+      | jq -r --arg u "https://example.com/scope-guard-$$" 'map(select(.rssUrl == $u))[0].id // empty' 2>/dev/null || true)
+  fi
+
+  if [ -n "$scope_src_id" ] && [ -n "$scope_user_tok" ]; then
+    # Subscribe through user-service so the count is 1.
+    api_json POST "$base_url/api/users/users/me/subscriptions/$scope_src_id" "$scope_user_tok" >/dev/null
+    count_before=$(api_json GET "$base_url/api/content/sources/$scope_src_id" "" \
+      | jq -r '.subscriberCount // empty' 2>/dev/null || true)
+    check "Source has subscribers before abuse test" "1" "$count_before"
+
+    # Attempt to unsubscribe repeatedly with an ordinary user JWT (no source.write scope).
+    for i in 1 2 3; do
+      check "Unsubscribe attempt $i with user JWT returns 403" "403" \
+        "$(http -X POST "$base_url/api/content/sources/$scope_src_id/unsubscribe" \
+          -H "Authorization: Bearer $token")"
+    done
+
+    # Attempt unauthenticated unsubscribe.
+    check "Unsubscribe without token returns 401" "401" \
+      "$(http -X POST "$base_url/api/content/sources/$scope_src_id/unsubscribe")"
+
+    # Verify the count hasn't moved and the source still exists.
+    count_after=$(api_json GET "$base_url/api/content/sources/$scope_src_id" "" \
+      | jq -r '.subscriberCount // empty' 2>/dev/null || true)
+    check "Subscriber count unchanged after abuse attempts" "$count_before" "$count_after"
+    check "Source still exists after abuse attempts" "200" \
+      "$(http "$base_url/api/content/sources/$scope_src_id")"
+
+    # Same for subscribe inflation.
+    check "Subscribe with user JWT returns 403" "403" \
+      "$(http -X POST "$base_url/api/content/sources/$scope_src_id/subscribe" \
+        -H "Authorization: Bearer $token")"
+    check "Subscribe without token returns 401" "401" \
+      "$(http -X POST "$base_url/api/content/sources/$scope_src_id/subscribe")"
+    count_final=$(api_json GET "$base_url/api/content/sources/$scope_src_id" "" \
+      | jq -r '.subscriberCount // empty' 2>/dev/null || true)
+    check "Subscriber count still unchanged after subscribe abuse" "$count_before" "$count_final"
+
+    # Clean up: unsubscribe via user-service (legitimate path).
+    api_json DELETE "$base_url/api/users/users/me/subscriptions/$scope_src_id" "$scope_user_tok" >/dev/null
+  else
+    skip "Service-scope tests (no source or token)"
+  fi
+else
+  skip "Service-scope tests (no token)"
 fi
 echo ""
 
@@ -175,7 +239,7 @@ if [ -n "$tokenA" ] && [ -n "$tokenB" ]; then
     | jq -r --arg s "$source_id" '(.enabledSourceIds // []) | index($s) == null' 2>/dev/null || true)
   check "Source removed from user B's enabled sources" "true" "$b_gone"
 else
-  check "Shared source subscriber lifecycle (skipped - no tokens)" "ok" "skipped"
+  skip "Shared source subscriber lifecycle (no tokens)"
 fi
 echo ""
 

@@ -16,7 +16,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 public class SecurityConfig {
 
-	@Value("${cors.allowed-origins:*}")
+	@Value("${cors.allowed-origins:}")
 	private String allowedOrigins;
 
 	@Bean
@@ -44,6 +44,10 @@ public class SecurityConfig {
 								"/api/content/topics",
 								"/api/content/articles", "/api/content/articles/**")
 						.permitAll()
+						.requestMatchers(HttpMethod.POST,
+								"/api/content/sources/*/subscribe",
+								"/api/content/sources/*/unsubscribe")
+						.hasAuthority("SCOPE_source.write")
 						.anyRequest().authenticated())
 				.csrf(csrf -> csrf.disable())
 				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {}))
@@ -54,8 +58,20 @@ public class SecurityConfig {
 	}
 
 	private CorsConfigurationSource corsConfigurationSource() {
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+		// Fail closed: with no configured origins, register no CORS rule so the browser blocks
+		// every cross-origin request instead of the gateway serving a wildcard by default.
+		if (allowedOrigins == null || allowedOrigins.isBlank()) {
+			return source;
+		}
+
+		List<String> origins = Arrays.stream(allowedOrigins.split(","))
+				.map(String::trim)
+				.filter(o -> !o.isEmpty())
+				.toList();
+
 		CorsConfiguration config = new CorsConfiguration();
-		List<String> origins = Arrays.asList(allowedOrigins.split(","));
 		if (origins.contains("*")) {
 			config.setAllowedOriginPatterns(List.of("*"));
 		} else {
@@ -64,7 +80,6 @@ public class SecurityConfig {
 		}
 		config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		config.setAllowedHeaders(List.of("*"));
-		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 		source.registerCorsConfiguration("/**", config);
 		return source;
 	}

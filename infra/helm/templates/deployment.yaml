@@ -48,6 +48,11 @@ spec:
             - name: {{ $env.name }}
               value: {{ $env.value | quote }}
 {{- end }}
+{{- if eq $app.key "apiGateway" }}
+            # Lock CORS to the ingress origin; tracks .Values.host (incl. the dev host override).
+            - name: CORS_ALLOWED_ORIGINS
+              value: {{ printf "https://%s" $.Values.host | quote }}
+{{- end }}
 {{- range $env := $cfg.secretEnv }}
             - name: {{ $env.name }}
               valueFrom:
