@@ -9,6 +9,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT_DIR="${REPO_ROOT}/output/AET-DevOps26/team-the-rolling-restarts"
 REGISTRY="ghcr.io/aet-devops26/team-the-rolling-restarts"
 
+# Label applied to every scanner container so an interrupted run can force-remove them via
+# the Docker API — signaling the local `docker run` client does not reliably stop the
+# container itself (it doesn't forward the signal when its output is redirected, which every
+# scanner here does).
+RUN_LABEL="security-scan-run=$$"
+
 # Track overall pass/fail per tool for the summary
 declare -A TOOL_STATUS   # "ok" | "failed"
 declare -A TOOL_RESULTS  # finding count (from jq) or "?" on failure
@@ -51,17 +57,32 @@ print_summary() {
   echo "════════════════════════════════════════════"
   printf "%-40s %-8s %s\n" "Tool / Target" "Status" "Findings"
   echo "────────────────────────────────────────────"
+  echo "  FAIL  = the scanner itself did not complete (see the SCAN_ERROR message in its report)"
+  echo "  FOUND = the scanner ran fine and reported one or more findings"
+  echo "  OK    = the scanner ran fine with zero findings"
+  echo "────────────────────────────────────────────"
 
-  # Print one row per SARIF output file
+  # Print one row per SARIF output file. Status is derived purely from the SARIF
+  # contents so every tool is judged the same way:
+  #   FAIL  - a SCAN_ERROR placeholder result is present (the scanner didn't run), or the
+  #           file is missing/unparseable
+  #   FOUND - the scanner ran and reported at least one real finding
+  #   OK    - the scanner ran and reported nothing
   for f in "${OUTPUT_DIR}"/*.json; do
     [ -f "$f" ] || continue
     local name; name=$(basename "$f" .json)
     local count; count=$(sarif_count "$f")
-    local status_icon="${GREEN}OK${RESET}"
-    # Flag files that contain a SCAN_ERROR or CODEOWNERS_NOT_FOUND result
-    local has_error; has_error=$(jq '[.runs[].results[].ruleId] | map(select(. == "SCAN_ERROR" or . == "CODEOWNERS_NOT_FOUND")) | length' "$f" 2>/dev/null || echo 0)
-    [ "$has_error" -gt 0 ] && status_icon="${RED}ERR${RESET}"
-    printf "%-40s ${status_icon}    %s\n" "$name" "$count"
+    local has_scan_error; has_scan_error=$(jq '[.runs[].results[]?.ruleId] | map(select(. == "SCAN_ERROR")) | length' "$f" 2>/dev/null || echo 0)
+
+    local label
+    if [ "$has_scan_error" -gt 0 ] || ! [[ "$count" =~ ^[0-9]+$ ]]; then
+      label="${RED}$(printf '%-5s' FAIL)${RESET}"
+    elif [ "$count" -gt 0 ]; then
+      label="${YELLOW}$(printf '%-5s' FOUND)${RESET}"
+    else
+      label="${GREEN}$(printf '%-5s' OK)${RESET}"
+    fi
+    printf "%-40s %b %s\n" "$name" "$label" "$count"
   done
 
   echo "────────────────────────────────────────────"
@@ -107,7 +128,7 @@ build_local_images() {
 run_trivy_fs() {
   local out="${OUTPUT_DIR}/trivy_fs_report.json"
   info "Running trivy fs (source filesystem vulnerability scanning)..."
-  docker run --rm \
+  docker run --rm --label "${RUN_LABEL}" \
       -v "${REPO_ROOT}:/repo:ro" \
       aquasec/trivy:latest \
       fs -f sarif -o /dev/stdout --quiet \
@@ -139,7 +160,7 @@ run_trivy() {
       continue
     fi
     # trivy exits non-zero when vulnerabilities found; capture output regardless
-    docker run --rm \
+    docker run --rm --label "${RUN_LABEL}" \
         -v /var/run/docker.sock:/var/run/docker.sock \
         aquasec/trivy:latest \
         image -f sarif -o /dev/stdout --quiet "$img" > "$out" 2>/dev/null || true
@@ -171,7 +192,7 @@ run_dockle() {
       continue
     fi
     # dockle may exit non-zero on findings; capture output regardless
-    docker run --rm \
+    docker run --rm --label "${RUN_LABEL}" \
         -v /var/run/docker.sock:/var/run/docker.sock \
         goodwithtech/dockle:latest \
         -f sarif --exit-code 0 "$img" > "$out" 2>/dev/null || true
@@ -233,7 +254,7 @@ SARIF
 run_gitleaks() {
   local out="${OUTPUT_DIR}/gitleaks_report.json"
   info "Running gitleaks (secret scanning)..."
-  if docker run --rm \
+  if docker run --rm --label "${RUN_LABEL}" \
       -v "${REPO_ROOT}:/repo" \
       zricethezav/gitleaks:latest \
       detect --source /repo --no-git -f sarif -r /repo/gitleaks_tmp.json \
@@ -268,7 +289,7 @@ run_hadolint() {
       continue
     fi
     # hadolint exits non-zero when findings exist; capture output regardless
-    docker run --rm \
+    docker run --rm --label "${RUN_LABEL}" \
         -v "${REPO_ROOT}/${df}:/Dockerfile:ro" \
         hadolint/hadolint:latest \
         hadolint -f sarif /Dockerfile > "$out" 2>/dev/null || true
@@ -289,7 +310,7 @@ run_kics() {
   info "Running KICS (IaC security scanning)..."
   local tmpdir; tmpdir=$(mktemp -d)
   # kics exits non-zero when findings exist; run without checking exit code
-  docker run --rm \
+  docker run --rm --label "${RUN_LABEL}" \
       -v "${REPO_ROOT}:/repo:ro" \
       -v "${tmpdir}:/out" \
       checkmarx/kics:latest \
@@ -326,7 +347,7 @@ run_zizmor() {
     return
   fi
   # zizmor exits non-zero when findings exist; capture output regardless
-  docker run --rm \
+  docker run --rm --label "${RUN_LABEL}" \
       -v "${REPO_ROOT}/.github/workflows:/workflows:ro" \
       ghcr.io/zizmorcore/zizmor:latest \
       --format sarif "${workflow_files[@]}" > "$out" 2>/dev/null || true
@@ -345,7 +366,7 @@ run_typos() {
   local out="${OUTPUT_DIR}/typos_report.json"
   info "Running typos (spell checking)..."
   # typos exits non-zero when typos are found; capture output regardless
-  docker run --rm \
+  docker run --rm --label "${RUN_LABEL}" \
       -v "${REPO_ROOT}:/repo:ro" \
       -w /repo \
       python:3.12-slim \
@@ -379,7 +400,7 @@ run_npm_audit() {
     fi
 
     local audit_json
-    audit_json=$(docker run --rm \
+    audit_json=$(docker run --rm --label "${RUN_LABEL}" \
       -v "${pkg_dir}:/app:ro" \
       -w /app \
       node:lts-slim \
@@ -450,7 +471,29 @@ echo ""
 
 build_local_images
 
-trap 'echo ""; echo "Interrupted — killing scanners…"; kill 0; exit 130' INT TERM
+cleanup_on_interrupt() {
+  echo ""
+  echo "Interrupted — killing scanners…"
+  # Kill the backgrounded scanner jobs first (not this shell itself — signaling our own PID
+  # while still inside this trap previously caused unbounded trap re-entry and a SIGSEGV) so
+  # a function looping over several `docker run` calls (e.g. run_trivy, one per service)
+  # stops issuing new ones.
+  kill $(jobs -p) 2>/dev/null
+  # Force-remove via the Docker API by label: this is the only reliable way to stop the
+  # containers themselves. Signaling the local `docker run` client (e.g. via `kill 0`) only
+  # reaches local processes in this script's process group — the container runs under the
+  # Docker daemon's own process tree, and the client doesn't forward the signal to it when
+  # its output is redirected (as every scanner function here does).
+  # Poll instead of checking once: a `docker run` already in flight when the interrupt lands
+  # may not be registered with the daemon yet, so a single immediate check can miss it and
+  # leave it running orphaned once it starts moments later.
+  for _ in 1 2 3 4 5; do
+    docker ps -q --filter "label=${RUN_LABEL}" | xargs -r docker rm -f > /dev/null 2>&1
+    sleep 1
+  done
+  exit 130
+}
+trap cleanup_on_interrupt INT TERM
 
 echo "Running scanners in parallel…"
 run_gitleaks         > /dev/null 2>&1 &
