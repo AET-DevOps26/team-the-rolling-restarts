@@ -258,7 +258,7 @@ run_gitleaks() {
       -v "${REPO_ROOT}:/repo" \
       zricethezav/gitleaks:latest \
       detect --source /repo --no-git -f sarif -r /repo/gitleaks_tmp.json \
-      --ignore-path output --exit-code 0 2>/dev/null; then
+      --exit-code 0 2>/dev/null; then
     mv "${REPO_ROOT}/gitleaks_tmp.json" "$out"
     local count; count=$(sarif_count "$out")
     TOOL_STATUS[gitleaks]="ok"; TOOL_RESULTS[gitleaks]="$count"
