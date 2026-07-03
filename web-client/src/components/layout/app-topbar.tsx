@@ -3,6 +3,7 @@
 import { Bell } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { AppBrand } from "@/components/layout/app-brand";
 import { AppMobileNav } from "@/components/layout/app-mobile-nav";
 import { TopbarSearch } from "@/components/layout/topbar-search";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -48,7 +49,10 @@ export function AppTopbar({
       <div className="md:hidden">
         <AppMobileNav topics={topics} sources={sources} />
       </div>
-      <h1 className="text-sm font-medium md:text-base">{title}</h1>
+      <div className="md:hidden">
+        <AppBrand />
+      </div>
+      <h1 className="hidden text-sm font-medium md:block md:text-base">{title}</h1>
       <TopbarSearch />
       <Button size="icon-sm" variant="ghost" aria-label="Notifications" className="ml-auto md:ml-0">
         <Bell className="size-5" />

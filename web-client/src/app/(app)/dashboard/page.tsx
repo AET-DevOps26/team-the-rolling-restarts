@@ -1,4 +1,5 @@
 import { DashboardFeed } from "@/components/feed/dashboard-feed";
+import { FeedSourcesSheet } from "@/components/feed/feed-sources-sheet";
 import { getArticles, getMySettings, getSources, getTopics } from "@/lib/api/reads";
 
 export default async function DashboardPage({
@@ -21,6 +22,7 @@ export default async function DashboardPage({
           <h1 className="text-2xl font-semibold tracking-tight">Your feed</h1>
           <p className="text-sm text-muted-foreground">Stories tailored to your interests.</p>
         </div>
+        <FeedSourcesSheet sources={sources} enabledSourceIds={settings.enabledSourceIds} />
       </div>
       <DashboardFeed
         articles={articles}

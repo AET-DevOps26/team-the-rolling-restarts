@@ -67,9 +67,16 @@ export default function SignupPage() {
               />
             </Field>
             {state?.error && (
-              <p className="text-sm text-destructive" role="alert">
-                {state.error}
-              </p>
+              <div className="text-sm text-destructive" role="alert">
+                <p>{state.error}</p>
+                {state.details && state.details.length > 0 && (
+                  <ul className="mt-2 list-inside list-disc space-y-0.5">
+                    {state.details.map((detail) => (
+                      <li key={detail}>{detail}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
             <p className="text-xs text-muted-foreground">
               By creating an account you agree to the Terms and Privacy Policy.

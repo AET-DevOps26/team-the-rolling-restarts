@@ -4,6 +4,7 @@ import { Bookmark, Home, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AppBrand } from "@/components/layout/app-brand";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import type { Source, Topic } from "@/lib/api/types";
@@ -44,11 +45,7 @@ export function AppSidebar({
       )}
     >
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <span
-          aria-hidden
-          className="inline-block size-6 rounded-md bg-primary"
-        />
-        <span className="font-semibold tracking-tight">NewsLens</span>
+        <AppBrand />
       </div>
       <nav aria-label="Primary" className="flex flex-col gap-1 px-3 py-4">
         {mainNav.map((item) => {

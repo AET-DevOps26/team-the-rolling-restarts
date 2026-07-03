@@ -32,6 +32,7 @@ import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.ArticleRepository;
 import rolling_restarts.content.repository.SourceRepository;
 import rolling_restarts.content.util.RssHtmlUtils;
+import rolling_restarts.content.util.RssUrlNormalizer;
 import rolling_restarts.content.util.UrlSafetyValidator;
 
 @Service
@@ -46,8 +47,8 @@ public class RssFetcherService {
 	private final ArticleRepository articleRepository;
 	private final MongoTemplate mongoTemplate;
 
-	// Redirects are disabled so a public URL cannot 30x-bounce us to an internal address after
-	// the up-front SSRF validation.
+	// Redirects are not auto-followed; same-host Location headers are handled manually in
+	// fetchWithSameHostRedirect so http→https upgrades stay safe from SSRF bounce attacks.
 	private final HttpClient httpClient = HttpClient.newBuilder()
 			.connectTimeout(CONNECT_TIMEOUT)
 			.followRedirects(HttpClient.Redirect.NEVER)
@@ -107,86 +108,143 @@ public class RssFetcherService {
 	}
 
 	private void fetchSource(Source source) throws Exception {
+		List<String> candidates = RssUrlNormalizer.fetchCandidates(source.getRssUrl());
+		if (candidates.isEmpty()) {
+			throw new IllegalArgumentException("Invalid RSS URL");
+		}
+
+		Exception lastError = null;
+		for (String candidate : candidates) {
+			try {
+				fetchFromUrl(source, candidate);
+				return;
+			} catch (Exception e) {
+				lastError = e;
+				log.debug("Failed to fetch {} for source {}: {}", candidate, source.getName(), e.getMessage());
+			}
+		}
+		if (lastError != null) {
+			throw lastError;
+		}
+		throw new IllegalStateException("Could not fetch RSS feed for " + source.getName());
+	}
+
+	private void fetchFromUrl(Source source, String url) throws Exception {
 		// Re-validate at fetch time: DNS may have re-resolved to an internal address since the
 		// source was created (TOCTOU), so the create-time check alone is not sufficient.
-		UrlSafetyValidator.validatePublicUrl(source.getRssUrl());
-
-		HttpRequest request = HttpRequest.newBuilder()
-				.uri(URI.create(source.getRssUrl()))
-				.timeout(REQUEST_TIMEOUT)
-				.GET()
-				.build();
-		HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-
-		// Redirects are not followed; a 3xx is treated as a failed fetch rather than chased to a
-		// potentially internal Location.
-		if (response.statusCode() >= 300) {
-			response.body().close();
-			throw new IllegalStateException("Unexpected HTTP status " + response.statusCode()
-					+ " fetching " + source.getRssUrl());
-		}
+		HttpResponse<InputStream> response = fetchWithSameHostRedirect(url);
 
 		SyndFeedInput input = new SyndFeedInput();
 		try (XmlReader reader = new XmlReader(response.body())) {
 			SyndFeed feed = input.build(reader);
-
-			List<String> entryUrls = feed.getEntries().stream()
-					.map(SyndEntry::getLink)
-					.filter(url -> url != null)
-					.toList();
-
-			List<Article> existingArticles = articleRepository.findByExternalUrlIn(entryUrls);
-			Set<String> existingUrls = existingArticles.stream()
-					.map(Article::getExternalUrl)
-					.collect(Collectors.toSet());
-
-			// A shared source is deleted when its last subscriber leaves; re-adding the same feed
-			// mints a new source id. Existing articles (deduped globally by URL) would otherwise stay
-			// pinned to the dead id and never appear for the re-created source, so re-point them here.
-			List<Article> reassigned = new ArrayList<>();
-			for (Article existing : existingArticles) {
-				if (!source.getId().equals(existing.getSourceId())) {
-					existing.setSourceId(source.getId());
-					reassigned.add(existing);
-				}
-			}
-			if (!reassigned.isEmpty()) {
-				articleRepository.saveAll(reassigned);
-				log.info("Re-pointed {} existing articles to source {}", reassigned.size(), source.getName());
-			}
-
-			Instant now = Instant.now();
-			List<Article> newArticles = new ArrayList<>();
-
-			for (SyndEntry entry : feed.getEntries()) {
-				String url = entry.getLink();
-				if (url == null || existingUrls.contains(url)) {
-					continue;
-				}
-
-				Article article = new Article();
-				article.setHeadline(entry.getTitle());
-				String rawDescription = entry.getDescription() != null ? entry.getDescription().getValue() : "";
-				article.setImageUrl(RssHtmlUtils.extractImageUrl(rawDescription));
-				article.setSnippet(RssHtmlUtils.toPlainText(rawDescription));
-				article.setBody(List.of());
-				article.setSourceId(source.getId());
-				article.setAuthor(entry.getAuthor());
-				article.setExternalUrl(url);
-				article.setPublishedAt(
-						entry.getPublishedDate() != null
-								? entry.getPublishedDate().toInstant()
-								: now);
-				article.setFetchedAt(now);
-				newArticles.add(article);
-			}
-
-			if (!newArticles.isEmpty()) {
-				articleRepository.saveAll(newArticles);
-			}
-			// lastFetchedAt / fetchStatus are persisted by fetchAndRecord via an atomic partial
-			// update so the source's subscriberCount is never overwritten here.
-			log.info("Fetched {} new articles from {}", newArticles.size(), source.getName());
+			persistFeedEntries(source, feed);
 		}
+	}
+
+	/**
+	 * Fetches a URL without auto-following redirects, but will follow a single same-host
+	 * {@code Location} on 3xx so http→https upgrades on the original host still work safely.
+	 */
+	private HttpResponse<InputStream> fetchWithSameHostRedirect(String url) throws Exception {
+		UrlSafetyValidator.validatePublicUrl(url);
+		URI originalUri = URI.create(url);
+		String originalHost = originalUri.getHost();
+
+		String currentUrl = url;
+		for (int hop = 0; hop < 2; hop++) {
+			HttpRequest request = HttpRequest.newBuilder()
+					.uri(URI.create(currentUrl))
+					.timeout(REQUEST_TIMEOUT)
+					.GET()
+					.build();
+			HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+			int status = response.statusCode();
+
+			if (status >= 200 && status < 300) {
+				return response;
+			}
+
+			if (status >= 300 && status < 400 && hop == 0) {
+				String location = response.headers().firstValue("Location").orElse(null);
+				response.body().close();
+				if (location == null || location.isBlank()) {
+					throw new IllegalStateException("Redirect without Location fetching " + currentUrl);
+				}
+				String redirectUrl = URI.create(currentUrl).resolve(location).toString();
+				URI redirectUri = URI.create(redirectUrl);
+				if (redirectUri.getHost() == null
+						|| !redirectUri.getHost().equalsIgnoreCase(originalHost)) {
+					throw new IllegalStateException("Cross-host redirect not allowed for " + currentUrl);
+				}
+				UrlSafetyValidator.validatePublicUrl(redirectUrl);
+				currentUrl = redirectUrl;
+				continue;
+			}
+
+			response.body().close();
+			throw new IllegalStateException(
+					"Unexpected HTTP status " + status + " fetching " + currentUrl);
+		}
+		throw new IllegalStateException("Too many redirects fetching " + url);
+	}
+
+	private void persistFeedEntries(Source source, SyndFeed feed) {
+		List<String> entryUrls = feed.getEntries().stream()
+				.map(SyndEntry::getLink)
+				.filter(url -> url != null)
+				.toList();
+
+		List<Article> existingArticles = articleRepository.findByExternalUrlIn(entryUrls);
+		Set<String> existingUrls = existingArticles.stream()
+				.map(Article::getExternalUrl)
+				.collect(Collectors.toSet());
+
+		// A shared source is deleted when its last subscriber leaves; re-adding the same feed
+		// mints a new source id. Existing articles (deduped globally by URL) would otherwise stay
+		// pinned to the dead id and never appear for the re-created source, so re-point them here.
+		List<Article> reassigned = new ArrayList<>();
+		for (Article existing : existingArticles) {
+			if (!source.getId().equals(existing.getSourceId())) {
+				existing.setSourceId(source.getId());
+				reassigned.add(existing);
+			}
+		}
+		if (!reassigned.isEmpty()) {
+			articleRepository.saveAll(reassigned);
+			log.info("Re-pointed {} existing articles to source {}", reassigned.size(), source.getName());
+		}
+
+		Instant now = Instant.now();
+		List<Article> newArticles = new ArrayList<>();
+
+		for (SyndEntry entry : feed.getEntries()) {
+			String url = entry.getLink();
+			if (url == null || existingUrls.contains(url)) {
+				continue;
+			}
+
+			Article article = new Article();
+			article.setHeadline(entry.getTitle());
+			String rawDescription = entry.getDescription() != null ? entry.getDescription().getValue() : "";
+			article.setImageUrl(RssHtmlUtils.extractImageUrl(rawDescription));
+			article.setSnippet(RssHtmlUtils.toPlainText(rawDescription));
+			article.setBody(List.of());
+			article.setSourceId(source.getId());
+			article.setAuthor(entry.getAuthor());
+			article.setExternalUrl(url);
+			article.setPublishedAt(
+					entry.getPublishedDate() != null
+							? entry.getPublishedDate().toInstant()
+							: now);
+			article.setFetchedAt(now);
+			newArticles.add(article);
+		}
+
+		if (!newArticles.isEmpty()) {
+			articleRepository.saveAll(newArticles);
+		}
+		// lastFetchedAt / fetchStatus are persisted by fetchAndRecord via an atomic partial
+		// update so the source's subscriberCount is never overwritten here.
+		log.info("Fetched {} new articles from {}", newArticles.size(), source.getName());
 	}
 }

@@ -2,10 +2,11 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { apiFetch, ApiError, AUTH_COOKIE } from "@/lib/api/client";
+import { apiFetch, AUTH_COOKIE } from "@/lib/api/client";
+import { toApiErrorDisplay } from "@/lib/api/errors";
 import type { TokenResponse } from "@/lib/api/types";
 
-export type AuthResult = { error: string } | undefined;
+export type AuthResult = { error: string; details?: string[] } | undefined;
 
 const COOKIE_MAX_AGE = 60 * 60; // 1h, matches JWT TTL
 
@@ -32,7 +33,8 @@ export async function login(_prev: AuthResult, formData: FormData): Promise<Auth
     if (!res.token) return { error: "Sign in failed" };
     await setToken(res.token);
   } catch (e) {
-    return { error: e instanceof ApiError ? e.message : "Sign in failed" };
+    const { message, details } = toApiErrorDisplay(e, "Sign in failed");
+    return { error: message, ...(details.length > 0 ? { details } : {}) };
   }
   redirect("/dashboard");
 }
@@ -60,7 +62,8 @@ export async function register(_prev: AuthResult, formData: FormData): Promise<A
     if (!token.token) return { error: "Sign up failed" };
     await setToken(token.token);
   } catch (e) {
-    return { error: e instanceof ApiError ? e.message : "Sign up failed" };
+    const { message, details } = toApiErrorDisplay(e, "Sign up failed");
+    return { error: message, ...(details.length > 0 ? { details } : {}) };
   }
   redirect("/dashboard");
 }

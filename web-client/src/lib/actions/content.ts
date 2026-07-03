@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api/client";
+import { toApiErrorDisplay } from "@/lib/api/errors";
 import { getMySettings } from "@/lib/api/reads";
 import type { UserSettings } from "@/lib/api/types";
+import { normalizeRssUrl } from "@/lib/format/rss-url";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -73,11 +75,11 @@ export async function unsubscribe(sourceId: string): Promise<ActionResult> {
 
 export type AddSourceResult =
   | { ok: true; sourceId: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; details?: string[] };
 
 export async function addSource(name: string, rssUrl: string): Promise<AddSourceResult> {
   const trimmedName = name.trim();
-  const trimmedUrl = rssUrl.trim();
+  const trimmedUrl = normalizeRssUrl(rssUrl);
   if (!trimmedName) return { ok: false, error: "Source name is required" };
   if (!trimmedUrl) return { ok: false, error: "RSS feed URL is required" };
 
@@ -94,7 +96,8 @@ export async function addSource(name: string, rssUrl: string): Promise<AddSource
     revalidatePath("/", "layout");
     return { ok: true, sourceId: source.id };
   } catch (e) {
-    return { ok: false, error: e instanceof ApiError ? e.message : "Could not add source" };
+    const { message, details } = toApiErrorDisplay(e, "Could not add source");
+    return { ok: false, error: message, ...(details.length > 0 ? { details } : {}) };
   }
 }
 

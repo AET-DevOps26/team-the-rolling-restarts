@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +23,7 @@ import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.SourceRepository;
 import rolling_restarts.content.service.RssFetcherService;
 import rolling_restarts.content.service.SourceService;
+import rolling_restarts.content.util.RssUrlNormalizer;
 import rolling_restarts.content.util.UrlSafetyValidator;
 
 @RestController
@@ -72,16 +72,17 @@ public class SourceController {
 					@ApiResponse(responseCode = "401", description = "Not authenticated")
 			})
 	public ResponseEntity<Source> create(@Valid @RequestBody CreateSourceRequest request) {
-		UrlSafetyValidator.validatePublicUrl(request.rssUrl());
-		return sourceRepository.findByRssUrl(request.rssUrl())
+		String rssUrl = RssUrlNormalizer.normalize(request.rssUrl());
+		UrlSafetyValidator.validatePublicUrl(rssUrl);
+		return sourceRepository.findByRssUrl(rssUrl)
 				.map(ResponseEntity::ok)
 				.orElseGet(() -> {
 					Source source = new Source();
 					// Stable id keyed off the feed URL so re-adding a removed source reuses its id
 					// (and reclaims its previously fetched articles).
-					source.setId(Source.idForRssUrl(request.rssUrl()));
+					source.setId(Source.idForRssUrl(rssUrl));
 					source.setName(request.name());
-					source.setRssUrl(request.rssUrl());
+					source.setRssUrl(rssUrl);
 					if (request.name() != null && request.name().length() >= 2) {
 						source.setInitials(request.name().substring(0, 2).toUpperCase());
 					}
@@ -127,7 +128,5 @@ public class SourceController {
 		return existed ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
 	}
 
-	public record CreateSourceRequest(
-			@NotBlank String name,
-			@NotBlank @Pattern(regexp = "^https?://.*", message = "must be an http or https URL") String rssUrl) {}
+	public record CreateSourceRequest(@NotBlank String name, @NotBlank String rssUrl) {}
 }

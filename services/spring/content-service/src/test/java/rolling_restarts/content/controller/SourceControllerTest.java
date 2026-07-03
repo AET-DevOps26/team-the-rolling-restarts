@@ -97,7 +97,25 @@ class SourceControllerTest {
 
 	@Test
 	@WithMockUser
-	void create_blankName_returns400() throws Exception {
+	void create_bareDomainUrl_normalizesToHttpsAndReturns201() throws Exception {
+		when(sourceRepository.findByRssUrl("https://example.com/feed")).thenReturn(Optional.empty());
+		when(sourceRepository.save(any(Source.class))).thenAnswer(invocation -> {
+			Source s = invocation.getArgument(0);
+			s.setId("new-id");
+			return s;
+		});
+
+		mockMvc.perform(post("/sources")
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"Example","rssUrl":"example.com/feed"}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.rssUrl").value("https://example.com/feed"));
+	}
+
+	@Test
 		mockMvc.perform(post("/sources")
 						.with(csrf())
 						.contentType(MediaType.APPLICATION_JSON)

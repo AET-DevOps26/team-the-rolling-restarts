@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { SourceToggleList } from "@/components/sources/source-toggle-list";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,8 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { addSource, getSourceFetchStatus, subscribe, unsubscribe } from "@/lib/actions/content";
+import { addSource, getSourceFetchStatus, unsubscribe } from "@/lib/actions/content";
 import type { Source } from "@/lib/api/types";
 
 const POLL_INTERVAL_MS = 2000;
@@ -63,12 +61,13 @@ export function SourcesSection({
         return;
       }
       if (res.status === "FAILED") {
+        await unsubscribe(sourceId);
         setFetchState({
           phase: "failed",
           name: sourceName,
           error: res.error ?? "The feed could not be read.",
         });
-        toast.error(`Couldn't fetch ${sourceName}`);
+        toast.error(`Couldn't fetch ${sourceName} — it wasn't added to your feed`);
         router.refresh();
         return;
       }
@@ -91,7 +90,8 @@ export function SourcesSection({
         router.refresh(); // surface the new source in the list right away
         void pollStatus(res.sourceId, addedName);
       } else {
-        toast.error(res.error);
+        const detailText = res.details?.join("; ");
+        toast.error(detailText ? `${res.error}: ${detailText}` : res.error);
       }
     } finally {
       setAdding(false);
@@ -126,8 +126,8 @@ export function SourcesSection({
                 <Input
                   id="source-rss-url"
                   name="rssUrl"
-                  type="url"
-                  placeholder="https://rss.sueddeutsche.de/alles"
+                  type="text"
+                  placeholder="rss.sueddeutsche.de/alles or https://…"
                   value={rssUrl}
                   onChange={(e) => setRssUrl(e.target.value)}
                   disabled={adding}
@@ -156,91 +156,6 @@ export function SourcesSection({
       </Card>
     </section>
   );
-}
-
-function SourceToggleList({
-  sources,
-  enabledSourceIds,
-}: {
-  sources: Source[];
-  enabledSourceIds: string[];
-}) {
-  const [enabled, setEnabled] = useState<Set<string>>(() => new Set(enabledSourceIds));
-  const [pending, setPending] = useState(false);
-
-  async function toggle(sourceId: string, next: boolean) {
-    setEnabled((current) => {
-      const updated = new Set(current);
-      if (next) updated.add(sourceId);
-      else updated.delete(sourceId);
-      return updated;
-    });
-    setPending(true);
-    try {
-      const res = next ? await subscribe(sourceId) : await unsubscribe(sourceId);
-      if (!res.ok) {
-        setEnabled((current) => {
-          const reverted = new Set(current);
-          if (next) reverted.delete(sourceId);
-          else reverted.add(sourceId);
-          return reverted;
-        });
-        toast.error(res.error);
-      }
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <ul className="flex flex-col divide-y divide-border">
-      {sources.map((source) => (
-        <li key={source.id} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-          <Avatar className="size-9">
-            <AvatarFallback>{source.initials}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="truncate text-sm font-medium">{source.name}</p>
-              <SourceStatusBadge source={source} />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {source.subscriberCount} subscriber{source.subscriberCount === 1 ? "" : "s"}
-            </p>
-            {source.fetchStatus === "FAILED" && source.fetchError && (
-              <p className="mt-0.5 text-xs text-destructive">{source.fetchError}</p>
-            )}
-          </div>
-          <Switch
-            checked={enabled.has(source.id)}
-            disabled={pending}
-            onCheckedChange={(next) => toggle(source.id, next)}
-            aria-label={`Toggle ${source.name}`}
-          />
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function SourceStatusBadge({ source }: { source: Source }) {
-  if (source.fetchStatus === "PENDING") {
-    return (
-      <Badge variant="secondary" className="gap-1">
-        <Loader2 className="size-3 animate-spin" aria-hidden />
-        Fetching
-      </Badge>
-    );
-  }
-  if (source.fetchStatus === "FAILED") {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <AlertCircle className="size-3" aria-hidden />
-        Fetch failed
-      </Badge>
-    );
-  }
-  return null;
 }
 
 function FetchStatusBanner({
@@ -289,7 +204,7 @@ function FetchStatusBanner({
       <span className="flex items-start gap-2">
         <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span>
-          Couldn&apos;t fetch {state.name}. {state.error}
+          Couldn&apos;t fetch {state.name}. {state.error} It wasn&apos;t kept in your feed.
         </span>
       </span>
       <DismissButton onDismiss={onDismiss} />
