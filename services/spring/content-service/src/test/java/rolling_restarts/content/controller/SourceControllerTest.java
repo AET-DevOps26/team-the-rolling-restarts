@@ -116,6 +116,8 @@ class SourceControllerTest {
 	}
 
 	@Test
+	@WithMockUser
+	void create_blankName_returns400() throws Exception {
 		mockMvc.perform(post("/sources")
 						.with(csrf())
 						.contentType(MediaType.APPLICATION_JSON)
