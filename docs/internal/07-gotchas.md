@@ -13,7 +13,7 @@ from `web-client/src/lib/mock/*`. A generated API client exists
 yet, despite the UI looking complete. See
 [02-web-client.md](02-web-client.md).
 
-```
+```sh
 grep -rln "generated/api\|fetch(\|axios\|NEXT_PUBLIC_API" web-client/src --include="*.tsx" --include="*.ts"
 ```
 

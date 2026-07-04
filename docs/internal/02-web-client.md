@@ -6,7 +6,7 @@ Next.js 16 (canary-ish, React 19), TypeScript, Tailwind v4, shadcn/ui
 
 ## Structure
 
-```
+```text
 src/
   app/
     (app)/          dashboard, saved, settings, article/[id]
@@ -41,7 +41,7 @@ to a backend yet.**
 
 ## Re-verify
 
-```
+```sh
 grep -n '"scripts"' -A6 web-client/package.json
 find web-client -iname "*.test.*" -not -path "*/node_modules/*"
 grep -rln "generated/api\|fetch(\|axios\|NEXT_PUBLIC_API" web-client/src --include="*.tsx" --include="*.ts"

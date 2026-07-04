@@ -50,7 +50,7 @@ web-client), plus `ingress.yml` and `secrets.yml.example`.
 
 ## Re-verify
 
-```
+```sh
 grep -n "^  [a-zA-Z0-9_-]*:$" infra/docker-compose.yaml     # service list
 find infra/helm -maxdepth 2 -type f
 find infra/k8s -type f

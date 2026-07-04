@@ -48,7 +48,7 @@ outside that tree.
 
 ## Re-verify
 
-```
+```sh
 ls .github/workflows/
 grep -n "^  [a-z-]*:$" .github/workflows/ci.yml
 ls -la scripts/run-pact.sh 2>&1   # should still fail — if it now exists, contract-test is real

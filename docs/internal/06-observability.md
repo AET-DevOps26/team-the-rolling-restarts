@@ -37,7 +37,7 @@ already deployed and just unexploited.
 
 ## Re-verify
 
-```
+```sh
 grep -rn "opentelemetry\|micrometer" services/spring/*/build.gradle
 grep -n -A5 "grafana-lgtm:" infra/docker-compose.yaml
 find . -iname "*dashboard*.json" -o -iname "*alert*rule*" | grep -v node_modules | grep -v .venv

@@ -40,7 +40,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 06 — CI/CD
 
 - ✅ GitHub Actions CI on every PR — `.github/workflows/ci.yml`: builds + tests all 5 services (Gradle, pytest, npm), plus OpenAPI contract-drift check, Terraform validate, Helm lint, contract tests
-- ✅ Static analysis/linting — ESLint for web-client is run in CI; no explicit Java linter (Checkstyle/Spotless) or Python linter (ruff/flake8) job found — confirm before claiming full "static analysis" coverage
+- ⚠️ Static analysis/linting — CI runs ESLint (web-client), Helm lint, and OpenAPI contract lint, but there is still no explicit Java linter (Checkstyle/Spotless) or Python linter (ruff/flake8) job — not yet full "static analysis" coverage across all services
 - ✅ Auto-build & push images — `.github/workflows/upload_images.yml` (multi-arch, GHCR)
 - ✅ Auto-deploy to Kubernetes on merge to main — `.github/workflows/deploy_kubernetes.yml` (triggers on the build workflow completing for `main`, runs `helm upgrade --install`)
 - ✅ Secrets used via GitHub Actions secrets, not hardcoded — confirmed in deploy workflows

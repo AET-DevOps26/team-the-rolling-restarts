@@ -34,7 +34,7 @@ in the working tree — exclude it from any `find`/`grep` over this directory).
 
 ## Re-verify
 
-```
+```sh
 grep -n "@app\.\|APIRouter" services/gen-ai/app/main.py
 find services/gen-ai -name "*.py" -not -path "*/.venv/*" -not -path "*/generated/*"
 find services/gen-ai/tests -name "test_*.py"

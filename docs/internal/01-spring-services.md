@@ -51,7 +51,7 @@ package root `rolling_restarts.*` (note: underscore, not the usual `rollingresta
 
 ## Re-verify
 
-```
+```sh
 cat services/spring/settings.gradle                    # module list
 find services/spring/*/src/main/java -iname "*Controller.java"
 git ls-files services/spring-api | wc -l                # should stay 0 (untracked)
