@@ -57,9 +57,7 @@ course brief's letter says "Prometheus must be used." See
 
 ## Team is 2 people, not 3
 
-Third member left the project. See
-`~/.claude/projects/-home-yrc-playground-DevOps-project/memory/project_team_composition.md`
-(agent memory, not in this repo) and `.github/CODEOWNERS` for current
+Third member left the project. See `.github/CODEOWNERS` for current
 ownership: `brscn2` (web-client + gen-ai), `YRC99` (services/spring + gen-ai).
 
 ## Root README is much thinner than the actual documentation
