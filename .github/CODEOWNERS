@@ -6,31 +6,29 @@
 # primary subsystem — client, server, or GenAI — but collaborates across
 # boundaries for integration, deployment, and debugging).
 #
-# The names below are role placeholders, NOT usable GitHub handles. GitHub
-# silently ignores entries that aren't real usernames/teams with repo access,
-# so this file has no effect until each placeholder is replaced with the
-# actual GitHub username of that subsystem's owner:
+# Team is currently 2 (originally 3 — the third member left the project;
+# see docs/requirements/12-grading-structure.md's note on partial-team
+# grading consideration). GenAI is jointly owned by both remaining members.
 #
-#   @client-owner  -> web-client owner's GitHub username
-#   @server-owner  -> Spring services owner's GitHub username
-#   @genai-owner   -> GenAI service owner's GitHub username
+#   brscn2 -> Baris Can       -> web-client, gen-ai
+#   YRC99  -> Yi Rui Cui      -> services/spring, gen-ai
 #
 # Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# Default: shared review across all three owners for anything not matched below
-* @client-owner @server-owner @genai-owner
+# Default: shared review for anything not matched below
+* @brscn2 @YRC99
 
 # Client
-/web-client/ @client-owner
+/web-client/ @brscn2
 
 # Server (Spring Boot microservices)
-/services/spring/ @server-owner
+/services/spring/ @YRC99
 
-# GenAI service
-/services/gen-ai/ @genai-owner
+# GenAI service — jointly owned
+/services/gen-ai/ @brscn2 @YRC99
 
 # Cross-cutting / shared responsibility: infra, CI/CD, API contract, docs
-/infra/ @client-owner @server-owner @genai-owner
-/.github/ @client-owner @server-owner @genai-owner
-/api/ @client-owner @server-owner @genai-owner
-/docs/ @client-owner @server-owner @genai-owner
+/infra/ @brscn2 @YRC99
+/.github/ @brscn2 @YRC99
+/api/ @brscn2 @YRC99
+/docs/ @brscn2 @YRC99
