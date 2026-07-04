@@ -10,7 +10,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 03 — System Architecture
 
 - ✅ Client/server/DB/GenAI separation — `web-client/`, `services/spring/*`, MongoDB, `services/gen-ai/`
-- ✅ ≥3 Spring microservices with distinct responsibilities — `api-gateway`, `user-service`, `content-service` (`services/spring/settings.gradle`)
+- ❌ ≥3 Spring microservices with distinct responsibilities — only **2 qualify**: `user-service` (auth/profiles), `content-service` (RSS/articles). `api-gateway` is routing/JWT-validation infrastructure, not a business-domain service, so it doesn't count toward the "≥3 microservices" requirement. A third service is needed — see decision below.
 - ✅ Documented API contract — `api/openapi.yaml`, generated code-first (`docs/source/openapi-workflow.md`)
 - ⚠️ Documented DB schema — MongoDB is schemaless; no dedicated schema doc beyond entity classes, no migration tool
 
@@ -30,7 +30,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Kubernetes deployable via Helm — `infra/helm/` real chart (`Chart.yaml` + `templates/`)
 - ✅ Kubernetes deployable via raw manifests too — `infra/k8s/deployments/*.yml`, `infra/k8s/services/*.yml`
 - ✅ Cloud environment (Azure) — `infra/terraform/azure-vm/`, `infra/ansible/`, `.github/workflows/deploy-azure.yml`
-- ❌ Course infrastructure (Rancher) — no Rancher-specific config found anywhere in the repo
+- ✅ Course infrastructure (Rancher) — Rancher is the course's managed distribution of the same standard Kubernetes API, so the existing `infra/helm/` chart and `infra/k8s/` manifests already satisfy this path; no Rancher-specific config is needed unless the course cluster requires something bespoke (e.g. a specific ingress class or a Rancher project namespace) — confirm that against the course's cluster docs
 - ✅ No hardcoded secrets in production profiles — `application-production.properties` (all 3 Spring services) carry no credentials; Helm `values.yaml` references K8s Secrets
 - ⚠️ Dev-only secrets committed in plaintext — `infra/docker-compose.dev.yaml` has a real RSA JWT keypair; `application-dev.properties` hardcodes `mongodb://root:secret@...` (acceptable as dev-only per `CLAUDE.md` convention, but worth rotating if this repo is ever made public)
 
@@ -82,14 +82,21 @@ activity rather than this file.
 
 ## Where the biggest gaps are right now
 
-1. **GenAI has no real feature yet** — only `/health`. This is the single largest
+1. **Only 2 of the required ≥3 Spring microservices count** — `api-gateway`
+   doesn't qualify as a business-domain microservice. Decision: add a third
+   service, **Interaction/Bookmarks** (owns view/bookmark/ignore events; exposes
+   `POST /interactions`, `GET /users/{id}/bookmarks`, `GET /users/{id}/history`).
+   Chosen over a Notification or Recommendation service because it's
+   self-contained (no changes needed to existing services), maps directly to
+   problem-statement bullets ("tracks user interactions", "bookmarking") that
+   currently have zero implementation, and is the cheapest legitimate option
+   given the approaching deadline. Not yet scaffolded.
+2. **GenAI has no real feature yet** — only `/health`. This is the single largest
    open item: no summarization/Q&A endpoint, no local-model path, no RAG.
-2. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
+3. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
    plausible metrics backbone, but the *deliverables* (exported dashboard `.json`,
    an alert rule) don't exist yet.
-3. **No client tests, no GenAI tests** — Spring is the only side with real test
+4. **No client tests, no GenAI tests** — Spring is the only side with real test
    coverage.
-4. **Root README is thin** — quick-start, CI/CD, monitoring, and responsibilities
+5. **Root README is thin** — quick-start, CI/CD, monitoring, and responsibilities
    sections should be pulled up from docs/Makefile into `README.md` itself.
-5. **No Rancher deployment path** — only Azure is covered for the cloud/managed
-   k8s requirement.
