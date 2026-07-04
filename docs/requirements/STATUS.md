@@ -1,0 +1,95 @@
+# Requirements Status Checklist
+
+Tracks how the current codebase measures up against the course requirements in
+this folder (`00`–`11`). Status is based on what's actually in the repo, not on
+intent — re-verify before relying on this for grading prep, since it will drift
+as work continues.
+
+Legend: ✅ Done · ⚠️ Partial · ❌ Missing
+
+## 03 — System Architecture
+
+- ✅ Client/server/DB/GenAI separation — `web-client/`, `services/spring/*`, MongoDB, `services/gen-ai/`
+- ✅ ≥3 Spring microservices with distinct responsibilities — `api-gateway`, `user-service`, `content-service` (`services/spring/settings.gradle`)
+- ✅ Documented API contract — `api/openapi.yaml`, generated code-first (`docs/source/openapi-workflow.md`)
+- ⚠️ Documented DB schema — MongoDB is schemaless; no dedicated schema doc beyond entity classes, no migration tool
+
+## 04 — GenAI Component
+
+- ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
+- ❌ Real user-facing use case — `services/gen-ai/app/main.py` only exposes `/health`; no summarization/explanation/Q&A endpoint is implemented yet despite being described in `services/gen-ai/README.md`
+- ❌ Cloud + local model support — only `langchain-openai` is a dependency; no local-model path (GPT4All/LLaMA/Ollama) is wired up; `app/config.py` has an `llm_provider` field but no branching logic uses it
+- ❌ RAG / vector DB (optional bonus) — not started
+
+## 05 — Environment & Deployment
+
+- ✅ Every component has its own Dockerfile — `services/spring/{api-gateway,user-service,content-service}/Dockerfile`, `services/gen-ai/Dockerfile`, `web-client/Dockerfile`
+- ✅ Database via official image (no custom Dockerfile needed) — `mongo:8` in `infra/docker-compose.yaml`
+- ✅ `docker-compose.yaml` + `docker-compose.dev.yaml` wire up all components end-to-end
+- ✅ ≤3-command local setup with sane defaults — `cp infra/.env.example infra/.env` + `make compose-up` (documented in `docs/source/index.md`; **not yet mirrored in root `README.md`**)
+- ✅ Kubernetes deployable via Helm — `infra/helm/` real chart (`Chart.yaml` + `templates/`)
+- ✅ Kubernetes deployable via raw manifests too — `infra/k8s/deployments/*.yml`, `infra/k8s/services/*.yml`
+- ✅ Cloud environment (Azure) — `infra/terraform/azure-vm/`, `infra/ansible/`, `.github/workflows/deploy-azure.yml`
+- ❌ Course infrastructure (Rancher) — no Rancher-specific config found anywhere in the repo
+- ✅ No hardcoded secrets in production profiles — `application-production.properties` (all 3 Spring services) carry no credentials; Helm `values.yaml` references K8s Secrets
+- ⚠️ Dev-only secrets committed in plaintext — `infra/docker-compose.dev.yaml` has a real RSA JWT keypair; `application-dev.properties` hardcodes `mongodb://root:secret@...` (acceptable as dev-only per `CLAUDE.md` convention, but worth rotating if this repo is ever made public)
+
+## 06 — CI/CD
+
+- ✅ GitHub Actions CI on every PR — `.github/workflows/ci.yml`: builds + tests all 5 services (Gradle, pytest, npm), plus OpenAPI contract-drift check, Terraform validate, Helm lint, contract tests
+- ✅ Static analysis/linting — ESLint for web-client is run in CI; no explicit Java linter (Checkstyle/Spotless) or Python linter (ruff/flake8) job found — confirm before claiming full "static analysis" coverage
+- ✅ Auto-build & push images — `.github/workflows/upload_images.yml` (multi-arch, GHCR)
+- ✅ Auto-deploy to Kubernetes on merge to main — `.github/workflows/deploy_kubernetes.yml` (triggers on the build workflow completing for `main`, runs `helm upgrade --install`)
+- ✅ Secrets used via GitHub Actions secrets, not hardcoded — confirmed in deploy workflows
+- ✅ Docs auto-published — `.github/workflows/publish_docs.yml` (PlantUML + MkDocs + Redoc → GitHub Pages)
+
+## 07 — Observability
+
+- ⚠️ Metrics collection — implemented via **OpenTelemetry + `grafana-lgtm`** (all-in-one Grafana/Loki/Tempo/Mimir image), not a standalone Prometheus deployment; Spring services depend on `spring-boot-starter-opentelemetry`; **this differs from the letter of the requirement ("Prometheus must be used") even though it satisfies the spirit** (request count/latency/error rate should be derivable from OTel metrics in Mimir/Prometheus-compatible storage) — worth flagging with the tutor if in doubt
+- ❌ GenAI service instrumented — no metrics/tracing instrumentation found in `services/gen-ai`
+- ❌ Grafana dashboards exported as `.json` — none found in the repo
+- ❌ Alert rules — none found (no Prometheus alerting rules, no Grafana alert YAML/JSON)
+
+## 08 — Testing
+
+- ✅ Spring unit tests, real assertions, run in CI — api-gateway (5 files, e.g. `SubscriberScopeTest.java`), user-service (6 files, e.g. `AuthControllerTest.java`), content-service (7 files, e.g. `ArticleControllerTest.java`)
+- ❌ GenAI unit tests — `services/gen-ai/tests/` contains only `__init__.py`; CI explicitly tolerates "no tests collected" (pytest exit code 5 handled as pass)
+- ❌ Client-side tests — no `*.test.tsx`/`__tests__`, no test runner configured; `web-client/package.json` has no `test` script
+
+## 09 — Engineering Artefacts
+
+- ✅ Subsystem Decomposition diagram — `docs/source/diagrams/architecture-component-diagram.puml` (+ rendered PNG)
+- ✅ Use Case diagram — `docs/source/diagrams/use-case.puml` (+ rendered PNG)
+- ✅ Analysis Object Model — `docs/source/diagrams/analysis-object-model.puml` (+ rendered PNG)
+- ✅ OpenAPI/Swagger UI exposed — `springdoc-openapi-starter-webmvc-ui` in all 3 Spring services; api-gateway aggregates all specs via `springdoc.swagger-ui.urls[...]`
+
+## 10 — Deliverables (README completeness)
+
+- ✅ Architecture info in root `README.md` (service table + project layout)
+- ⚠️ Setup/quick-start instructions — exist in `docs/source/index.md` and the `Makefile`, but are **not surfaced in root `README.md`** itself
+- ❌ CI/CD instructions in README — not present (exists implicitly in workflow files only)
+- ❌ Monitoring instructions in README — not present
+- ❌ Student/contributor responsibilities section in README — team ownership rules live in `docs/requirements/01-team-and-collaboration.md` but aren't reflected in `README.md`
+
+## Team & Process (01, 02) — not verifiable from code
+
+Registration data, PR/review discipline, and Artemis-channel communication are
+process requirements tied to how the team actually works, not to what's in the
+tree at a point in time. Check these against actual GitHub PR history / Artemis
+activity rather than this file.
+
+---
+
+## Where the biggest gaps are right now
+
+1. **GenAI has no real feature yet** — only `/health`. This is the single largest
+   open item: no summarization/Q&A endpoint, no local-model path, no RAG.
+2. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
+   plausible metrics backbone, but the *deliverables* (exported dashboard `.json`,
+   an alert rule) don't exist yet.
+3. **No client tests, no GenAI tests** — Spring is the only side with real test
+   coverage.
+4. **Root README is thin** — quick-start, CI/CD, monitoring, and responsibilities
+   sections should be pulled up from docs/Makefile into `README.md` itself.
+5. **No Rancher deployment path** — only Azure is covered for the cloud/managed
+   k8s requirement.

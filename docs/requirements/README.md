@@ -9,7 +9,7 @@ The brief is split into isolated chunks so a single requirement area can be chec
 without rereading the whole document. Jump straight to the relevant file:
 
 | # | File | What it covers |
-|---|------|----------------|
+| --- | --- | --- |
 | 00 | [overview.md](00-overview.md) | Objective, project type, required system elements, deadline |
 | 01 | [team-and-collaboration.md](01-team-and-collaboration.md) | Team size, registration data, subsystem ownership, contribution tracking, communication |
 | 02 | [development-workflow.md](02-development-workflow.md) | Mono-repo, feature branches, mandatory PRs + review, CI-on-PR / CD-on-merge flow |
@@ -28,3 +28,6 @@ without rereading the whole document. Jump straight to the relevant file:
 The mandatory, gradeable requirements live in chunks 00–10. Chunk 11 is guidance.
 When verifying compliance, chunks **02, 05, 06, 07, 08, 09, 10** are the ones with the
 most concrete pass/fail checks.
+
+See [STATUS.md](STATUS.md) for a file-referenced checklist of what's actually
+implemented in the repo today versus what's still open, per requirement area.
