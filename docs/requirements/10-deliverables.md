@@ -4,7 +4,7 @@ The final submission must include the complete codebase for the client, server, 
 
 The monitoring setup must include Prometheus and Grafana configuration, exported dashboards, and alert rule files. The testing suite must be included together with instructions for how to run it. Documentation in README.md must include setup instructions, architecture information, API documentation references, CI/CD and monitoring instructions, and an explanation of student responsibilities.
 
-The project concludes with a final presentation, as well as individual oral examination. You need to be prepared to defend thee whole project, as well as your individual contribution within it. The final team presentation must include a live demo. Each student must present and explain their subsystem and be ready to answer technical questions.
+The project concludes with a final presentation, as well as individual oral examination. You need to be prepared to defend the whole project, as well as your individual contribution within it. The final team presentation must include a live demo. Each student must present and explain their subsystem and be ready to answer technical questions.
 
 | Deliverable | Description |
 | --- | --- |

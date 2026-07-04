@@ -1,6 +1,6 @@
 # Development Workflow
 
-The project must be developed in a GitHub mono-repository. Therefore, the system is must be treated as one integrated deliverable. A mono-repo makes it possible to version client, server, GenAI service, deployment files, CI/CD workflows, and documentation together, and to validate changes across the whole system.
+The project must be developed in a GitHub mono-repository. Therefore, the system must be treated as one integrated deliverable. A mono-repo makes it possible to version client, server, GenAI service, deployment files, CI/CD workflows, and documentation together, and to validate changes across the whole system.
 
 All work must be structured through pull requests. Each feature or bugfix must be developed in a dedicated feature branch. Direct commits to the main branch are not acceptable as a normal workflow. A pull request must be opened, reviewed, and approved before the change is merged into main. Team members must peer-review each other's work. Review is part of the workflow and should be treated as a normal step before merging changes.
 

@@ -6,7 +6,10 @@ They are distinct from the application domain spec — for the news-aggregator p
 itself see [`docs/source/PROBLEM_STATEMENT.md`](../source/PROBLEM_STATEMENT.md).
 
 The brief is split into isolated chunks so a single requirement area can be checked
-without rereading the whole document. Jump straight to the relevant file:
+without rereading the whole document. Text is kept as close to the original as
+possible; obvious spelling/grammar typos (e.g. "recieve", "sutuatios") have been
+corrected where the fix doesn't change meaning, per review feedback on PR #79.
+Jump straight to the relevant file:
 
 | # | File | What it covers |
 | --- | --- | --- |

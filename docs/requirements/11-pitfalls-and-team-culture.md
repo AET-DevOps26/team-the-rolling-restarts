@@ -12,7 +12,7 @@ One of the very common reasons for a team to fail is feature orientation. It mig
 
 ### The system is a single pipeline
 
-Every part of the system is a different component, but they are all interconnected and dependent on each other. A big mistake is to think about coding, deployment, and monitoring as three separate components — the system you create with this strategy would ended up just a codebase. The best practice you can implement is to link every component of the system into one chain: code → test → build → deploy → observe → improve
+Every part of the system is a different component, but they are all interconnected and dependent on each other. A big mistake is to think about coding, deployment, and monitoring as three separate components — the system you create with this strategy would end up just a codebase. The best practice you can implement is to link every component of the system into one chain: code → test → build → deploy → observe → improve
 
 ### Reproducibility
 
@@ -56,7 +56,7 @@ If something is bothering you, bring it up for discussion as soon as possible. T
 
 ### Clear roles and responsibilities
 
-It is easy to avoid responsibility if you do not clearly understand what you are responsible for. Right after forming a team, one of the first things to discuss is individual responsibilities. Try to define roles similar to those in real projects, and thought the project execution define reponsibilities and accountability for various tasks. We recommend to use a RACI matrix for this: <https://www.atlassian.com/work-management/project-management/raci-chart>
+It is easy to avoid responsibility if you do not clearly understand what you are responsible for. Right after forming a team, one of the first things to discuss is individual responsibilities. Try to define roles similar to those in real projects, and throughout the project execution define responsibilities and accountability for various tasks. We recommend using a RACI matrix for this: <https://www.atlassian.com/work-management/project-management/raci-chart>
 
 ### Individual strength
 

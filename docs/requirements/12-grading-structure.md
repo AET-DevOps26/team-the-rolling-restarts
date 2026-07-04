@@ -65,7 +65,7 @@ The team aggregated grade reflects how the team works over the course of the
 semester. It is based on three checkpoint evaluations, one per month, carried
 out by the tutor. The aggregated grade ensures that work is done throughout
 the semester and avoids situations where everything is done at the last
-minute. It also prevent unfair sutuatios, in which a student who worked the
+minute. It also prevents unfair situations, in which a student who worked the
 whole semester gets the same grade as someone who did everything one week
 before submission. This grade captures how the project develops over time and
 how consistently the team is able to organise and carry it forward. The final
@@ -75,12 +75,12 @@ This component is intended to assess whether the team is managing the project
 in a structured and reliable way. The main questions are whether the team
 plans and distributes work clearly, makes steady progress, integrates the
 technical parts of the system properly, reacts to feedback, and collaborates
-effectively as a group. You expected to receive a guidance on any risks and
-problems observed, and being suggested concrete steps for improvement. In
+effectively as a group. You are expected to receive guidance on any risks and
+problems observed, and to be given concrete steps for improvement. In
 this way, the aggregated grade also serves as a mechanism for guidance during
 the semester.
 
-> ❗ You will recieve your intermediate grade from your tutor after each
+> ❗ You will receive your intermediate grade from your tutor after each
 > evaluation. That will allow you to understand your strength and weaknesses,
 > and to work on it.
 
@@ -136,7 +136,7 @@ own part of the work, and present it clearly is also taken into account.
 
 **The project is graded as failed if:**
 
-- Contributions are not transparently documented (Artemis + Github)
+- Contributions are not transparently documented (Artemis + GitHub)
 - Team members cannot clearly explain their own subsystem during the presentation
 - No working end-to-end system is demonstrated
 
