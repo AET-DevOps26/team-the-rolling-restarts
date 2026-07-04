@@ -26,3 +26,14 @@ For course-requirement compliance (not repo structure), see
 [`docs/requirements/GRADING-EVALUATION.md`](../requirements/GRADING-EVALUATION.md)
 instead — this folder is about *what the code is*, those are about *how it
 measures up*.
+
+## Keeping this in sync
+
+**Whoever changes something documented here — human or agent — should update
+the relevant file in the same change**, not leave it for a later full
+re-audit. Concretely: if a PR adds/removes a Spring module, wires the
+frontend to a real backend, adds a GenAI endpoint, changes a CI/CD workflow,
+or adds a Grafana dashboard/alert, update the matching file above (and
+`docs/requirements/STATUS.md` / `GRADING-EVALUATION.md` if it closes a
+tracked gap) as part of that PR. Small, incremental edits here are cheap;
+rediscovering all of this from scratch is not.

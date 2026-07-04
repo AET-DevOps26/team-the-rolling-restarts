@@ -44,3 +44,16 @@ without re-reading the whole repo.
 course-internal grading details and a candid self-assessment. They are kept
 outside `docs/source/` on purpose so MkDocs never publishes them — see the
 notes at the top of each file before moving or restructuring this folder.
+
+## Keeping STATUS.md / GRADING-EVALUATION.md in sync
+
+Chunks `00`–`12` are the fixed brief and rarely change. `STATUS.md` and
+`GRADING-EVALUATION.md` are the opposite — they're snapshots of the repo and
+go stale the moment the repo moves. **Whoever closes a gap tracked in either
+file — human or agent — should flip that item's status in the same
+change**, rather than leaving it for a future full re-audit (e.g. shipping
+the 3rd microservice, wiring the frontend to the backend, adding a GenAI
+endpoint, or exporting a Grafana dashboard should all update the relevant
+line). Each has its own re-verify commands for exactly this purpose. See
+also [`docs/internal/README.md`](../internal/README.md#keeping-this-in-sync)
+for the equivalent rule on the repo-map docs.

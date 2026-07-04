@@ -67,3 +67,8 @@ docker compose --env-file infra/.env -f infra/docker-compose.yaml -f infra/docke
   inventory, gotchas). Read `docs/internal/07-gotchas.md` first.
 - `docs/requirements/` — course grading requirements, compliance status, and
   grading self-assessment.
+- **Keep them current.** If a change you make (as a human or an agent)
+  touches something these docs describe — a service's structure, a CI/CD
+  workflow, the frontend/backend wiring, observability setup, or a tracked
+  gap in `STATUS.md`/`GRADING-EVALUATION.md` — update the relevant file in
+  the same change. Don't defer it to a future re-audit.
