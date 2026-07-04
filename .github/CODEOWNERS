@@ -1,0 +1,36 @@
+# CODEOWNERS
+#
+# Maps repository paths to subsystem owners for GitHub's review-assignment
+# feature, and doubles as documentation of who owns what (see
+# docs/requirements/01-team-and-collaboration.md: each student owns one
+# primary subsystem — client, server, or GenAI — but collaborates across
+# boundaries for integration, deployment, and debugging).
+#
+# The names below are role placeholders, NOT usable GitHub handles. GitHub
+# silently ignores entries that aren't real usernames/teams with repo access,
+# so this file has no effect until each placeholder is replaced with the
+# actual GitHub username of that subsystem's owner:
+#
+#   @client-owner  -> web-client owner's GitHub username
+#   @server-owner  -> Spring services owner's GitHub username
+#   @genai-owner   -> GenAI service owner's GitHub username
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: shared review across all three owners for anything not matched below
+* @client-owner @server-owner @genai-owner
+
+# Client
+/web-client/ @client-owner
+
+# Server (Spring Boot microservices)
+/services/spring/ @server-owner
+
+# GenAI service
+/services/gen-ai/ @genai-owner
+
+# Cross-cutting / shared responsibility: infra, CI/CD, API contract, docs
+/infra/ @client-owner @server-owner @genai-owner
+/.github/ @client-owner @server-owner @genai-owner
+/api/ @client-owner @server-owner @genai-owner
+/docs/ @client-owner @server-owner @genai-owner
