@@ -22,6 +22,7 @@ without rereading the whole document. Jump straight to the relevant file:
 | 09 | [engineering-artefacts.md](09-engineering-artefacts.md) | Architecture description, mandatory UML diagrams, OpenAPI/Swagger UI |
 | 10 | [deliverables.md](10-deliverables.md) | Final submission checklist, README contents, presentation + oral exam |
 | 11 | [pitfalls-and-team-culture.md](11-pitfalls-and-team-culture.md) | Failure patterns and recommended practices (advice, not hard requirements) |
+| 12 | [grading-structure.md](12-grading-structure.md) | Grading weights, oral exam, aggregated grade, final presentation, rubric tables — **internal, non-public** |
 
 ## Requirement status at a glance
 
@@ -31,3 +32,15 @@ most concrete pass/fail checks.
 
 See [STATUS.md](STATUS.md) for a file-referenced checklist of what's actually
 implemented in the repo today versus what's still open, per requirement area.
+
+See [GRADING-EVALUATION.md](GRADING-EVALUATION.md) for a best-effort,
+repo-only self-assessment against the grading rubric in chunk 12 — **also
+internal/non-public**, with re-verification pointers so it can be refreshed
+without re-reading the whole repo.
+
+## Non-public documents
+
+`12-grading-structure.md`, `STATUS.md`, and `GRADING-EVALUATION.md` contain
+course-internal grading details and a candid self-assessment. They are kept
+outside `docs/source/` on purpose so MkDocs never publishes them — see the
+notes at the top of each file before moving or restructuring this folder.

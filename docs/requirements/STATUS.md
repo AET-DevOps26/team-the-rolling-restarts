@@ -1,5 +1,8 @@
 # Requirements Status Checklist
 
+> **Internal — not for publication.** Lives outside `docs/source/` on purpose
+> so MkDocs never publishes it (see `docs/source/mkdocs.yml`'s `docs_dir`).
+
 Tracks how the current codebase measures up against the course requirements in
 this folder (`00`–`11`). Status is based on what's actually in the repo, not on
 intent — re-verify before relying on this for grading prep, since it will drift
