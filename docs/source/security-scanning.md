@@ -2,8 +2,9 @@
 
 Local security/quality scanning via `infra/scripts/security-scan.sh`, exposed as a single
 Makefile entrypoint. Not wired into CI — run it manually before a release or when touching
-infra/Dockerfiles. Secret scanning specifically also runs automatically as a pre-commit hook —
-see [Pre-commit secret scanning](#pre-commit-secret-scanning) below.
+infra/Dockerfiles. Secret scanning specifically also runs automatically as a pre-commit and
+pre-push hook — see [Pre-commit and pre-push secret scanning](#pre-commit-and-pre-push-secret-scanning)
+below.
 
 ## Usage
 
@@ -42,22 +43,33 @@ of every run). `make score` mounts that folder into
 [`guestlecture`](https://github.com/pstoeckle/guestlecture), a read-only SARIF viewer TUI — it
 generates nothing itself, so `make security-scan` must be run first.
 
-## Pre-commit secret scanning
+## Pre-commit and pre-push secret scanning
 
-`.pre-commit-config.yaml`'s `gitleaks` hook (`infra/scripts/pre-commit-gitleaks.sh`) runs
-`gitleaks protect --staged` — the same `zricethezav/gitleaks` image and `.gitleaks.toml`
-allowlist as the `make security-scan` gitleaks check above, but scoped to the staged diff instead
-of the whole working tree, so it's fast enough to run on every commit. A commit is blocked if it
-introduces a secret.
+`infra/scripts/gitleaks-check.sh` is a shared wrapper around the same `zricethezav/gitleaks`
+image and `.gitleaks.toml` allowlist as the `make security-scan` gitleaks check above, scoped
+narrower so it's fast enough to run on every commit/push:
 
-Enable it once per clone with `pre-commit install` (see
-[OpenAPI Workflow — Git hooks](openapi-workflow.md#git-hooks)). Caveats:
+| Hook | Wired from | Runs | Scope |
+| ---- | ---------- | ---- | ----- |
+| pre-commit | `.pre-commit-config.yaml`'s `gitleaks` hook | `gitleaks-check.sh --staged` (`gitleaks protect --staged`) | The staged diff |
+| pre-push | `scripts/git-hooks/pre-push` | `gitleaks-check.sh --push` (`gitleaks git --log-opts=...`) | Every commit being pushed, one `git log <remote-sha>..<local-sha>` range per ref (falls back to a merge-base or full-history scan for a new branch, or if the remote commit isn't available locally) |
 
-- It only runs if `pre-commit install` has been run locally — nothing enforces that today, so a
-  fresh clone (or a commit made with `--no-verify`) isn't protected.
-- It isn't a CI gate either — a secret that slips past a local commit (hook not installed, or
-  bypassed) isn't caught until/unless someone runs `make security-scan`'s full gitleaks pass over
-  the whole repo.
+Either one blocks the commit/push if it finds a secret.
+
+Enable both once per clone:
+
+```bash
+pre-commit install     # pre-commit hook
+make install-hooks     # pre-push hook (also regenerates the OpenAPI contract — see openapi-workflow.md)
+```
+
+See [OpenAPI Workflow — Git hooks](openapi-workflow.md#git-hooks). Caveats:
+
+- Both only run if that install step has been run locally — nothing enforces that today, so a
+  fresh clone (or a commit/push made with `--no-verify`) isn't protected.
+- Neither is a CI gate — a secret that slips past both local hooks (not installed, or bypassed)
+  isn't caught until/unless someone runs `make security-scan`'s full gitleaks pass over the whole
+  repo.
 
 ## Secret scanning allowlist
 

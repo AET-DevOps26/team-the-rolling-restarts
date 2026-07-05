@@ -28,7 +28,7 @@ help:
 	  '  make generate          - regenerate OpenAPI spec + consumer clients (Python, TypeScript)' \
 	  '  make spring-build      - compile and test Spring services' \
 	  '  make spring-openapi-docs - export each services OpenAPI spec to build/openapi/' \
-	  '  make install-hooks     - install the pre-push hook that regenerates the OpenAPI contract' \
+	  '  make install-hooks     - install the pre-push hook (secret scan + OpenAPI contract regen)' \
 	  '  make clean             - remove build artifacts (handles root-owned Docker files)' \
 	  '  make preflight         - full pre-flight: generate, build, lint helm, validate terraform' \
 	  '' \
@@ -91,13 +91,15 @@ generate:
 spring-build:
 	cd services/spring && ./gradlew build
 
-# Install the git pre-push hook that regenerates api/openapi.yaml from the services (code-first),
-# so the committed contract never drifts and no manual `make generate` is needed before pushing.
+# Install the git pre-push hook: blocks pushes that contain secrets (gitleaks, see
+# infra/scripts/gitleaks-check.sh), then regenerates api/openapi.yaml from the services
+# (code-first) so the committed contract never drifts and no manual `make generate` is
+# needed before pushing.
 install-hooks:
 	@mkdir -p .git/hooks
 	@ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
 	@chmod +x scripts/git-hooks/pre-push
-	@echo "Installed pre-push hook: regenerates api/openapi.yaml from the Spring services on push."
+	@echo "Installed pre-push hook: scans for secrets, then regenerates api/openapi.yaml from the Spring services on push."
 
 # Generate each Spring service's OpenAPI spec from its springdoc endpoint (test-based, no live
 # DB) and collect them into services/spring/build/openapi/ for inspection or CI artifact upload.

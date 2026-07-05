@@ -9,11 +9,11 @@ repos:
         files: ^api/openapi\.yaml$
 
       # Block commits that introduce secrets. Same gitleaks image + .gitleaks.toml allowlist as
-      # `make security-scan`'s gitleaks check, scoped to the staged diff so it's fast enough to
-      # run on every commit. See docs/source/security-scanning.md.
+      # `make security-scan`'s gitleaks check (and the pre-push hook below), scoped to the
+      # staged diff so it's fast enough to run on every commit. See docs/source/security-scanning.md.
       - id: gitleaks
         name: Scan staged changes for secrets
-        entry: infra/scripts/pre-commit-gitleaks.sh
+        entry: infra/scripts/gitleaks-check.sh --staged
         language: script
         pass_filenames: false
 
