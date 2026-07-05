@@ -41,6 +41,7 @@ export function SourcesSection({
   const [name, setName] = useState("");
   const [rssUrl, setRssUrl] = useState("");
   const [fetchState, setFetchState] = useState<FetchState>(null);
+  const addingOrFetching = adding || fetchState?.phase === "fetching";
 
   // Bumped whenever a new poll starts (or the component unmounts) so stale polls exit early.
   const pollTokenRef = useRef(0);
@@ -78,6 +79,7 @@ export function SourcesSection({
 
   async function handleAddSource(e: React.FormEvent) {
     e.preventDefault();
+    if (fetchState?.phase === "fetching") return;
     setAdding(true);
     try {
       const addedName = name.trim();
@@ -87,7 +89,13 @@ export function SourcesSection({
         setName("");
         setRssUrl("");
         setFetchState({ phase: "fetching", name: addedName });
-        router.refresh(); // surface the new source in the list right away
+        router.refresh();
+        void pollStatus(res.sourceId, addedName);
+      } else if (res.sourceId) {
+        const detailText = res.details?.join("; ");
+        toast.warning(detailText ? `${res.error}: ${detailText}` : res.error);
+        setFetchState({ phase: "fetching", name: addedName });
+        router.refresh();
         void pollStatus(res.sourceId, addedName);
       } else {
         const detailText = res.details?.join("; ");
@@ -118,7 +126,7 @@ export function SourcesSection({
                   placeholder="e.g. Süddeutsche Zeitung"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={adding}
+                  disabled={addingOrFetching}
                 />
               </Field>
               <Field>
@@ -130,11 +138,11 @@ export function SourcesSection({
                   placeholder="rss.sueddeutsche.de/alles or https://…"
                   value={rssUrl}
                   onChange={(e) => setRssUrl(e.target.value)}
-                  disabled={adding}
+                  disabled={addingOrFetching}
                 />
               </Field>
             </FieldGroup>
-            <Button type="submit" size="sm" className="mt-4" disabled={adding}>
+            <Button type="submit" size="sm" className="mt-4" disabled={addingOrFetching}>
               {adding ? "Adding…" : "Add source"}
             </Button>
 

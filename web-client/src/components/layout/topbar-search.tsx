@@ -19,8 +19,12 @@ export function TopbarSearch() {
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const q = value.trim();
-    router.push(q ? `/dashboard?q=${encodeURIComponent(q)}` : "/dashboard");
+    const nextQ = value.trim();
+    const next = new URLSearchParams(params.toString());
+    if (nextQ) next.set("q", nextQ);
+    else next.delete("q");
+    const search = next.toString();
+    router.push(search ? `/dashboard?${search}` : "/dashboard");
   }
 
   return (

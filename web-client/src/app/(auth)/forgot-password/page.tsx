@@ -1,11 +1,11 @@
 "use client";
 
-import { CheckCircle2 } from "lucide-react";
+import { Info } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { AuthShellCard } from "@/components/layout/auth-shell-card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   CardContent,
   CardDescription,
@@ -16,47 +16,9 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { ROUTES } from "@/lib/routes";
-import { cn } from "@/lib/utils";
 
 export default function ForgotPasswordPage() {
-  const [submitted, setSubmitted] = useState(false);
   const [email, setEmail] = useState("");
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSubmitted(true);
-  }
-
-  if (submitted) {
-    return (
-      <AuthShellCard>
-        <CardHeader className="items-center text-center">
-          <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <CheckCircle2 className="size-6" aria-hidden />
-          </div>
-          <CardTitle>Check your email</CardTitle>
-          <CardDescription>
-            We&apos;ve sent reset instructions to{" "}
-            <span className="font-medium text-foreground">
-              {email || "your inbox"}
-            </span>
-            .
-          </CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <Link
-            href={ROUTES.login}
-            className={cn(
-              buttonVariants({ variant: "ghost" }),
-              "w-full justify-center"
-            )}
-          >
-            Back to sign in
-          </Link>
-        </CardFooter>
-      </AuthShellCard>
-    );
-  }
 
   return (
     <AuthShellCard>
@@ -66,42 +28,42 @@ export default function ForgotPasswordPage() {
           Enter the email tied to your account and we&apos;ll send a reset link.
         </CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit} noValidate>
-        <CardContent>
-          <FieldGroup>
-            <p className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              Password reset isn&apos;t available yet — this is a preview of the flow.
-            </p>
-            <Field>
-              <FieldLabel htmlFor="forgot-email">Email</FieldLabel>
-              <Input
-                id="forgot-email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </Field>
-          </FieldGroup>
-        </CardContent>
-        <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full">
-            Send reset link
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Remembered it?{" "}
-            <Link
-              href={ROUTES.login}
-              className="text-primary underline-offset-4 hover:underline"
-            >
-              Back to sign in
-            </Link>
+      <CardContent>
+        <FieldGroup>
+          <p className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+            Password reset isn&apos;t available yet — this is a preview of the flow. No email will
+            be sent.
           </p>
-        </CardFooter>
-      </form>
+          <Field>
+            <FieldLabel htmlFor="forgot-email">Email</FieldLabel>
+            <Input
+              id="forgot-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled
+            />
+          </Field>
+        </FieldGroup>
+      </CardContent>
+      <CardFooter className="flex flex-col gap-3">
+        <Button type="button" className="w-full" disabled>
+          Send reset link
+        </Button>
+        <p className="text-center text-sm text-muted-foreground">
+          Remembered it?{" "}
+          <Link
+            href={ROUTES.login}
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            Back to sign in
+          </Link>
+        </p>
+      </CardFooter>
     </AuthShellCard>
   );
 }

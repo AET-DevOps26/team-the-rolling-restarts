@@ -1,5 +1,14 @@
 const IMG_SRC = /<img[^>]+src=["']([^"']+)["']/i;
 const HTML_TAGS = /<[^>]+>/g;
+const HTML_ENTITIES: Record<string, string> = {
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&nbsp;": " ",
+};
+const HTML_ENTITY_PATTERN = /&amp;|&lt;|&gt;|&quot;|&#39;|&nbsp;/g;
 
 export function extractImageUrl(html: string | null | undefined): string | undefined {
   if (!html) return undefined;
@@ -8,7 +17,11 @@ export function extractImageUrl(html: string | null | undefined): string | undef
 
 export function stripHtml(html: string | null | undefined): string {
   if (!html) return "";
-  return html.replace(HTML_TAGS, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(HTML_TAGS, " ")
+    .replace(HTML_ENTITY_PATTERN, (entity) => HTML_ENTITIES[entity] ?? entity)
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Prefer backend imageUrl; fall back to parsing legacy HTML snippets. */

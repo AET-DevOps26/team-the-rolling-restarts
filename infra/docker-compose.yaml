@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        NEXT_PUBLIC_API_BASE_URL: ""
+        NEXT_PUBLIC_API_BASE_URL: http://reverse-proxy
     image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:

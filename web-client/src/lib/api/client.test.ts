@@ -52,4 +52,10 @@ describe("apiFetch", () => {
       details: ["x: y"],
     });
   });
+
+  it("returns undefined for empty 2xx bodies", async () => {
+    cookieStore.get.mockReturnValue(undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 201 }));
+    await expect(apiFetch("/p")).resolves.toBeUndefined();
+  });
 });

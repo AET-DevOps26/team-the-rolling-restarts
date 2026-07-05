@@ -8,6 +8,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import rolling_restarts.content.util.RssUrlNormalizer;
+
 @Document(collection = "sources")
 public class Source {
 
@@ -43,7 +45,7 @@ public class Source {
 	 * previously fetched articles — which pin this id — associated with the re-created source.
 	 */
 	public static String idForRssUrl(String rssUrl) {
-		String normalized = rssUrl == null ? "" : rssUrl.trim();
+		String normalized = RssUrlNormalizer.normalize(rssUrl);
 		return UUID.nameUUIDFromBytes(normalized.getBytes(StandardCharsets.UTF_8)).toString();
 	}
 

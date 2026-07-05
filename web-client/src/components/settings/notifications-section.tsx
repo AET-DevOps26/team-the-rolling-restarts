@@ -33,7 +33,7 @@ export function NotificationsSection() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
-            Saved locally only — server sync coming soon.
+            Preview only — changes reset when you leave this page. Server sync coming soon.
           </p>
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
             <div className="flex flex-col gap-1">

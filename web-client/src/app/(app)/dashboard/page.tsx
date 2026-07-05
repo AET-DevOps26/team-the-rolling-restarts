@@ -1,6 +1,6 @@
 import { DashboardFeed } from "@/components/feed/dashboard-feed";
 import { FeedSourcesSheet } from "@/components/feed/feed-sources-sheet";
-import { getArticles, getMySettings, getSources, getTopics } from "@/lib/api/reads";
+import { getAllArticles, getArticles, getMySettings, getSources, getTopics } from "@/lib/api/reads";
 
 export default async function DashboardPage({
   searchParams,
@@ -8,8 +8,11 @@ export default async function DashboardPage({
   searchParams: Promise<{ topic?: string; source?: string; q?: string }>;
 }) {
   const { topic, source, q } = await searchParams;
+  const articleParams = { topicId: topic, sourceId: source, sort: "publishedAt,desc" as const };
   const [articles, topics, sources, settings] = await Promise.all([
-    getArticles({ topicId: topic, sourceId: source, size: 50, sort: "publishedAt,desc" }),
+    q
+      ? getAllArticles(articleParams)
+      : getArticles({ ...articleParams, size: 50 }),
     getTopics(),
     getSources(),
     getMySettings(),

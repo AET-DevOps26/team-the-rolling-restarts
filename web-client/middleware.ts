@@ -1,13 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/dashboard", "/saved", "/settings", "/article"];
+import { AUTH_COOKIE } from "@/lib/auth/constants";
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const needsAuth = PROTECTED.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
-  if (needsAuth && !request.cookies.get("auth_token")) {
+  if (!request.cookies.get(AUTH_COOKIE)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

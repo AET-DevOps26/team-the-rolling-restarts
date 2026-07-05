@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import { toApiErrorDisplay } from "@/lib/api/errors";
 import { getMySettings } from "@/lib/api/reads";
-import type { UserSettings } from "@/lib/api/types";
+import type { Source, UserSettings } from "@/lib/api/types";
 import { normalizeRssUrl } from "@/lib/format/rss-url";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -75,7 +75,7 @@ export async function unsubscribe(sourceId: string): Promise<ActionResult> {
 
 export type AddSourceResult =
   | { ok: true; sourceId: string }
-  | { ok: false; error: string; details?: string[] };
+  | { ok: false; error: string; details?: string[]; sourceId?: string };
 
 export async function addSource(name: string, rssUrl: string): Promise<AddSourceResult> {
   const trimmedName = name.trim();
@@ -91,7 +91,20 @@ export async function addSource(name: string, rssUrl: string): Promise<AddSource
     });
     if (!source?.id) return { ok: false, error: "Could not add source" };
 
-    await apiFetch(`/api/users/users/me/subscriptions/${source.id}`, { method: "POST" });
+    try {
+      await apiFetch(`/api/users/users/me/subscriptions/${source.id}`, { method: "POST" });
+    } catch (e) {
+      const { message, details } = toApiErrorDisplay(
+        e,
+        "Source was created but could not be subscribed"
+      );
+      return {
+        ok: false,
+        error: message,
+        sourceId: source.id,
+        ...(details.length > 0 ? { details } : {}),
+      };
+    }
     revalidatePath("/settings");
     revalidatePath("/", "layout");
     return { ok: true, sourceId: source.id };
@@ -101,10 +114,8 @@ export async function addSource(name: string, rssUrl: string): Promise<AddSource
   }
 }
 
-export type FetchStatus = "PENDING" | "SUCCESS" | "FAILED";
-
 export type SourceFetchStatusResult =
-  | { ok: true; status: FetchStatus; error?: string }
+  | { ok: true; status: NonNullable<Source["fetchStatus"]>; error?: string }
   | { ok: false; error: string };
 
 /**
@@ -113,7 +124,7 @@ export type SourceFetchStatusResult =
  */
 export async function getSourceFetchStatus(sourceId: string): Promise<SourceFetchStatusResult> {
   try {
-    const source = await apiFetch<{ fetchStatus?: FetchStatus | null; fetchError?: string | null }>(
+    const source = await apiFetch<Pick<Source, "fetchStatus" | "fetchError">>(
       `/api/content/sources/${sourceId}`,
       { auth: false }
     );

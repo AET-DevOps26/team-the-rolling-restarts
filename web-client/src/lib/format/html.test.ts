@@ -6,6 +6,10 @@ describe("stripHtml", () => {
   it("removes tags and collapses whitespace", () => {
     expect(stripHtml('<p>Hello <strong>world</strong></p>')).toBe("Hello world");
   });
+
+  it("decodes common HTML entities", () => {
+    expect(stripHtml("Tom &amp; Jerry &quot;classic&quot;")).toBe('Tom & Jerry "classic"');
+  });
 });
 
 describe("extractImageUrl", () => {

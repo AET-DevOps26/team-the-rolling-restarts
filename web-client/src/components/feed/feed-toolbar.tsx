@@ -18,6 +18,7 @@ function isFeedSort(value: string): value is FeedSort {
 export type ActiveFilters = {
   topic?: string;
   source?: string;
+  q?: string;
 };
 
 function chipHrefWithoutKey(key: keyof ActiveFilters, filters: ActiveFilters) {

@@ -47,12 +47,19 @@ export function TopicsSection({
           <ToggleGroup
             multiple
             value={selected}
-            onValueChange={setSelected}
+            onValueChange={(values) => {
+              if (!pending) setSelected(values);
+            }}
             variant="outline"
             className="flex flex-wrap justify-start gap-2"
           >
             {topics.map((topic) => (
-              <ToggleGroupItem key={topic.id} value={topic.id} aria-label={topic.name}>
+              <ToggleGroupItem
+                key={topic.id}
+                value={topic.id}
+                aria-label={topic.name}
+                disabled={pending}
+              >
                 <span
                   aria-hidden
                   className="mr-2 inline-block size-2 rounded-full"

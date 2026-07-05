@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { articleImageUrl } from "@/lib/format/html";
 import { colorFromId } from "@/lib/format/color";
 import { cn } from "@/lib/utils";
@@ -14,8 +18,9 @@ export function ArticleThumbnail({
   className?: string;
 }) {
   const resolved = imageUrl ?? undefined;
+  const [failed, setFailed] = useState(false);
 
-  if (resolved) {
+  if (resolved && !failed) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- RSS thumbnails come from many external domains.
       <img
@@ -23,6 +28,7 @@ export function ArticleThumbnail({
         alt={alt}
         className={cn("size-full object-cover", className)}
         loading="lazy"
+        onError={() => setFailed(true)}
       />
     );
   }

@@ -53,17 +53,24 @@ export async function register(_prev: AuthResult, formData: FormData): Promise<A
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  } catch (e) {
+    const { message, details } = toApiErrorDisplay(e, "Sign up failed");
+    return { error: message, ...(details.length > 0 ? { details } : {}) };
+  }
+
+  try {
     const token = await apiFetch<TokenResponse>("/api/users/auth/login", {
       auth: false,
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: body.username, password: body.password }),
     });
-    if (!token.token) return { error: "Sign up failed" };
+    if (!token.token) {
+      return { error: "Account created. Please sign in with your new credentials." };
+    }
     await setToken(token.token);
-  } catch (e) {
-    const { message, details } = toApiErrorDisplay(e, "Sign up failed");
-    return { error: message, ...(details.length > 0 ? { details } : {}) };
+  } catch {
+    return { error: "Account created. Please sign in with your new credentials." };
   }
   redirect("/dashboard");
 }

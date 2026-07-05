@@ -1,5 +1,5 @@
 import "server-only";
-import { apiFetch } from "./client";
+import { apiFetch, ApiError } from "./client";
 import type {
   Article,
   PageArticle,
@@ -17,12 +17,17 @@ export async function getSources(): Promise<Source[]> {
   return apiFetch<Source[]>("/api/content/sources", { auth: false });
 }
 
-export async function getSource(id: string): Promise<Source | null> {
+async function nullOn404<T>(promise: Promise<T>): Promise<T | null> {
   try {
-    return await apiFetch<Source>(`/api/content/sources/${id}`, { auth: false });
-  } catch {
-    return null;
+    return await promise;
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
   }
+}
+
+export async function getSource(id: string): Promise<Source | null> {
+  return nullOn404(apiFetch<Source>(`/api/content/sources/${id}`, { auth: false }));
 }
 
 // Returns articles from the paged response, typed as Article via the backend contract.
@@ -43,12 +48,22 @@ export async function getArticles(params: {
   return (page.content ?? []) as Article[];
 }
 
-export async function getArticle(id: string): Promise<Article | null> {
-  try {
-    return await apiFetch<Article>(`/api/content/articles/${id}`, { auth: false });
-  } catch {
-    return null;
+/** Loads every page of articles for client-side filtering (e.g. dashboard search). */
+export async function getAllArticles(
+  params: Omit<Parameters<typeof getArticles>[0], "page" | "size"> = {}
+): Promise<Article[]> {
+  const pageSize = 50;
+  const all: Article[] = [];
+  for (let page = 0; page < 20; page++) {
+    const batch = await getArticles({ ...params, page, size: pageSize });
+    all.push(...batch);
+    if (batch.length < pageSize) break;
   }
+  return all;
+}
+
+export async function getArticle(id: string): Promise<Article | null> {
+  return nullOn404(apiFetch<Article>(`/api/content/articles/${id}`, { auth: false }));
 }
 
 export async function getSavedArticles(ids: string[]): Promise<Article[]> {

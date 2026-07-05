@@ -11,6 +11,12 @@ describe("relativeTime", () => {
     expect(relativeTime(new Date("2026-05-14T05:00:00.000Z").toISOString())).toBe("3h ago");
     expect(relativeTime(new Date("2026-05-11T08:00:00.000Z").toISOString())).toBe("3d ago");
   });
+
+  it("does not round partial minutes up", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-14T08:00:30.000Z"));
+    expect(relativeTime(new Date("2026-05-14T08:00:00.000Z").toISOString())).toBe("just now");
+  });
 });
 
 describe("dateLabel", () => {

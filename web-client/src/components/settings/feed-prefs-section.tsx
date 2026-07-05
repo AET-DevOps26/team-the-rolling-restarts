@@ -29,7 +29,7 @@ export function FeedPrefsSection() {
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
-            Saved locally only — server sync coming soon.
+            Preview only — changes reset when you leave this page. Server sync coming soon.
           </p>
           <FieldGroup>
             <Field>

@@ -23,6 +23,9 @@ export function SaveButton({ articleId, saved }: { articleId: string; saved: boo
       } else {
         toast.success(next ? "Saved" : "Removed from saved");
       }
+    } catch {
+      setIsSaved(!next);
+      toast.error("Could not update saved state");
     } finally {
       setPending(false);
     }

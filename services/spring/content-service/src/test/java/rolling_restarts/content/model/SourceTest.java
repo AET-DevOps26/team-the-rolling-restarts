@@ -26,4 +26,11 @@ class SourceTest {
 				Source.idForRssUrl("https://example.com/feed"),
 				Source.idForRssUrl("https://example.org/feed"));
 	}
+
+	@Test
+	void idForRssUrl_treatsSchemelessUrlSameAsHttps() {
+		assertEquals(
+				Source.idForRssUrl("https://example.com/feed"),
+				Source.idForRssUrl("example.com/feed"));
+	}
 }

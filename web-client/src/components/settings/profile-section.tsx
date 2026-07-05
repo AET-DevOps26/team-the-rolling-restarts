@@ -60,7 +60,7 @@ function ProfileForm({
   const [email, setEmail] = useState(user.email ?? "");
 
   return (
-    <form action={formAction}>
+    <form action={formAction} aria-busy={pending}>
       <CardContent className="flex flex-col gap-6">
         <div className="flex items-center gap-4">
           <Avatar className="size-16">
@@ -78,6 +78,7 @@ function ProfileForm({
               name="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={pending}
             />
           </Field>
           <Field>
@@ -88,6 +89,7 @@ function ProfileForm({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              disabled={pending}
             />
           </Field>
         </FieldGroup>

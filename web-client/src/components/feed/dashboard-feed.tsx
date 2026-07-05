@@ -84,7 +84,7 @@ export function DashboardFeed({
       <FeedToolbar
         sort={sort}
         onSortChange={setSort}
-        filters={{ topic, source }}
+        filters={{ topic, source, q: query }}
         topicsById={topicsById}
         sourcesById={sourcesById}
       />

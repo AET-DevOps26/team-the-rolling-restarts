@@ -1,7 +1,9 @@
 import "server-only";
 import { cookies } from "next/headers";
 
-export const AUTH_COOKIE = "auth_token";
+import { AUTH_COOKIE } from "@/lib/auth/constants";
+
+export { AUTH_COOKIE };
 
 export class ApiError extends Error {
   readonly name = "ApiError";
@@ -61,5 +63,8 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+
+  const text = await res.text();
+  if (!text.trim()) return undefined as T;
+  return JSON.parse(text) as T;
 }
