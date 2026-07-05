@@ -1,0 +1,34 @@
+# CODEOWNERS
+#
+# Maps repository paths to subsystem owners for GitHub's review-assignment
+# feature, and doubles as documentation of who owns what (see
+# docs/requirements/01-team-and-collaboration.md: each student owns one
+# primary subsystem — client, server, or GenAI — but collaborates across
+# boundaries for integration, deployment, and debugging).
+#
+# Team is currently 2 (originally 3 — the third member left the project;
+# see docs/requirements/12-grading-structure.md's note on partial-team
+# grading consideration). GenAI is jointly owned by both remaining members.
+#
+#   brscn2 -> Baris Can       -> web-client, gen-ai
+#   YRC99  -> Yi Rui Cui      -> services/spring, gen-ai
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: shared review for anything not matched below
+* @brscn2 @YRC99
+
+# Client
+/web-client/ @brscn2
+
+# Server (Spring Boot microservices)
+/services/spring/ @YRC99
+
+# GenAI service — jointly owned
+/services/gen-ai/ @brscn2 @YRC99
+
+# Cross-cutting / shared responsibility: infra, CI/CD, API contract, docs
+/infra/ @brscn2 @YRC99
+/.github/ @brscn2 @YRC99
+/api/ @brscn2 @YRC99
+/docs/ @brscn2 @YRC99
