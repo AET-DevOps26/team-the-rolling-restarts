@@ -188,7 +188,10 @@ even though the deep content would arguably support "Excellent" if surfaced.
   viewer. Worth noting this is local/manual tooling, not a CI gate — it
   doesn't itself satisfy the baseline "CI must perform static analysis"
   requirement (see `STATUS.md` §06), so its value here is as an extension
-  beyond the baseline rather than closing that gap.
+  beyond the baseline rather than closing that gap. The gitleaks half of this
+  suite is additionally wired into a `pre-commit` hook (staged-diff scan on
+  every commit) — a real guard rail, though one that depends on each
+  contributor having run `pre-commit install` and isn't a CI-enforced gate.
 - **System Excellence**: premature to claim while the baseline gaps above are
   open.
 

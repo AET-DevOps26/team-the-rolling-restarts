@@ -2,7 +2,8 @@
 
 Local security/quality scanning via `infra/scripts/security-scan.sh`, exposed as a single
 Makefile entrypoint. Not wired into CI — run it manually before a release or when touching
-infra/Dockerfiles.
+infra/Dockerfiles. Secret scanning specifically also runs automatically as a pre-commit hook —
+see [Pre-commit secret scanning](#pre-commit-secret-scanning) below.
 
 ## Usage
 
@@ -40,6 +41,23 @@ Results land in `output/AET-DevOps26/team-the-rolling-restarts/` (gitignored, wi
 of every run). `make score` mounts that folder into
 [`guestlecture`](https://github.com/pstoeckle/guestlecture), a read-only SARIF viewer TUI — it
 generates nothing itself, so `make security-scan` must be run first.
+
+## Pre-commit secret scanning
+
+`.pre-commit-config.yaml`'s `gitleaks` hook (`infra/scripts/pre-commit-gitleaks.sh`) runs
+`gitleaks protect --staged` — the same `zricethezav/gitleaks` image and `.gitleaks.toml`
+allowlist as the `make security-scan` gitleaks check above, but scoped to the staged diff instead
+of the whole working tree, so it's fast enough to run on every commit. A commit is blocked if it
+introduces a secret.
+
+Enable it once per clone with `pre-commit install` (see
+[OpenAPI Workflow — Git hooks](openapi-workflow.md#git-hooks)). Caveats:
+
+- It only runs if `pre-commit install` has been run locally — nothing enforces that today, so a
+  fresh clone (or a commit made with `--no-verify`) isn't protected.
+- It isn't a CI gate either — a secret that slips past a local commit (hook not installed, or
+  bypassed) isn't caught until/unless someone runs `make security-scan`'s full gitleaks pass over
+  the whole repo.
 
 ## Secret scanning allowlist
 

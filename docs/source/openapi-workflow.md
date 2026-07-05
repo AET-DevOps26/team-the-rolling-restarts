@@ -84,12 +84,14 @@ have no security), and `operation-4xx-response` / `info-license` are disabled.
 Install both hooks once after cloning:
 
 ```bash
-pre-commit install     # pre-commit: lints api/openapi.yaml when it changes
+pre-commit install     # pre-commit: lints api/openapi.yaml when it changes, scans staged changes for secrets
 make install-hooks     # pre-push:  regenerates the contract from the services
 ```
 
-- **pre-commit** runs only the cheap spec lint. Client/contract generation is intentionally *not* a
-  pre-commit hook — it boots Spring (~30s), which is too slow for every commit.
+- **pre-commit** runs the cheap spec lint plus a gitleaks secret scan (see
+  [Security Scanning](security-scanning.md)) — both fast enough for every commit. Client/contract
+  generation is intentionally *not* a pre-commit hook — it boots Spring (~30s), which is too slow
+  for every commit.
 - **pre-push** regenerates `api/openapi.yaml` from the services so you never have to remember to run
   `make generate`. If the contract changed, it commits the update and asks you to push again so the
   change is included. If no Spring source changed since the upstream branch, it skips (fast path).
