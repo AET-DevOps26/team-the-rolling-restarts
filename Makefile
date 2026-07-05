@@ -66,7 +66,6 @@ help:
 	  '' \
 	  'Security:' \
 	  '  make security-scan        - run all security/quality scanners and write SARIF to output/' \
-	  '  make security-scan IMAGE_CHANNEL=dev - scan against a specific published image channel' \
 	  '  make score               - open the guestlecture TUI viewer against local scan results' \
 	  '' \
 	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'

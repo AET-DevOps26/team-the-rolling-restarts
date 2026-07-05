@@ -26,7 +26,6 @@ jobs:
     env:
       HELM_RELEASE: newsgenai
       HELM_CHART: ./infra/helm
-      PROFILE: prod
 
     steps:
       # CI gate: build-and-package runs on push regardless of CI, so before deploying we require

@@ -18,8 +18,8 @@ These must be changed from defaults in production. The dev defaults below work o
 | -------- | ----------- | ------------- | ------- |
 | `MONGO_ROOT_PASSWORD` | `secret` | Strong random password (24+ chars) | mongodb, user-service, content-service |
 | `MONGO_ROOT_USERNAME` | `root` | Keep or change | mongodb, user-service, content-service |
-| `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
-| `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
+| `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.dev.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
+| `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.dev.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
 | `LLM_API_KEY` | _(empty)_ | OpenAI / provider API key | gen-ai |
 
 ### Configuration

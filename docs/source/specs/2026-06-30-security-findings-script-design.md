@@ -1,5 +1,12 @@
 # Security findings script — design
 
+> **Historical — superseded.** Written before implementation; the shipped
+> script has since dropped `IMAGE_CHANNEL`/published-image scanning (trivy and
+> dockle now scan only locally-built images) and runs scanners in parallel.
+> For current behavior see [Security Scanning](../security-scanning.md) or
+> read `infra/scripts/security-scan.sh` directly. Kept for historical context
+> only.
+
 ## Context
 
 `ghcr.io/pstoeckle/guestlecture:v0.1.3` is a TUI ("DevOps Findings Analyzer") that renders SARIF

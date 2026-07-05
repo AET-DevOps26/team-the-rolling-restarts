@@ -1,5 +1,12 @@
 # Security Findings Script Implementation Plan
 
+> **Historical — superseded.** This was the pre-implementation plan; the
+> shipped script has since diverged from it in several ways (scanners run in
+> parallel rather than sequentially, `IMAGE_CHANNEL`/published-image scanning
+> was dropped, trivy/dockle now scan only locally-built images). For current
+> behavior see [Security Scanning](../security-scanning.md) or read
+> `infra/scripts/security-scan.sh` directly. Kept for historical context only.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Write `infra/scripts/security-scan.sh` — a single Bash script that runs nine security/quality tools via Docker, writes SARIF 2.1.0 output into `output/AET-DevOps26/team-the-rolling-restarts/`, and prints a terminal summary; exposed as `make security-scan`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs nine security/quality scanners via Docker and writes SARIF 2.1.0 output
+# Runs ten security/quality scans via Docker and writes SARIF 2.1.0 output
 # to output/AET-DevOps26/team-the-rolling-restarts/ for review with the
 # guestlecture TUI: docker run -it --rm -v $(pwd)/output/AET-DevOps26:/data \
 #   ghcr.io/pstoeckle/guestlecture:v0.1.3 /data

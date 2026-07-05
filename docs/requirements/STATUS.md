@@ -41,6 +41,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ GitHub Actions CI on every PR — `.github/workflows/ci.yml`: builds + tests all 5 services (Gradle, pytest, npm), plus OpenAPI contract-drift check, Terraform validate, Helm lint, contract tests
 - ⚠️ Static analysis/linting — CI runs ESLint (web-client), Helm lint, and OpenAPI contract lint, but there is still no explicit Java linter (Checkstyle/Spotless) or Python linter (ruff/flake8) job — not yet full "static analysis" coverage across all services
+- ✅ Local security/quality scanning — `make security-scan` (`infra/scripts/security-scan.sh`) runs gitleaks, hadolint, kics, zizmor, typos, npm audit, a CODEOWNERS coverage check, and trivy/dockle against locally-built images, in parallel, writing SARIF 2.1.0 to `output/`; `make score` views results in the `guestlecture` TUI. Local/manual only — not invoked from any `.github/workflows/*.yml`, so it doesn't close the CI static-analysis gap above. See `docs/source/security-scanning.md`.
 - ✅ Auto-build & push images — `.github/workflows/upload_images.yml` (multi-arch, GHCR)
 - ✅ Auto-deploy to Kubernetes on merge to main — `.github/workflows/deploy_kubernetes.yml` (triggers on the build workflow completing for `main`, runs `helm upgrade --install`)
 - ✅ Secrets used via GitHub Actions secrets, not hardcoded — confirmed in deploy workflows
