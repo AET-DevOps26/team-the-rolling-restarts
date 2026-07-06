@@ -111,6 +111,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Download generated sources
         if: matrix.needs-generated
@@ -171,6 +173,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+        with:
+          persist-credentials: false
 
       - name: Download generated sources
         uses: actions/download-artifact@v7
@@ -221,10 +225,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create multi-arch manifest
+        env:
+          OWNER: ${{ needs.prepare.outputs.owner }}
+          PROJECT: ${{ needs.prepare.outputs.project }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
         run: |
-          IMAGE="ghcr.io/${{ needs.prepare.outputs.owner }}/${{ needs.prepare.outputs.project }}/web-client"
-          SHA="${{ needs.prepare.outputs.sha }}"
-          CHANNEL="${{ needs.prepare.outputs.channel }}"
+          IMAGE="ghcr.io/${OWNER}/${PROJECT}/web-client"
           docker buildx imagetools create \
             -t "${IMAGE}:${SHA}" \
             -t "${IMAGE}:${CHANNEL}" \
@@ -240,9 +247,12 @@ jobs:
 
     steps:
       - name: Generate image values
+        env:
+          OWNER: ${{ needs.prepare.outputs.owner }}
+          PROJECT: ${{ needs.prepare.outputs.project }}
+          SHA: ${{ needs.prepare.outputs.sha }}
         run: |
-          PREFIX="ghcr.io/${{ needs.prepare.outputs.owner }}/${{ needs.prepare.outputs.project }}"
-          SHA="${{ needs.prepare.outputs.sha }}"
+          PREFIX="ghcr.io/${OWNER}/${PROJECT}"
           cat > image-values.yaml <<EOF
           webClient:
             image: ${PREFIX}/web-client:${SHA}

@@ -21,6 +21,7 @@ nav:
     - Web Client Integration: web-client-integration.md
     - Deployment Testing: deployment-testing.md
     - Secrets & Environment Variables: secrets-reference.md
+    - Security Scanning: security-scanning.md
   - Infrastructure:
     - Overview: infra/README.md
     - Azure CD Pipeline (ACR): cicd-azure-deploy.md

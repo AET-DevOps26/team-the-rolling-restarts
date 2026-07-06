@@ -125,7 +125,7 @@ if [ -n "$token" ]; then
   me_username=$(echo "$me_body" | jq -r '.username // empty' 2>/dev/null || true)
   check "GET /users/me returns correct username" "smoke$$" "$me_username"
 else
-  skip "GET /users/me with token (no token)"
+  skip "GET /users/me (no token)"
   skip "GET /users/me returns correct username (no token)"
 fi
 echo ""

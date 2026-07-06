@@ -107,26 +107,30 @@ Images are built and pushed automatically by CI:
 **Manual push** (for testing feature branches or when CI is unavailable):
 
 ```bash
-# Multi-arch build (recommended) — works on both amd64 K8s nodes and arm64 Azure VMs
-make push-images IMAGE_TAG=<tag-name> PLATFORM=linux/amd64,linux/arm64
+# Push for the host architecture (amd64 on most dev machines)
+make push-images IMAGE_TAG=<tag-name>
 
 # Or push to your personal registry (no extra permissions needed)
-make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling-restarts PLATFORM=linux/amd64,linux/arm64
+make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling-restarts
 ```
 
 `IMAGE_TAG` defaults to the current commit SHA if not specified.
 
 #### Cross-architecture builds
 
-The Azure VM uses arm64 (`Standard_B2ps_v2`), while the Kubernetes cluster and most dev machines run amd64. Pass `PLATFORM` to `make push-images` to cross-build:
+The Azure VM uses arm64 (`Standard_B2ps_v2`), while the Kubernetes cluster and most dev machines run amd64.
 
-| Target | `PLATFORM` value |
-| ------ | ---------------- |
-| Both (recommended) | `linux/amd64,linux/arm64` |
-| Azure VM only | `linux/arm64` |
-| K8s / local only | omit `PLATFORM` (defaults to host arch) |
+**Multi-arch images (amd64 + arm64) require CI.** The web-client uses Next.js's SWC compiler, which crashes with `SIGILL` under QEMU arm64 emulation, so `make push-images` cannot cross-build it locally. The `upload_images.yml` workflow handles this by building web-client natively on each arch and merging a multi-arch manifest.
 
-Multi-platform builds require a buildx builder and QEMU. One-time setup:
+For the Spring and GenAI services alone, `PLATFORM` can be passed to cross-build under QEMU:
+
+| Target | Command |
+| ------ | ------- |
+| amd64 only (default) | `make push-images IMAGE_TAG=<tag>` |
+| arm64 only (Spring/GenAI only — no web-client) | `make push-images IMAGE_TAG=<tag> PLATFORM=linux/arm64` |
+| Both arches | push via CI (`upload_images.yml`) |
+
+Cross-building the Spring and GenAI services requires a buildx builder and QEMU. One-time setup:
 
 ```bash
 docker run --privileged --rm multiarch/qemu-user-static --reset -p yes

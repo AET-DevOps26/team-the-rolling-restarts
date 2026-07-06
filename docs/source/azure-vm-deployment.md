@@ -48,15 +48,16 @@ terraform output ssh_command
 
 The validated VM profile (`Standard_B2ps_v2`) is **arm64**. Container images must be built for the matching architecture or the containers will fail to start with `exec format error`.
 
-```bash
-# Build and push arm64 images (or multi-arch for both K8s and VM)
-make push-images IMAGE_TAG=<tag> PLATFORM=linux/amd64,linux/arm64
+> **arm64 images:** `make push-images` does not support `PLATFORM=linux/arm64` — Next.js's SWC compiler crashes with SIGILL under QEMU arm64 emulation, so local cross-builds are blocked. Use the CI workflow (`upload_images.yml`) instead: it builds `web-client` natively on an `ubuntu-24.04-arm` runner and produces a multi-arch manifest automatically on every push to `main` or `dev`.
 
-# Or arm64-only if you only target the VM
-make push-images IMAGE_TAG=<tag> PLATFORM=linux/arm64
+To deploy a specific commit to the VM, push the branch to trigger CI, then deploy the resulting image tag:
+
+```bash
+# After CI produces the multi-arch image:
+ansible-playbook infra/ansible/playbooks/deploy.yml -e "image_tag=<sha>"
 ```
 
-See [Cross-architecture builds](deployment-testing.md#cross-architecture-builds) for the one-time QEMU/buildx setup.
+See [Cross-architecture builds](deployment-testing.md#cross-architecture-builds) for background on the per-arch CI strategy.
 
 ## 2) Configure and deploy on VM (Ansible)
 

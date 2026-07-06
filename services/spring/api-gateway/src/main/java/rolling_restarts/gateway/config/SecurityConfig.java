@@ -57,7 +57,8 @@ public class SecurityConfig {
 		return http.build();
 	}
 
-	private CorsConfigurationSource corsConfigurationSource() {
+	@Bean
+	public CorsConfigurationSource corsConfigurationSource() {
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
 		// Fail closed: with no configured origins, register no CORS rule so the browser blocks

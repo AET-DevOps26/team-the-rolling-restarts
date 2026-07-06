@@ -181,6 +181,18 @@ even though the deep content would arguably support "Excellent" if surfaced.
   Loki. See the Runtime and Observability bonus note above.
 - **Advanced AI** (RAG, vector DB): not started — no vector DB dependency
   found anywhere in `services/gen-ai`.
+- **Additional justified improvements**: `make security-scan`
+  (`infra/scripts/security-scan.sh`) — a ten-scan local security/quality suite
+  (gitleaks, hadolint, kics, zizmor, typos, npm audit, a CODEOWNERS coverage
+  check, trivy fs/image, dockle) with SARIF 2.1.0 output and a `make score` TUI
+  viewer. Worth noting this is local/manual tooling, not a CI gate — it
+  doesn't itself satisfy the baseline "CI must perform static analysis"
+  requirement (see `STATUS.md` §06), so its value here is as an extension
+  beyond the baseline rather than closing that gap. The gitleaks half of this
+  suite is additionally wired into both a `pre-commit` hook (staged-diff scan
+  on every commit) and a `pre-push` hook (scans every commit being pushed) —
+  a real guard rail, though one that depends on each contributor having run
+  `pre-commit install` / `make install-hooks` and isn't a CI-enforced gate.
 - **System Excellence**: premature to claim while the baseline gaps above are
   open.
 

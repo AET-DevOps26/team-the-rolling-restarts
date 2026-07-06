@@ -12,6 +12,14 @@ set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Secrets guard: scan every commit being pushed before doing anything else. Reads the ref
+# update list git already passed this hook on stdin. Same gitleaks image/config as the
+# pre-commit hook — see infra/scripts/gitleaks-check.sh.
+if ! infra/scripts/gitleaks-check.sh --push; then
+  echo "[pre-push] Secret(s) found in commits being pushed — aborting push." >&2
+  exit 1
+fi
+
 # Fast path: if no Spring service source changed versus the upstream branch, there is nothing the
 # contract could drift from, so skip the (slow) regeneration.
 if upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
