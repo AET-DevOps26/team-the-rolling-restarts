@@ -19,15 +19,25 @@ export type ActiveFilters = {
   topic?: string;
   source?: string;
   q?: string;
+  /** 1-based page for search results; omitted on page 1. */
+  page?: number;
 };
 
-function chipHrefWithoutKey(key: keyof ActiveFilters, filters: ActiveFilters) {
+export function dashboardHref(filters: ActiveFilters) {
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(filters)) {
-    if (k !== key && v) params.set(k, v);
-  }
+  if (filters.topic) params.set("topic", filters.topic);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.q) params.set("q", filters.q);
+  if (filters.page && filters.page > 1) params.set("page", String(filters.page));
   const search = params.toString();
   return search ? `/dashboard?${search}` : "/dashboard";
+}
+
+function chipHrefWithoutKey(key: keyof ActiveFilters, filters: ActiveFilters) {
+  const next = { ...filters };
+  delete next[key];
+  if (key === "q") delete next.page;
+  return dashboardHref(next);
 }
 
 export function FeedToolbar({

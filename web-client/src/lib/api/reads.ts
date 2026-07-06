@@ -31,35 +31,52 @@ export async function getSource(id: string): Promise<Source | null> {
 }
 
 // Returns articles from the paged response, typed as Article via the backend contract.
-export async function getArticles(params: {
-  page?: number;
-  size?: number;
-  sourceId?: string;
-  topicId?: string;
-  sort?: string;
-} = {}): Promise<Article[]> {
+export type ArticlesPageResult = {
+  articles: Article[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+};
+
+export async function getArticlesPage(
+  params: {
+    page?: number;
+    size?: number;
+    sourceId?: string;
+    topicId?: string;
+    sort?: string;
+    q?: string;
+  } = {}
+): Promise<ArticlesPageResult> {
   const q = new URLSearchParams();
   q.set("page", String(params.page ?? 0));
   q.set("size", String(params.size ?? 20));
   if (params.sourceId) q.set("sourceId", params.sourceId);
   if (params.topicId) q.set("topicId", params.topicId);
   if (params.sort) q.set("sort", params.sort);
+  if (params.q) q.set("q", params.q);
   const page = await apiFetch<PageArticle>(`/api/content/articles?${q.toString()}`, { auth: false });
-  return (page.content ?? []) as Article[];
+  return {
+    articles: (page.content ?? []) as Article[],
+    page: page.number ?? params.page ?? 0,
+    size: page.size ?? params.size ?? 20,
+    totalElements: page.totalElements ?? 0,
+    totalPages: page.totalPages ?? 0,
+  };
 }
 
-/** Loads every page of articles for client-side filtering (e.g. dashboard search). */
-export async function getAllArticles(
-  params: Omit<Parameters<typeof getArticles>[0], "page" | "size"> = {}
+export async function getArticles(
+  params: {
+    page?: number;
+    size?: number;
+    sourceId?: string;
+    topicId?: string;
+    sort?: string;
+    q?: string;
+  } = {}
 ): Promise<Article[]> {
-  const pageSize = 50;
-  const all: Article[] = [];
-  for (let page = 0; page < 20; page++) {
-    const batch = await getArticles({ ...params, page, size: pageSize });
-    all.push(...batch);
-    if (batch.length < pageSize) break;
-  }
-  return all;
+  return (await getArticlesPage(params)).articles;
 }
 
 export async function getArticle(id: string): Promise<Article | null> {

@@ -43,7 +43,7 @@ class ArticleControllerTest {
 		article.setSnippet("A test snippet");
 		article.setPublishedAt(Instant.now());
 		Page<Article> page = new PageImpl<>(List.of(article));
-		when(articleService.findAll(isNull(), isNull(), any(Pageable.class))).thenReturn(page);
+		when(articleService.findAll(isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(page);
 
 		mockMvc.perform(get("/articles"))
 				.andExpect(status().isOk())
@@ -53,11 +53,24 @@ class ArticleControllerTest {
 	@Test
 	void list_withSourceFilter_returnsFiltered() throws Exception {
 		Page<Article> page = new PageImpl<>(List.of());
-		when(articleService.findAll(eq("src1"), isNull(), any(Pageable.class))).thenReturn(page);
+		when(articleService.findAll(eq("src1"), isNull(), isNull(), any(Pageable.class))).thenReturn(page);
 
 		mockMvc.perform(get("/articles").param("sourceId", "src1"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.content").isEmpty());
+	}
+
+	@Test
+	void list_withSearchQuery_returnsFiltered() throws Exception {
+		Article article = new Article();
+		article.setId("a1");
+		article.setHeadline("Climate update");
+		Page<Article> page = new PageImpl<>(List.of(article));
+		when(articleService.findAll(isNull(), isNull(), eq("climate"), any(Pageable.class))).thenReturn(page);
+
+		mockMvc.perform(get("/articles").param("q", "climate"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].headline").value("Climate update"));
 	}
 
 	@Test

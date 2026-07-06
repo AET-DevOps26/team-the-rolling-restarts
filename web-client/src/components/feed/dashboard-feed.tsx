@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { ArticleCard } from "@/components/feed/article-card";
 import { EmptyFeed } from "@/components/feed/empty-feed";
+import { FeedSearchPagination } from "@/components/feed/feed-search-pagination";
 import { FeedToolbar, type FeedSort } from "@/components/feed/feed-toolbar";
 import type { Article, Source, Topic } from "@/lib/api/types";
 
@@ -38,6 +39,7 @@ export function DashboardFeed({
   topic,
   source,
   query,
+  searchPagination,
 }: {
   articles: Article[];
   topics: Topic[];
@@ -48,6 +50,12 @@ export function DashboardFeed({
   topic?: string;
   source?: string;
   query?: string;
+  searchPagination?: {
+    page: number;
+    totalElements: number;
+    totalPages: number;
+    pageSize: number;
+  };
 }) {
   const [sort, setSort] = useState<FeedSort>("for-you");
 
@@ -57,17 +65,9 @@ export function DashboardFeed({
   const enabledSources = useMemo(() => new Set(enabledSourceIds), [enabledSourceIds]);
 
   const visible = useMemo(() => {
-    let list = articles.filter((a) => enabledSources.has(a.sourceId));
-    if (query) {
-      const needle = query.toLowerCase();
-      list = list.filter(
-        (a) =>
-          a.headline.toLowerCase().includes(needle) ||
-          a.snippet.toLowerCase().includes(needle)
-      );
-    }
+    const list = articles.filter((a) => enabledSources.has(a.sourceId));
     return applySort(list, sort, selectedTopicIds);
-  }, [articles, enabledSources, query, sort, selectedTopicIds]);
+  }, [articles, enabledSources, sort, selectedTopicIds]);
 
   const topicName = topic ? topicsById.get(topic)?.name ?? topic : undefined;
   const sourceName = source ? sourcesById.get(source)?.name ?? source : undefined;
@@ -111,6 +111,15 @@ export function DashboardFeed({
           ))}
         </div>
       )}
+      {searchPagination ? (
+        <FeedSearchPagination
+          filters={{ topic, source, q: query }}
+          page={searchPagination.page}
+          totalElements={searchPagination.totalElements}
+          totalPages={searchPagination.totalPages}
+          pageSize={searchPagination.pageSize}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,22 +1,49 @@
 import { DashboardFeed } from "@/components/feed/dashboard-feed";
 import { FeedSourcesSheet } from "@/components/feed/feed-sources-sheet";
-import { getAllArticles, getArticles, getMySettings, getSources, getTopics } from "@/lib/api/reads";
+import { getArticles, getArticlesPage, getMySettings, getSources, getTopics } from "@/lib/api/reads";
+
+const FEED_PAGE_SIZE = 50;
+
+function parseSearchPage(raw: string | undefined): number {
+  const n = Number(raw ?? "1");
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.floor(n);
+}
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ topic?: string; source?: string; q?: string }>;
+  searchParams: Promise<{ topic?: string; source?: string; q?: string; page?: string }>;
 }) {
-  const { topic, source, q } = await searchParams;
+  const { topic, source, q, page: pageParam } = await searchParams;
+  const currentPage = parseSearchPage(pageParam);
   const articleParams = { topicId: topic, sourceId: source, sort: "publishedAt,desc" as const };
-  const [articles, topics, sources, settings] = await Promise.all([
+
+  const [articlesBundle, topics, sources, settings] = await Promise.all([
     q
-      ? getAllArticles(articleParams)
-      : getArticles({ ...articleParams, size: 50 }),
+      ? getArticlesPage({
+          ...articleParams,
+          size: FEED_PAGE_SIZE,
+          q,
+          page: currentPage - 1,
+        })
+      : getArticles({ ...articleParams, size: FEED_PAGE_SIZE }).then((articles) => ({
+          articles,
+          page: 0,
+          size: FEED_PAGE_SIZE,
+          totalElements: articles.length,
+          totalPages: 1,
+        })),
     getTopics(),
     getSources(),
     getMySettings(),
   ]);
+
+  const { articles, totalElements, totalPages, size: pageSize } = articlesBundle;
+  const searchPagination =
+    q && totalElements > pageSize
+      ? { page: currentPage, totalElements, totalPages, pageSize }
+      : undefined;
 
   return (
     <main className="flex flex-col gap-6">
@@ -37,6 +64,7 @@ export default async function DashboardPage({
         topic={topic}
         source={source}
         query={q}
+        searchPagination={searchPagination}
       />
     </main>
   );

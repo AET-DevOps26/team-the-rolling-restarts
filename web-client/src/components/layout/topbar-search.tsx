@@ -23,6 +23,7 @@ export function TopbarSearch() {
     const next = new URLSearchParams(params.toString());
     if (nextQ) next.set("q", nextQ);
     else next.delete("q");
+    next.delete("page");
     const search = next.toString();
     router.push(search ? `/dashboard?${search}` : "/dashboard");
   }

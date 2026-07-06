@@ -35,12 +35,13 @@ public class ArticleController {
 	@GetMapping
 	@Operation(
 			summary = "List articles",
-			description = "Returns a paginated list of articles, optionally filtered by source and/or topic")
+			description = "Returns a paginated list of articles, optionally filtered by source, topic, and/or search query")
 	public Page<Article> list(
 			@Parameter(description = "Filter by source ID") @RequestParam(required = false) String sourceId,
 			@Parameter(description = "Filter by topic ID") @RequestParam(required = false) String topicId,
+			@Parameter(description = "Case-insensitive search in headline and snippet") @RequestParam(required = false) String q,
 			Pageable pageable) {
-		return articleService.findAll(sourceId, topicId, pageable);
+		return articleService.findAll(sourceId, topicId, q, pageable);
 	}
 
 	@GetMapping("/{id}")
