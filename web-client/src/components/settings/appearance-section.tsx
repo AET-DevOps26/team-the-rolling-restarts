@@ -34,6 +34,9 @@ export function AppearanceSection() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <p className="rounded-md border border-border bg-muted/40 p-2 text-xs text-muted-foreground">
+            Preview only — changes reset when you leave this page. Server sync coming soon.
+          </p>
           <FieldGroup>
             <Field>
               <FieldLabel>Theme</FieldLabel>

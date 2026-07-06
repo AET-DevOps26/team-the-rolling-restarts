@@ -2,8 +2,7 @@
 
 import { Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useActionState, useState } from "react";
 
 import { AuthShellCard } from "@/components/layout/auth-shell-card";
 import { Button } from "@/components/ui/button";
@@ -17,16 +16,12 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { login } from "@/lib/actions/auth";
 import { ROUTES } from "@/lib/routes";
 
 export default function LoginPage() {
-  const router = useRouter();
+  const [state, formAction, pending] = useActionState(login, undefined);
   const [showPassword, setShowPassword] = useState(false);
-
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    router.push(ROUTES.dashboard);
-  }
 
   return (
     <AuthShellCard>
@@ -34,17 +29,16 @@ export default function LoginPage() {
         <CardTitle>Welcome back</CardTitle>
         <CardDescription>Sign in to continue to your feed.</CardDescription>
       </CardHeader>
-      <form onSubmit={handleSubmit} noValidate>
+      <form action={formAction} noValidate>
         <CardContent>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="login-email">Email</FieldLabel>
+              <FieldLabel htmlFor="login-username">Username</FieldLabel>
               <Input
-                id="login-email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
+                id="login-username"
+                name="username"
+                autoComplete="username"
+                placeholder="yourname"
                 required
               />
             </Field>
@@ -64,14 +58,15 @@ export default function LoginPage() {
                   className="absolute inset-y-0 right-2 inline-flex items-center text-muted-foreground hover:text-foreground"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
-                  {showPassword ? (
-                    <EyeOff className="size-4" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
             </Field>
+            {state?.error && (
+              <p className="text-sm text-destructive" role="alert">
+                {state.error}
+              </p>
+            )}
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2">
                 <Checkbox id="login-remember" />
@@ -87,15 +82,12 @@ export default function LoginPage() {
           </FieldGroup>
         </CardContent>
         <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full">
-            Sign in
+          <Button type="submit" className="w-full" disabled={pending}>
+            {pending ? "Signing in…" : "Sign in"}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{" "}
-            <Link
-              href={ROUTES.signup}
-              className="text-primary underline-offset-4 hover:underline"
-            >
+            <Link href={ROUTES.signup} className="text-primary underline-offset-4 hover:underline">
               Sign up
             </Link>
           </p>

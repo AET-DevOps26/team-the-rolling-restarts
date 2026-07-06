@@ -1,7 +1,14 @@
-import { SOURCES } from "@/lib/mock";
+import { getSources } from "@/lib/api/reads";
 
-export function SourcesStrip() {
-  const displayed = SOURCES.slice(0, 8);
+export async function SourcesStrip() {
+  let displayed: { id: string; name: string }[] = [];
+  try {
+    displayed = (await getSources()).slice(0, 8);
+  } catch {
+    displayed = [];
+  }
+  if (displayed.length === 0) return null;
+
   return (
     <section className="border-y border-border bg-muted/30 py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-4 px-4">

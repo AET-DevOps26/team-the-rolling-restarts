@@ -7,11 +7,13 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        NEXT_PUBLIC_API_BASE_URL: ""
+        NEXT_PUBLIC_API_BASE_URL: http://reverse-proxy
     image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Server-side fetches run inside the container; use the internal proxy, not localhost.
+      NEXT_PUBLIC_API_BASE_URL: http://reverse-proxy
     networks:
       - frontend
 
