@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -65,18 +66,24 @@ class ArticleServiceTest {
 		PageRequest pageable = PageRequest.of(0, 20);
 		Article article = new Article();
 		article.setId("a1");
-		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(1L);
+		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(45L);
 		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of(article));
 
 		Page<Article> result = articleService.findAll("src1", "topic1", "climate", pageable);
 
 		assertThat(result.getContent()).containsExactly(article);
+		assertThat(result.getTotalElements()).isEqualTo(45L);
+		assertThat(result.getTotalPages()).isEqualTo(3);
+		assertThat(result.getNumber()).isZero();
+		assertThat(result.getSize()).isEqualTo(20);
+
 		ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
 		verify(mongoTemplate).count(queryCaptor.capture(), eq(Article.class));
-		assertThat(queryCaptor.getValue().getQueryObject().toString())
-				.contains("sourceId")
-				.contains("topicId")
-				.contains("headline")
-				.contains("snippet");
+		Document queryDoc = queryCaptor.getValue().getQueryObject();
+		assertThat(queryDoc.getString("sourceId")).isEqualTo("src1");
+		assertThat(queryDoc.getString("topicId")).isEqualTo("topic1");
+		Document text = queryDoc.get("$text", Document.class);
+		assertThat(text).isNotNull();
+		assertThat(text.getString("$search")).isEqualTo("climate");
 	}
 }
