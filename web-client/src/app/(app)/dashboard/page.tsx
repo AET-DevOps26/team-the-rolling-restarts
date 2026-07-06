@@ -40,9 +40,11 @@ export default async function DashboardPage({
   ]);
 
   const { articles, totalElements, totalPages, size: pageSize } = articlesBundle;
+  const boundedPage =
+    totalPages > 0 ? Math.min(currentPage, totalPages) : 1;
   const searchPagination =
     q && totalElements > pageSize
-      ? { page: currentPage, totalElements, totalPages, pageSize }
+      ? { page: boundedPage, totalElements, totalPages, pageSize }
       : undefined;
 
   return (

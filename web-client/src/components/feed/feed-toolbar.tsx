@@ -36,7 +36,7 @@ export function dashboardHref(filters: ActiveFilters) {
 function chipHrefWithoutKey(key: keyof ActiveFilters, filters: ActiveFilters) {
   const next = { ...filters };
   delete next[key];
-  if (key === "q") delete next.page;
+  delete next.page;
   return dashboardHref(next);
 }
 
