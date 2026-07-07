@@ -6,7 +6,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.errors import register_exception_handlers
-from app.routers import summarize
+from app.routers import explain, qa, sentiment, summarize
 
 logging.basicConfig(
     level=settings.log_level,
@@ -31,6 +31,9 @@ app = FastAPI(
 
 register_exception_handlers(app)
 app.include_router(summarize.router)
+app.include_router(explain.router)
+app.include_router(sentiment.router)
+app.include_router(qa.router)
 
 
 @app.get("/health")
