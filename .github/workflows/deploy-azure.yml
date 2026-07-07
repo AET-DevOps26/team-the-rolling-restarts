@@ -242,8 +242,11 @@ jobs:
           APP_PORT=80
           GEN_AI_PORT=8000
           NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-          LLM_PROVIDER=${LLM_PROVIDER:-openai}
-          LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+          # NOTE: the Azure VM is NOT on the TUM network, so the Logos cloud endpoint is
+          # unreachable from here. GenAI on the Azure VM needs a self-hosted model (Ollama);
+          # the in-TUM Kubernetes cluster is the target for Logos-backed GenAI.
+          LLM_PROVIDER=${LLM_PROVIDER:-logos}
+          LLM_MODEL=${LLM_MODEL:-openai/gpt-oss-120b}
           LLM_API_KEY=${LLM_API_KEY}
           LOG_LEVEL=INFO
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}

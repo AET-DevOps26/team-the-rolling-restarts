@@ -101,6 +101,10 @@ jobs:
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
+          # Optional Logos API key (lg-...) for gen-ai. The k8s cluster is inside the TUM
+          # network, so Logos is reachable there. If unset, gen-ai deploys keyless and LLM
+          # calls fail with 401 until a key is provided.
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
         run: |
           umask 077
           python3 -c '
@@ -126,6 +130,9 @@ jobs:
               }
           }
           data["userService"]["serviceClientSecret"] = QuotedStr(os.environ.get("SERVICE_CLIENT_SECRET", ""))
+          # Optional — the llm-credentials secret is not `required` in the chart, so an empty
+          # value renders fine (gen-ai just runs without a Logos key).
+          data["genAi"] = {"llmApiKey": QuotedStr(os.environ.get("LLM_API_KEY", ""))}
           yaml.dump(data, sys.stdout, default_flow_style=False)
           ' > infra/helm/secrets-values.yaml
 
