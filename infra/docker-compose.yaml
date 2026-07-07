@@ -44,6 +44,8 @@ services:
       CONTENT_SERVICE_URL: http://content-service:8082
       GEN_AI_URL: http://gen-ai:8000
       JWT_ISSUER_URI: http://user-service:8081
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://grafana-lgtm:4318/v1/metrics
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/traces
       # Comma-separated allowed CORS origins. Declared here so a value set in .env reaches the
       # container; empty by default (gateway fails closed). The dev override sets '*'.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
@@ -85,6 +87,8 @@ services:
       # Secret for the client_credentials token used to call content-service's subscribe/unsubscribe
       # endpoints (scope source.write). Override SERVICE_CLIENT_SECRET in production.
       SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET}
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://grafana-lgtm:4318/v1/metrics
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/traces
     healthcheck:
       test:
         - CMD
@@ -114,6 +118,8 @@ services:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
       JWT_ISSUER_URI: http://user-service:8081
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://grafana-lgtm:4318/v1/metrics
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/traces
     healthcheck:
       test:
         - CMD
