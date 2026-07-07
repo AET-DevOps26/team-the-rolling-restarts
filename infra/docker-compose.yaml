@@ -210,6 +210,8 @@ services:
       - "${LGTM_GRAFANA_PORT:-3001}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
       - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
+    volumes:
+      - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
     networks:
       - backend
 
