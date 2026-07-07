@@ -39,6 +39,44 @@ api_json() {
   curl $curl_extra "${args[@]}" "$url" 2>/dev/null || true
 }
 
+# Best-effort: query Loki (via Grafana's datasource proxy) for a log line matching a regex,
+# emitted by the given service in the last N seconds. Grafana only runs on the same host as
+# the reverse proxy for local docker-compose — for the VM/k8s targets it's not reachable
+# without a tunnel/port-forward, so this returns "skip" (not "fail") when unreachable.
+loki_grafana_host() {
+  # base_url is like http://localhost:8080 or http://<vm-ip> or https://<ingress-host> — Grafana
+  # shares the same host, on the docker-compose-published Grafana port.
+  echo "$base_url" | sed -E 's#^(https?://[^:/]+).*#\1#'
+}
+
+check_log_reaches_loki() {
+  local desc="$1" service="$2" pattern="$3"
+  local grafana_url grafana_port="${LGTM_GRAFANA_PORT:-3001}"
+  grafana_url="$(loki_grafana_host):${grafana_port}"
+
+  if ! curl $curl_extra -so /dev/null --connect-timeout 3 --max-time 5 "$grafana_url/api/health"; then
+    skip "$desc (Grafana not reachable at $grafana_url)"
+    return
+  fi
+
+  local now start body count
+  now=$(date +%s)
+  start=$((now - 300))
+  # grafana-lgtm's bundled Grafana default admin credential, not a real secret.
+  local grafana_auth="-u admin:admin" # gitleaks:allow
+  body=$(curl $curl_extra -s $grafana_auth --connect-timeout 5 --max-time 10 \
+    "$grafana_url/api/datasources/proxy/uid/loki/loki/api/v1/query_range" \
+    --data-urlencode "query={service_name=\"$service\"} |~ \"$pattern\"" \
+    --data-urlencode "start=${start}000000000" \
+    --data-urlencode "end=${now}000000000" 2>/dev/null || true)
+  count=$(echo "$body" | jq -r '[.data.result[]?.values[]?] | length' 2>/dev/null || echo 0)
+  if [ "${count:-0}" -gt 0 ]; then
+    check "$desc" "found" "found"
+  else
+    check "$desc" "found" "not found"
+  fi
+}
+
 # Register (idempotent) then log in a user; echo their JWT. Arg: USERNAME
 register_login() {
   local uname="$1"
@@ -52,6 +90,10 @@ register_login() {
 echo "=== Reverse Proxy + Health ==="
 check "Web Client via /" "200" "$(http "$base_url/")"
 check "API Gateway health" "200" "$(http "$base_url/actuator/health")"
+echo ""
+
+echo "=== Log Aggregation (Loki) ==="
+check_log_reaches_loki "api-gateway health-check request logged in Loki" "api-gateway" "GET /actuator/health"
 echo ""
 
 echo "=== API Routing ==="
