@@ -8,9 +8,10 @@ package root `rolling_restarts.*` (note: underscore, not the usual `rollingresta
 - Package: `rolling_restarts.gateway` — `config/`, `controller/`, `exception/`
 - Only controller: `RootController.java` (likely just a root/health route —
   routing itself is Spring Cloud Gateway config, not hand-written controllers)
-- Role: routes traffic to user-service/content-service, validates JWTs as a
+- Role: routes traffic to user-service/content-service/gen-ai, validates JWTs as a
   resource server, aggregates Swagger UI for all services
-  (`springdoc.swagger-ui.urls[...]` in `application.properties`)
+  (`springdoc.swagger-ui.urls[...]` in `application.properties`). Public (no JWT):
+  `/api/users/auth/**`, GET content reads, `/api/ai/**`.
 - **Does not count as one of the required ≥3 business-domain microservices**
   — it's routing/infra. See `docs/requirements/STATUS.md` §03.
 - Tests: 5 files, e.g. `SubscriberScopeTest.java`

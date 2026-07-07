@@ -43,6 +43,7 @@ The gateway uses `StripPrefix` filters:
 The gateway SecurityConfig permits these public paths (no JWT required):
 - `/api/users/auth/**` — registration and login
 - GET `/api/content/sources`, `/api/content/topics`, `/api/content/articles` — public reads
+- `/api/ai/**` — GenAI endpoints (summarize, explain, etc.; unauthenticated for browser demos)
 - Swagger UI, actuator health, root endpoints
 
 All other routes require JWT Bearer token.

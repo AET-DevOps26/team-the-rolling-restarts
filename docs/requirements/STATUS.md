@@ -21,6 +21,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ✅ Real user-facing use case — `POST /summarize` implemented (gateway: `/api/ai/summarize`); fetches article text from content-service when `articleId` is supplied
+- ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
 - ⚠️ Cloud + local model support — Logos (cloud) path implemented via `get_chat_model()` + `LLM_PROVIDER=logos`; Ollama provider branch exists but runtime/container wiring lands in PR3
 - ❌ RAG / vector DB (optional bonus) — not started
 
