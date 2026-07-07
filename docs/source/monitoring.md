@@ -4,15 +4,83 @@ Metrics, dashboards, and alerts run on `grafana/otel-lgtm` — a single image bu
 Prometheus, Grafana, Tempo (traces), Loki (logs), and Pyroscope (profiles). Same image, same
 configuration files, in both docker-compose and Kubernetes/Helm.
 
-## Accessing Grafana
+## Reaching the monitoring stack
 
-- **docker-compose**: `http://localhost:${LGTM_GRAFANA_PORT:-3001}` (anonymous access, Admin
-  role — see `GF_AUTH_ANONYMOUS_ENABLED` in the image's own defaults).
-- **Kubernetes**: no public ingress is exposed. Port-forward instead:
-  ```sh
-  kubectl port-forward svc/grafana-lgtm 3001:3000 -n <namespace>
-  ```
-  then open `http://localhost:3001`.
+The stack is **deliberately not exposed publicly** in any target — no ingress route, no published
+admin UI on the internet (the AET fair-use policy forbids open admin UIs, and Grafana here runs
+with anonymous Admin access). You reach it over a local port instead.
+
+### docker-compose (local)
+
+Grafana is published straight to your host:
+
+```sh
+# from the repo root, with the stack up (make compose-up)
+open http://localhost:3001          # or whatever LGTM_GRAFANA_PORT is set to in infra/.env
+```
+
+- Port: host `3001` → container `3000`, overridable via `LGTM_GRAFANA_PORT` in `infra/.env`
+  (`infra/.env.example` ships it as `3001`).
+- Auth: none needed — the `grafana/otel-lgtm` image enables anonymous **Admin** access by
+  default. `admin` / `admin` also works if a login is ever prompted (this is what
+  `infra/scripts/smoke-test.sh` uses for its Loki datasource-proxy query).
+
+### Kubernetes (Helm or raw manifests)
+
+There is **no ingress** for `grafana-lgtm` — reach it with a port-forward to the ClusterIP
+Service:
+
+```sh
+# pick your namespace (kubernetes-test, your dev namespace, prod, …)
+kubectl port-forward svc/grafana-lgtm 3001:3000 -n <namespace>
+# then open:
+open http://localhost:3001
+```
+
+If you're not sure it's running:
+
+```sh
+kubectl get pods,svc -n <namespace> -l app=grafana-lgtm
+```
+
+### Once you're in Grafana
+
+Everything below is provisioned automatically — nothing to import by hand:
+
+- **Dashboard** — left nav → *Dashboards* → **Service Overview** (request rate / error rate /
+  duration percentiles per service; use the `job` dropdown at the top to filter to a service).
+- **Alerts** — left nav → *Alerting* → *Alert rules* → **Service Health** folder (the two rules
+  below).
+- **Logs** — left nav → *Explore* → pick the **Loki** datasource → e.g. query
+  `{service_name="api-gateway"}` (all four services forward logs here).
+- **Traces** — *Explore* → **Tempo** datasource. **Profiles** — *Explore* → **Pyroscope**.
+
+### Reaching Prometheus directly (ad-hoc PromQL)
+
+The bundled Prometheus listens on `9090` inside the container. It's normally used through
+Grafana's *Explore*, but you can hit its own UI/API directly:
+
+```sh
+# docker-compose: 9090 isn't published to the host, so go through the container
+docker exec rolling-restarts-grafana-lgtm-1 \
+  curl -s 'http://localhost:9090/api/v1/query?query=up'
+
+# Kubernetes: the Service only exposes 3000/4317/4318, so port-forward to the POD's 9090
+kubectl port-forward "$(kubectl get pod -n <namespace> -l app=grafana-lgtm -o name)" \
+  9090:9090 -n <namespace>
+# then browse http://localhost:9090
+```
+
+### OTLP ingest endpoints (for reference)
+
+Services push metrics/traces/logs to the collector inside the same container, not to Grafana's
+port:
+
+- OTLP/HTTP: `http://grafana-lgtm:4318` (docker-compose service DNS / Kubernetes Service name)
+- OTLP/gRPC: `grafana-lgtm:4317`
+
+You don't normally call these by hand — they're wired into every service's env
+(`MANAGEMENT_OTLP_METRICS_EXPORT_URL` etc. for Spring, `OTEL_EXPORTER_OTLP_ENDPOINT` for gen-ai).
 
 ## What's provisioned
 
@@ -35,6 +103,7 @@ Kubernetes deployment will silently drift from docker-compose.
 ## How metrics get here
 
 Two independent paths feed the same Prometheus:
+
 1. **OTLP push** (api-gateway, user-service, content-service, gen-ai) — drives the dashboard and
    the slow-response alert. Spring services use `management.otlp.metrics.export.url` /
    `management.opentelemetry.tracing.export.otlp.endpoint`; gen-ai uses the existing
