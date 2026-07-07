@@ -5,9 +5,10 @@ in the working tree — exclude it from any `find`/`grep` over this directory).
 
 ## Current state
 
-- `app/main.py` — `/health` plus `POST /summarize` (router at service root;
-  gateway exposes `/api/ai/summarize`). Lifespan handler for startup/shutdown.
-  Unified error handlers registered (`{timestamp, code, message, details, path}`).
+- `app/main.py` — `/health` plus `POST /summarize`, `/explain`, `/sentiment`, `/qa`
+  (routers at service root; gateway exposes `/api/ai/*`). Lifespan handler for
+  startup/shutdown. Unified error handlers registered
+  (`{timestamp, code, message, details, path}`).
 - `app/config.py` — Logos defaults (`llm_provider=logos`, `openai/gpt-oss-120b`,
   Logos base URL, Ollama URL, `internal_api_url` for gateway content reads).
 - `app/llm/provider.py` — `get_chat_model()` factory branches on `logos` vs
@@ -15,7 +16,11 @@ in the working tree — exclude it from any `find`/`grep` over this directory).
 - `app/services/content.py` — `get_article_text()` fetches articles via httpx
   from `{INTERNAL_API_URL}/api/content/articles/{id}`; 404 → `ArticleNotFoundError`.
 - `app/routers/summarize.py` — summarization endpoint with length/style prompts.
-- `tests/` — `test_health.py`, `test_summarize.py` (offline, mocked LLM + content).
+- `app/routers/explain.py` — simplified explanations by knowledge level.
+- `app/routers/sentiment.py` — sentiment + bias via structured output (JSON fallback).
+- `app/routers/qa.py` — single-article grounded Q&A.
+- `tests/` — `test_health.py`, `test_summarize.py`, `test_explain.py`,
+  `test_sentiment.py`, `test_qa.py` (offline, mocked LLM + content).
 
 ## Generated client
 
