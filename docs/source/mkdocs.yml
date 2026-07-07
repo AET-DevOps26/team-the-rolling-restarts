@@ -20,6 +20,7 @@ nav:
     - OpenAPI Workflow: openapi-workflow.md
     - Web Client Integration: web-client-integration.md
     - Deployment Testing: deployment-testing.md
+    - Monitoring: monitoring.md
     - Secrets & Environment Variables: secrets-reference.md
     - Security Scanning: security-scanning.md
   - Infrastructure:

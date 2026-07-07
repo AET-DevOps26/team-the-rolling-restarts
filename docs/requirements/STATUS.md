@@ -51,10 +51,24 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 ## 07 — Observability
 
-- ⚠️ Metrics collection — implemented via **OpenTelemetry + `grafana-lgtm`** (all-in-one Grafana/Loki/Tempo/Mimir image), not a standalone Prometheus deployment; Spring services depend on `spring-boot-starter-opentelemetry`; **this differs from the letter of the requirement ("Prometheus must be used") even though it satisfies the spirit** (request count/latency/error rate should be derivable from OTel metrics in Mimir/Prometheus-compatible storage) — worth flagging with the tutor if in doubt
-- ✅ GenAI service instrumented — OpenTelemetry SDK in `services/gen-ai` (FastAPI traces + custom LLM metrics via OTLP to `grafana-lgtm`)
-- ❌ Grafana dashboards exported as `.json` — none found in the repo
-- ❌ Alert rules — none found (no Prometheus alerting rules, no Grafana alert YAML/JSON)
+- ✅ Metrics collection — real Prometheus (bundled in `grafana/otel-lgtm`), fed via OTLP push
+  from all 3 Spring services + gen-ai, plus a classic scrape path for liveness (`up{job=...}`)
+- ✅ GenAI service instrumented — OpenTelemetry SDK in `services/gen-ai` (FastAPI traces + custom
+  LLM metrics via OTLP to `grafana-lgtm`), plus a `/metrics` scrape endpoint
+- ✅ Grafana dashboard exported as `.json` — `infra/grafana/dashboards/service-overview.json`
+- ✅ Alert rules — `infra/grafana/provisioning/alerting/rules.yaml` (slow response time, service
+  down)
+- ✅ Log aggregation — application logs from all 4 services reach Loki via OTLP;
+  `infra/scripts/smoke-test.sh` cross-checks its own requests appear there (real per-request log
+  lines come from a new `RequestLoggingFilter` on all 3 Spring services, added for exactly this)
+- ✅ Deployed to Kubernetes/Helm, not just docker-compose
+- ⚠️ No per-pod resource-usage metrics in Kubernetes — cluster RBAC doesn't allow the
+  cluster-scoped access the cAdvisor scrape approach needs (verified, not just assumed)
+- ⚠️ Security fix applied along the way: `/actuator/prometheus` was briefly reachable
+  unauthenticated from the public internet via nginx/ingress before the public routes were
+  narrowed to `/actuator/health` only — see `docs/internal/06-observability.md`
+- ⚠️ `infra/helm/files/grafana/*` is a manually-copied duplicate of `infra/grafana/*` (no CI check
+  keeps them in sync) — see `docs/internal/06-observability.md`
 
 ## 08 — Testing
 
@@ -74,7 +88,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Architecture info in root `README.md` (service table + project layout)
 - ⚠️ Setup/quick-start instructions — exist in `docs/source/index.md` and the `Makefile`, but are **not surfaced in root `README.md`** itself
 - ❌ CI/CD instructions in README — not present (exists implicitly in workflow files only)
-- ❌ Monitoring instructions in README — not present
+- ✅ Monitoring instructions in README — `## Monitoring` section added, links to `docs/source/monitoring.md`
 - ❌ Student/contributor responsibilities section in README — team ownership rules live in `docs/requirements/01-team-and-collaboration.md` but aren't reflected in `README.md`
 
 ## Team & Process (01, 02) — not verifiable from code
@@ -99,10 +113,15 @@ activity rather than this file.
    given the approaching deadline. Not yet scaffolded.
 2. **GenAI secondary endpoints** — `/summarize` works; `/explain`, `/sentiment`, `/qa`
    still pending gen-ai PR2. The web client widgets are wired and ready.
-3. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
-   plausible metrics backbone, but the *deliverables* (exported dashboard `.json`,
-   an alert rule) don't exist yet.
+3. ~~**No Prometheus/Grafana dashboards or alerts**~~ — done: a real Prometheus (bundled in
+   `grafana/otel-lgtm`), an exported dashboard (`infra/grafana/dashboards/service-overview.json`),
+   and alert rules (`infra/grafana/provisioning/alerting/rules.yaml`) are wired up and deployed to
+   both docker-compose and Kubernetes/Helm, plus log export to Loki from all 4 services. See
+   `docs/internal/06-observability.md` and `docs/source/monitoring.md` for details and known gaps
+   (no per-pod K8s resource panel; tight K8s resource budget; manual `infra/helm/files/grafana/*`
+   sync).
 4. **No client tests, no GenAI tests** — Spring is the only side with real test
    coverage.
-5. **Root README is thin** — quick-start, CI/CD, monitoring, and responsibilities
-   sections should be pulled up from docs/Makefile into `README.md` itself.
+5. **Root README is thin** — quick-start, CI/CD, and responsibilities sections should still be
+   pulled up from docs/Makefile into `README.md` itself. A monitoring section has since been
+   added (see 10 above).
