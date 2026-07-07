@@ -176,11 +176,26 @@ genAi:
   imageName: gen-ai
   image: ""
   port: 8000
+  # Optional Logos API key (lg-...); only reachable from TUM network / eduVPN.
+  # Override via secrets-values.yaml (see secrets-values.example.yaml).
+  llmApiKey: ""
   env:
     - name: PYTHONUNBUFFERED
       value: "1"
     - name: LOG_LEVEL
       value: INFO
+    - name: LLM_PROVIDER
+      value: logos
+    - name: LLM_BASE_URL
+      value: https://logos.aet.cit.tum.de/v1
+    - name: LLM_MODEL
+      value: openai/gpt-oss-120b
+    - name: INTERNAL_API_URL
+      value: http://api-gateway:8080
+  secretEnv:
+    - name: LLM_API_KEY
+      secretName: llm-credentials
+      secretKey: apiKey
   probes:
     path: /health
     readiness:

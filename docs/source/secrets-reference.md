@@ -20,7 +20,7 @@ These must be changed from defaults in production. The dev defaults below work o
 | `MONGO_ROOT_USERNAME` | `root` | Keep or change | mongodb, user-service, content-service |
 | `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.dev.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
 | `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.dev.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
-| `LLM_API_KEY` | _(empty)_ | OpenAI / provider API key | gen-ai |
+| `LLM_API_KEY` | _(empty)_ | Logos API key (`lg-...`, from tutor); TUM network / eduVPN only | gen-ai |
 
 ### Configuration
 
@@ -33,8 +33,12 @@ Safe to leave at defaults for local dev. Override as needed.
 | `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | API base URL baked into web client at build time |
 | `APP_PORT` | `8080` (local) / `80` (VM) | Host port for the nginx reverse proxy — the single entry point; the web client is served through it at `/`, not on its own port |
 | `GEN_AI_PORT` | `8000` | Host port for GenAI service |
-| `LLM_PROVIDER` | `openai` | LLM provider (`openai`, etc.) |
-| `LLM_MODEL` | `gpt-4o-mini` | Model name |
+| `LLM_PROVIDER` | `logos` | LLM provider (`logos` for cloud, `ollama` for local) |
+| `LLM_BASE_URL` | `https://logos.aet.cit.tum.de/v1` | Logos OpenAI-compatible endpoint (TUM network / eduVPN only) |
+| `LLM_MODEL` | `openai/gpt-oss-120b` | Model name (Logos default; use an Ollama model name when `LLM_PROVIDER=ollama`) |
+| `INTERNAL_API_URL` | `http://api-gateway:8080` | In-network URL gen-ai uses to fetch articles via the gateway |
+| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama API URL (when `LLM_PROVIDER=ollama` + compose profile `local-llm`) |
+| `OLLAMA_PORT` | `11434` | Host port for Ollama (only with `--profile local-llm`) |
 | `LOG_LEVEL` | `INFO` | GenAI log level |
 | `MONGO_PORT` | `27017` | Host port for MongoDB |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB init database name |
@@ -51,9 +55,12 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
 APP_PORT=8080
 GEN_AI_PORT=8000
 
-LLM_PROVIDER=openai
-LLM_API_KEY=sk-your-openai-key-here
-LLM_MODEL=gpt-4o-mini
+LLM_PROVIDER=logos
+LLM_BASE_URL=https://logos.aet.cit.tum.de/v1
+LLM_API_KEY=lg-your-logos-key-here
+LLM_MODEL=openai/gpt-oss-120b
+INTERNAL_API_URL=http://api-gateway:8080
+OLLAMA_BASE_URL=http://ollama:11434
 LOG_LEVEL=INFO
 
 MONGO_PORT=27017
@@ -74,6 +81,8 @@ WATCHPACK_POLLING=false
 **File:** `infra/ansible/group_vars/all.yml` (copy from `all.yml.example`)
 
 All the same variables as Docker Compose, passed via `app_env`. The Ansible playbook templates them into the `.env` file on the VM.
+
+> **Azure VM is off the TUM network** — Logos (`https://logos.aet.cit.tum.de/v1`) is not reachable from the VM. Use `LLM_PROVIDER=ollama`, enable the Compose profile `local-llm` (starts an Ollama container), pull a model, and set `LLM_MODEL` to that model name. Alternatively, run gen-ai locally on eduVPN with `LLM_PROVIDER=logos`.
 
 ### Additional Ansible variables
 
@@ -99,9 +108,13 @@ app_env:
   APP_PORT: "8080"
   GEN_AI_PORT: "8000"
 
-  LLM_PROVIDER: "openai"
-  LLM_API_KEY: "sk-prod-key-from-vault"      # <-- real secret
-  LLM_MODEL: "gpt-4o-mini"
+  LLM_PROVIDER: "ollama"
+  LLM_BASE_URL: "https://logos.aet.cit.tum.de/v1"
+  LLM_API_KEY: ""
+  LLM_MODEL: "llama3.2"
+  INTERNAL_API_URL: "http://api-gateway:8080"
+  OLLAMA_BASE_URL: "http://ollama:11434"
+  OLLAMA_PORT: "11434"
   LOG_LEVEL: "INFO"
 
   MONGO_PORT: "27017"
@@ -137,6 +150,7 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 | `mongodb.rootPassword` | yes | Strong random password | mongodb + both Secrets |
 | `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | yes | Fresh RSA pair | `jwt-keys` Secret → user-service JWT signing |
 | `userService.serviceClientSecret` | yes | Strong random value (`openssl rand -hex 32`) | `service-credentials` Secret → user-service's client_credentials token for content-service subscribe/unsubscribe |
+| `genAi.llmApiKey` | no | Logos API key (`lg-...`); TUM network / eduVPN only | `llm-credentials` Secret → gen-ai cloud LLM calls |
 
 > **Rotating `mongodb.rootPassword`:** MongoDB only applies the root password on first init (empty
 > data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
@@ -218,7 +232,7 @@ The Spring services use profiles to switch between dev and production configurat
 | **api-gateway** | `CORS_ALLOWED_ORIGINS`, `JWT_ISSUER_URI`, `USER_SERVICE_URL`, `CONTENT_SERVICE_URL` |
 | **user-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER`, `JWT_RSA_PUBLIC_KEY`, `JWT_RSA_PRIVATE_KEY`, `CONTENT_SERVICE_URL`, `SERVICE_CLIENT_SECRET` |
 | **content-service** | `SPRING_MONGODB_URI`, `JWT_ISSUER_URI` |
-| **gen-ai** | `LLM_API_KEY` (optional — service starts without it but LLM calls fail) |
+| **gen-ai** | `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `INTERNAL_API_URL`; `LLM_API_KEY` optional (Logos key, TUM network / eduVPN only); `OLLAMA_BASE_URL` when `LLM_PROVIDER=ollama` |
 
 > **JWT issuer must match across services.** user-service stamps the `iss` claim on tokens from `JWT_ISSUER` and serves OIDC discovery at that URL. api-gateway and content-service validate tokens via `JWT_ISSUER_URI`, which must resolve to the same user-service URL (default `http://user-service:8081` in Compose/Helm). A mismatch causes resource servers to reject every token with 401.
 >
@@ -238,17 +252,19 @@ The Spring services use profiles to switch between dev and production configurat
 ### Before `make compose-up` (local dev)
 
 - [ ] `cp infra/.env.example infra/.env`
-- [ ] Set `LLM_API_KEY` if you want GenAI features to work
+- [ ] Set `LLM_API_KEY` (Logos `lg-...` key) if on TUM network / eduVPN and you want cloud LLM
+- [ ] Or set `LLM_PROVIDER=ollama` and run `make compose-up` with `--profile local-llm` for local model
 
 ### Before `make deploy-azure`
 
 - [ ] `cp infra/ansible/group_vars/all.yml.example infra/ansible/group_vars/all.yml`
 - [ ] Set a real password for `MONGO_ROOT_PASSWORD`
-- [ ] Set `LLM_API_KEY`
+- [ ] Set `LLM_PROVIDER=ollama` (Azure VM is off TUM network — Logos unreachable); use compose profile `local-llm`
 - [ ] Set `project_repo_url` to your fork/org
 
 ### Before `make helm-deploy`
 
 - [ ] `cp infra/helm/secrets-values.example.yaml infra/helm/secrets-values.yaml`
 - [ ] Set a real password for `mongodb.rootPassword`
+- [ ] Optionally set `genAi.llmApiKey` for Logos cloud LLM (in-cluster TUM network only)
 - [ ] For prod: `make helm-deploy ENV=prod`

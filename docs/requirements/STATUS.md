@@ -21,7 +21,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ❌ Real user-facing use case — `services/gen-ai/app/main.py` only exposes `/health`; no summarization/explanation/Q&A endpoint is implemented yet despite being described in `services/gen-ai/README.md`
-- ❌ Cloud + local model support — only `langchain-openai` is a dependency; no local-model path (GPT4All/LLaMA/Ollama) is wired up; `app/config.py` has an `llm_provider` field but no branching logic uses it
+- ⚠️ Cloud + local model support — Logos cloud + Ollama local wired via env across compose/helm/k8s (`LLM_PROVIDER=logos|ollama`, compose profile `local-llm`); provider factory in gen-ai (PR1)
 - ❌ RAG / vector DB (optional bonus) — not started
 
 ## 05 — Environment & Deployment

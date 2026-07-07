@@ -22,11 +22,26 @@ spec:
           ports:
             - containerPort: 8000
 
+          # Keep env in sync with infra/helm/values.yaml (genAi block); Helm is the primary deploy path.
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: LOG_LEVEL
               value: "INFO"
+            - name: LLM_PROVIDER
+              value: "logos"
+            - name: LLM_BASE_URL
+              value: "https://logos.aet.cit.tum.de/v1"
+            - name: LLM_MODEL
+              value: "openai/gpt-oss-120b"
+            - name: INTERNAL_API_URL
+              value: "http://api-gateway:8080"
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: llm-credentials
+                  key: apiKey
+                  optional: true
 
           readinessProbe:
             httpGet:
