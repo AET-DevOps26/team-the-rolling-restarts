@@ -41,6 +41,25 @@ it is on port 80. The gateway forwards requests based on path prefix.
 - `GET    /api/content/articles/{id}` — full article
 - `POST   /api/content/articles/saved` — batch-get articles by IDs
 
+### GenAI service (via `/api/ai/`)
+
+Public after gateway PR4 (`permitAll` on `/api/ai/**`). The web client does **not**
+call these from the browser directly: `web-client/src/lib/api/client.ts` is
+`server-only`, so interactive widgets use **Next.js Server Actions**
+(`web-client/src/app/(app)/article/[id]/ai-actions.ts`) that delegate to typed
+wrappers in `web-client/src/lib/api/ai.ts` (`auth: false` on each request).
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `POST /api/ai/summarize` | `{ articleId, length? }` → `{ summary, model, provider }` |
+| `POST /api/ai/explain` | `{ articleId, knowledgeLevel? }` → `{ explanation, knowledgeLevel, model, provider }` |
+| `POST /api/ai/sentiment` | `{ articleId }` → `{ sentiment, score, bias, rationale, model, provider }` |
+| `POST /api/ai/qa` | `{ articleId, question }` → `{ answer, model, provider }` |
+
+Article detail page (`web-client/src/app/(app)/article/[id]/page.tsx`) renders
+`ArticleAiPanel` (tabs for summary / explain / sentiment / Q&A). Errors are shown
+inline in each widget; the page still renders if GenAI is unavailable.
+
 ## What should be updated in web-client
 
 - **`web-client/README.md`** — the "Backend integration" section still references

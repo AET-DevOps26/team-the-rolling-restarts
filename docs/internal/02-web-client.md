@@ -15,7 +15,7 @@ src/
     layout/         app-sidebar, app-topbar
     ui/             shadcn primitives
     settings/       profile-section, sources-section, topics-section, notifications-section
-    article/        related-articles, etc.
+    article/        related-articles, ai/ (ArticleAiPanel + widgets)
     feed/           dashboard-feed, article-card, feed-toolbar
     marketing/      sources-strip (landing page)
   lib/
@@ -24,9 +24,11 @@ src/
     api.ts          TypeScript types generated FROM api/openapi.yaml
 ```
 
-Real, non-trivial page inventory exists — this is not a stub UI. See
-[07-gotchas.md](07-gotchas.md) for the critical caveat: **none of it is wired
-to a backend yet.**
+Real, non-trivial page inventory exists — this is not a stub UI. The article
+detail page consumes live content APIs (`src/lib/api/reads.ts`) and GenAI via
+server actions (`src/app/(app)/article/[id]/ai-actions.ts` → `src/lib/api/ai.ts`
+→ gateway `/api/ai/*`). See [07-gotchas.md](07-gotchas.md) for remaining gaps
+(e.g. client test runner).
 
 ## Config files worth knowing about
 
