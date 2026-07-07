@@ -2,6 +2,7 @@ import { ChevronLeft, Share2 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { ArticleAiPanel } from "@/components/article/ai/article-ai-panel";
 import { RelatedArticles } from "@/components/article/related-articles";
 import { SaveButton } from "@/components/feed/save-button";
 import { ArticleThumbnailFromArticle } from "@/components/feed/article-thumbnail";
@@ -98,6 +99,7 @@ export default async function ArticleDetailPage({
           </p>
         )}
       </div>
+      <ArticleAiPanel articleId={article.id} />
       <Separator className="my-4" />
       <RelatedArticles articles={related} sourcesById={sourcesById} topicsById={topicsById} />
     </main>

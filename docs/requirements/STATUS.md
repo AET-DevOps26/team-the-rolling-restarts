@@ -20,7 +20,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 04 — GenAI Component
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
-- ✅ Real user-facing use case — `POST /summarize`, `/explain`, `/sentiment`, `/qa` implemented (gateway: `/api/ai/*`); fetches article text from content-service when `articleId` is supplied
+- ✅ Real user-facing use case — `POST /summarize`, `/explain`, `/sentiment`, `/qa` implemented (gateway: `/api/ai/*`); fetches article text from content-service when `articleId` is supplied; **web client article page** exposes Summary / Explain / Sentiment / Q&A widgets calling `/api/ai/*` via server actions (end-to-end user flow)
 - ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
 - ⚠️ Cloud + local model support — Logos cloud + Ollama local wired via env across compose/helm/k8s (`LLM_PROVIDER=logos|ollama`, compose profile `local-llm`); provider factory (`get_chat_model()`) in gen-ai (PR1)
 - ❌ RAG / vector DB (optional bonus) — not started
@@ -97,8 +97,8 @@ activity rather than this file.
    problem-statement bullets ("tracks user interactions", "bookmarking") that
    currently have zero implementation, and is the cheapest legitimate option
    given the approaching deadline. Not yet scaffolded.
-2. **GenAI has no real feature yet** — only `/health`. This is the single largest
-   open item: no summarization/Q&A endpoint, no local-model path, no RAG.
+2. **GenAI secondary endpoints** — `/summarize` works; `/explain`, `/sentiment`, `/qa`
+   still pending gen-ai PR2. The web client widgets are wired and ready.
 3. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
    plausible metrics backbone, but the *deliverables* (exported dashboard `.json`,
    an alert rule) don't exist yet.
