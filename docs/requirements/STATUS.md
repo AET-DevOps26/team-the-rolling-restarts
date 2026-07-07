@@ -21,6 +21,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ❌ Real user-facing use case — `services/gen-ai/app/main.py` only exposes `/health`; no summarization/explanation/Q&A endpoint is implemented yet despite being described in `services/gen-ai/README.md`
+- ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
 - ❌ Cloud + local model support — only `langchain-openai` is a dependency; no local-model path (GPT4All/LLaMA/Ollama) is wired up; `app/config.py` has an `llm_provider` field but no branching logic uses it
 - ❌ RAG / vector DB (optional bonus) — not started
 
