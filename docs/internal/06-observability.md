@@ -84,13 +84,28 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   approach needs cluster-scoped RBAC (`nodes/metrics`, `nodes/proxy`) that this course cluster
   doesn't grant to namespaced tenants (verified: `kubectl auth can-i create clusterrole` → `no`,
   checked against the real cluster, not assumed).
+- **OPEN / DEFERRED — the Spring services' 260Mi memory *limit* is below their measured usage
+  and will OOMKill.** Measured on the live `kubernetes-test` namespace (`kubectl top pod`, July
+  2026, running the pre-instrumentation image `2dedb24` — i.e. *before* this branch's OTLP
+  metrics/traces/logs export was even added): api-gateway 276–290Mi, user-service 268–285Mi,
+  content-service 254–269Mi, all idle. This branch trims their limit to **260Mi**, which several
+  pods already exceed before adding instrumentation overhead — a guaranteed OOMKill on deploy. The
+  fix is to raise the *limit* (not the request): at the default **1 replica** the namespace has
+  ~1080Mi of headroom (used ~1920Mi of the 3000Mi `limits.memory` quota), so bumping Spring to a
+  safe ~360–400Mi limit fits easily. It does **not** fit at 2 replicas *with* the 640Mi monitoring
+  bundle co-located (2400Mi Spring + 640Mi + the rest exceeds 3000Mi) — co-locating monitoring
+  structurally requires 1 replica. Per the AET fair-use policy the *reserved* quantity is
+  `requests` (team cap 4 vCPU / 6 GB across all namespaces), not `limits`, so raising the limit is
+  "free" against the team budget. **Decision deferred by the team** (replica count, final limits,
+  and whether to slim the JVM footprint — SerialGC / lower `MaxRAMPercentage` / native image — are
+  all still open); do not treat the current 260Mi as validated. `values-dev.yaml` is pinned to 1
+  replica; `values-prod.yaml` is still 2.
 - The Kubernetes resource budget for `grafana-lgtm` is tight (see `infra/helm/values.yaml`'s
   `monitoring.resources` and the trimmed limits on every other service) — every other service's
   Helm `values.yaml` and raw `infra/k8s/deployments/*.yml` limits were trimmed to make room for
-  it inside the namespace's hard quota (2 CPU / 3000Mi at 2 replicas/service, verified empirically
-  against the live cluster). Margin is small (~210m CPU / ~60Mi memory across the whole
-  namespace) — verify with `kubectl top pod` after deploying and adjust if it's running close to
-  the limit.
+  it inside the namespace's hard quota (2 CPU / 3000Mi `limits`, verified empirically against the
+  live cluster: quota reported `limits.cpu 2`, `limits.memory 3000Mi`). At 1 replica the fit is
+  comfortable; see the OOM item above for the 2-replica case.
 - `infra/helm/files/grafana/*` is a manually-copied duplicate of most of `infra/grafana/*` —
   Helm's `.Files.Get` can't escape the chart root (`infra/helm/`), so the config files had to be
   copied in rather than referenced directly. Nothing in CI enforces the two stay in sync; if

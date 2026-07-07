@@ -61,7 +61,15 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Log aggregation — application logs from all 4 services reach Loki via OTLP;
   `infra/scripts/smoke-test.sh` cross-checks its own requests appear there (real per-request log
   lines come from a new `RequestLoggingFilter` on all 3 Spring services, added for exactly this)
-- ✅ Deployed to Kubernetes/Helm, not just docker-compose
+- ✅ Deployed to Kubernetes/Helm, not just docker-compose — Prometheus scrapes per-pod
+  (`kubernetes_sd_configs`, role: pod) via a dedicated `grafana-lgtm` ServiceAccount +
+  namespaced Role/RoleBinding, so `rate()` panels/alerts stay correct across replicas
+- ⚠️ **OPEN / DEFERRED — Spring memory limit (260Mi) is below measured usage → will OOMKill.**
+  Live `kubectl top pod` shows the Spring services at 254–290Mi idle (pre-instrumentation), above
+  the 260Mi limit this branch sets. Fits fine once the *limit* is raised to ~360–400Mi (free
+  against the fair-use `requests` budget) at 1 replica; co-locating monitoring at 2 replicas
+  doesn't fit the 3000Mi namespace quota. Replica count and final limits deferred to the team —
+  `values-dev.yaml` pinned to 1 replica for now. See `docs/internal/06-observability.md`
 - ⚠️ No per-pod resource-usage metrics in Kubernetes — cluster RBAC doesn't allow the
   cluster-scoped access the cAdvisor scrape approach needs (verified, not just assumed)
 - ⚠️ Security fix applied along the way: `/actuator/prometheus` was briefly reachable
