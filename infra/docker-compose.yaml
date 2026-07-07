@@ -214,6 +214,7 @@ services:
       - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
       - ./grafana/dashboards/service-overview.json:/otel-lgtm/grafana-dashboards-custom/service-overview.json:ro
       - ./grafana/provisioning/dashboards/custom-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml:ro
+      - ./grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml:ro
     networks:
       - backend
 
