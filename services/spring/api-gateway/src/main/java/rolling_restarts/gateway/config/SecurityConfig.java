@@ -44,6 +44,8 @@ public class SecurityConfig {
 								"/api/content/topics",
 								"/api/content/articles", "/api/content/articles/**")
 						.permitAll()
+						.requestMatchers("/api/ai/**")
+						.permitAll()
 						.requestMatchers(HttpMethod.POST,
 								"/api/content/sources/*/subscribe",
 								"/api/content/sources/*/unsubscribe")
