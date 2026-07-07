@@ -17,14 +17,17 @@ flagging to a tutor if the letter of the requirement matters.
   `grafana/otel-lgtm` — bundles **Grafana + Loki (logs) + Tempo (tracing) +
   Mimir (metrics)** in one container. Ports: Grafana UI on
   `${LGTM_GRAFANA_PORT:-3001}`, OTLP gRPC `4317`, OTLP HTTP `4318`.
-- `services/gen-ai` has **zero** metrics/tracing instrumentation — no
-  `prometheus_client`, no OTel SDK usage found.
+- `services/gen-ai` exports **OpenTelemetry traces and custom LLM metrics** via OTLP
+  HTTP to the same `grafana-lgtm` collector (`OTEL_EXPORTER_OTLP_ENDPOINT`,
+  default `http://grafana-lgtm:4318` in compose/helm/k8s). FastAPI auto-instrumentation
+  plus `app/llm/invoke.py` counters/histograms for request count, latency, errors,
+  and token usage (when LangChain exposes them). Instrumentation is no-op when the
+  OTLP endpoint env is unset (CI/offline).
 
 ## What's missing (required deliverables, not just "nice to have")
 
 - No exported Grafana dashboard `.json` anywhere in the repo
 - No alert rule file (Prometheus alerting rules or Grafana alert YAML/JSON)
-- gen-ai instrumentation
 
 ## Why this matters beyond compliance
 
@@ -42,4 +45,5 @@ grep -rn "opentelemetry\|micrometer" services/spring/*/build.gradle
 grep -n -A5 "grafana-lgtm:" infra/docker-compose.yaml
 find . -iname "*dashboard*.json" -o -iname "*alert*rule*" | grep -v node_modules | grep -v .venv
 grep -n "prometheus_client\|opentelemetry" services/gen-ai/pyproject.toml
+grep -rn "opentelemetry" services/gen-ai/app --include="*.py"
 ```

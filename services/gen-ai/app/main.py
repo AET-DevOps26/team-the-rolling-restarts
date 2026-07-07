@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from app.config import settings
 from app.errors import register_exception_handlers
+from app.observability import setup_observability
 from app.routers import summarize
 
 logging.basicConfig(
@@ -30,6 +31,7 @@ app = FastAPI(
 )
 
 register_exception_handlers(app)
+setup_observability(app)
 app.include_router(summarize.router)
 
 

@@ -110,6 +110,22 @@ docker run -p 8000:8000 --env-file .env gen-ai-service
 | `OLLAMA_BASE_URL` | Ollama HTTP base URL (when `LLM_PROVIDER=ollama`) | `http://ollama:11434` |
 | `INTERNAL_API_URL` | api-gateway base for content reads | `http://api-gateway:8080` |
 | `LOG_LEVEL` | Logging level | `INFO` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP collector URL (omit for offline/CI no-op) | *(unset locally; `http://grafana-lgtm:4318` in compose/helm/k8s)* |
+| `OTEL_SERVICE_NAME` | OpenTelemetry service name | `gen-ai` |
+| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes (`key=value,...`) | *(optional)* |
+
+## Observability
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the service exports:
+
+- **Traces** — FastAPI auto-instrumentation (HTTP spans) via OTLP HTTP to the shared `grafana-lgtm` collector (Tempo).
+- **Metrics** — custom LLM counters/histograms from `app/llm/invoke.py`:
+  - `gen_ai.llm.requests` — invocation count (labels: `endpoint`, `provider`)
+  - `gen_ai.llm.latency` — invocation duration in seconds
+  - `gen_ai.llm.errors` — failed invocations
+  - `gen_ai.llm.prompt_tokens` / `gen_ai.llm.completion_tokens` — when LangChain exposes token usage
+
+If the OTLP endpoint is **unset** (local dev, CI), instrumentation is a no-op: the app starts and serves normally without contacting a collector.
 
 ## Running locally with Ollama
 

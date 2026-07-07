@@ -149,6 +149,8 @@ services:
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api-gateway:8080}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana-lgtm:4318
+      OTEL_SERVICE_NAME: gen-ai
     healthcheck:
       test:
         - CMD
