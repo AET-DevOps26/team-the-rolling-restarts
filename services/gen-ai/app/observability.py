@@ -63,7 +63,16 @@ def setup_observability(app: FastAPI) -> bool:
 
     logger_provider = LoggerProvider(resource=resource)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
-    logging.getLogger().addHandler(LoggingHandler(logger_provider=logger_provider))
+    otlp_handler = LoggingHandler(logger_provider=logger_provider)
+    logging.getLogger().addHandler(otlp_handler)
+    # uvicorn's default logging config sets propagate=False on "uvicorn" and
+    # "uvicorn.access" (and "uvicorn.error" ends up shielded too, since its parent
+    # "uvicorn" doesn't propagate further) specifically so app-level root logger
+    # config doesn't interfere with it. That also means nothing on those loggers
+    # ever reaches a handler attached only to root - i.e. virtually all request
+    # traffic logging - so the handler must be attached directly to them too.
+    for uvicorn_logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logging.getLogger(uvicorn_logger_name).addHandler(otlp_handler)
 
     try:
         from opentelemetry.instrumentation.logging import LoggingInstrumentor
