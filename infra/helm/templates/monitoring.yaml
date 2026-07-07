@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-prometheus-config
+data:
+  prometheus.yaml: |
+{{ .Files.Get "files/grafana/prometheus.yaml" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-dashboard
+data:
+  service-overview.json: |
+{{ .Files.Get "files/grafana/dashboards/service-overview.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-provisioning
+data:
+  custom-dashboards.yaml: |
+{{ .Files.Get "files/grafana/provisioning/dashboards/custom-dashboards.yaml" | indent 4 }}
+  rules.yaml: |
+{{ .Files.Get "files/grafana/provisioning/alerting/rules.yaml" | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.monitoring.name }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Values.monitoring.name }}
+  template:
+    metadata:
+      labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 8 }}
+    spec:
+      containers:
+        - name: {{ .Values.monitoring.name }}
+          image: {{ .Values.monitoring.image }}
+          ports:
+            - containerPort: 3000
+            - containerPort: 4317
+            - containerPort: 4318
+          resources:
+{{ toYaml .Values.monitoring.resources | nindent 12 }}
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /otel-lgtm/prometheus.yaml
+              subPath: prometheus.yaml
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/service-overview.json
+              subPath: service-overview.json
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
+              subPath: custom-dashboards.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
+              subPath: rules.yaml
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: grafana-lgtm-prometheus-config
+        - name: dashboard
+          configMap:
+            name: grafana-lgtm-dashboard
+        - name: provisioning
+          configMap:
+            name: grafana-lgtm-provisioning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.monitoring.name }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Values.monitoring.name }}
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: 3000
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
