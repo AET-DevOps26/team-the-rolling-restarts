@@ -31,6 +31,12 @@ spec:
               value: "http://user-service:8081"
             - name: CONTENT_SERVICE_URL
               value: "http://content-service:8082"
+            - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
+              value: "http://grafana-lgtm:4318/v1/metrics"
+            - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+              value: "http://grafana-lgtm:4318/v1/traces"
+            - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
+              value: "http://grafana-lgtm:4318/v1/logs"
             - name: SPRING_MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -78,15 +84,13 @@ spec:
             failureThreshold: 30
             periodSeconds: 10
 
-          # The target cluster enforces a ResourceQuota on LIMITS (total
-          # limits.cpu=2, limits.memory=3000Mi), so limits — not just requests —
-          # must stay small. These three JVM services dominate the budget:
-          # 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
-          # Keep in sync with infra/helm/values.yaml (userService.resources).
+          # Keep in sync with infra/helm/values.yaml (userService.resources) — trimmed to make
+          # room for grafana-lgtm in the same namespace; see infra/helm/values.yaml's monitoring
+          # block for the full budget.
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "50m"
+              memory: "200Mi"
             limits:
-              cpu: "350m"
-              memory: "512Mi"
+              cpu: "170m"
+              memory: "260Mi"
