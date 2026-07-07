@@ -72,6 +72,85 @@ Summarize article text or a stored article by ID.
 
 When `articleId` is provided, the service fetches headline and body paragraphs from content-service via the api-gateway (`GET /api/content/articles/{id}` — public, no auth).
 
+### `POST /explain`
+
+Simplified explanation of article text, tailored to a knowledge level.
+
+**Request body:**
+
+```json
+{
+  "articleId": "optional-article-id",
+  "text": "optional raw text (exactly one of articleId or text required)",
+  "knowledgeLevel": "child | beginner | intermediate | expert"
+}
+```
+
+**Response:**
+
+```json
+{
+  "explanation": "...",
+  "knowledgeLevel": "beginner",
+  "model": "openai/gpt-oss-120b",
+  "provider": "logos"
+}
+```
+
+### `POST /sentiment`
+
+Sentiment and light political-bias analysis of article text.
+
+**Request body:**
+
+```json
+{
+  "articleId": "optional-article-id",
+  "text": "optional raw text (exactly one of articleId or text required)"
+}
+```
+
+**Response:**
+
+```json
+{
+  "sentiment": "positive",
+  "score": 0.75,
+  "bias": "center",
+  "rationale": "The tone is optimistic about policy outcomes.",
+  "model": "openai/gpt-oss-120b",
+  "provider": "logos"
+}
+```
+
+`sentiment` is `positive`, `neutral`, or `negative`. `score` ranges from `-1.0` to `1.0`. `bias` is `left`, `center`, `right`, `unclear`, or `null`.
+
+### `POST /qa`
+
+Answer a question grounded in a single article's text (no RAG).
+
+**Request body:**
+
+```json
+{
+  "articleId": "optional-article-id",
+  "text": "optional raw text (exactly one of articleId or text required)",
+  "question": "What was discussed?"
+}
+```
+
+**Response:**
+
+```json
+{
+  "answer": "...",
+  "model": "openai/gpt-oss-120b",
+  "provider": "logos"
+}
+```
+
+The model answers only from the provided article text; if the answer is not present, it says so.
+
 ## LLM providers
 
 Set `LLM_PROVIDER` to switch backends:

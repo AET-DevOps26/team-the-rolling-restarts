@@ -22,20 +22,15 @@ rubric's categories rather than the requirement chunks.
 
 ## System
 
-### Functional System — **Basic**
+### Functional System — **Good** (partial end-to-end)
 
-Backend services (`api-gateway`, `user-service`, `content-service`) build,
-have real tests, and expose a documented REST contract. But there is no
-evidence of an actual working end-to-end user flow: the entire `web-client` UI
-(dashboard, feed, saved, settings, article pages) renders from
-`web-client/src/lib/mock/*`, not from the generated API client
-(`web-client/src/generated/api.ts`) or any live backend call — no `fetch`,
-`axios`, or `NEXT_PUBLIC_API`/`process.env` usage was found anywhere in
-`web-client/src`. `services/gen-ai` exposes only `/health`. So each piece
-builds in isolation, but nothing demonstrates them working together yet.
+Backend services build and expose REST + GenAI routes; the web client loads live
+articles and renders **AI widgets** on the article detail page (`ArticleAiPanel`)
+that call `/api/ai/*` through Next.js server actions. Summarize works end-to-end
+today; explain/sentiment/qa widgets are wired but depend on gen-ai PR2 endpoints.
 
-- **Evidence:** `web-client/src/lib/mock/{articles,sources,topics,user}.ts`; `web-client/src/generated/api.ts` (exists, unused); `services/gen-ai/app/main.py` (health check only)
-- **Re-verify:** `grep -rln "generated/personalised_news_aggregator_api_client\|fetch(\|axios\|NEXT_PUBLIC_API" web-client/src --include="*.tsx" --include="*.ts"` — empty output means still disconnected. Also recheck `services/gen-ai/app/main.py` for new routes beyond `/health`.
+- **Evidence:** `web-client/src/lib/api/reads.ts`, `web-client/src/lib/api/ai.ts`, `web-client/src/app/(app)/article/[id]/ai-actions.ts`, `web-client/src/components/article/ai/`; `services/gen-ai/app/routers/summarize.py`
+- **Re-verify:** open an article with the stack running; click **Summarize** and confirm a response. Re-check `services/gen-ai/app/main.py` for `/explain`, `/sentiment`, `/qa` when PR2 merges.
 
 ### Architecture Quality — **Good** (borderline)
 
@@ -50,18 +45,16 @@ exercise the defined interface yet (see Functional System above), so the
 - **Evidence:** `services/spring/settings.gradle`; `api/openapi.yaml`; `docs/requirements/STATUS.md` §03
 - **Re-verify:** `cat services/spring/settings.gradle` — check module count/names; re-run the Functional System check above.
 
-### User-Facing Value — **Basic**
+### User-Facing Value — **Good** (GenAI visible on article page)
 
-The UI is substantially scaffolded — dashboard, saved articles, settings,
-article detail, login/signup/forgot-password all exist as real pages, which is
-more than a stub. But since none of it is wired to live data or to the
-GenAI-generated summaries the problem statement centers on
-(`docs/source/PROBLEM_STATEMENT.md`), it currently reads as a UI prototype
-rather than a working product. This is the same underlying gap as Functional
-System, viewed from the "does it solve the user's problem yet" angle.
+The UI is substantially built — dashboard, saved, settings, article detail,
+login/signup — and the **article detail page** now surfaces GenAI: users can
+request summaries (and explain/sentiment/Q&A once backend PR2 lands) from
+`ArticleAiPanel`. Remaining gap: not all four GenAI endpoints exist in gen-ai
+yet, and broader product polish (third microservice, RAG) is still open.
 
-- **Evidence:** `web-client/src/app/(app)/{dashboard,saved,settings,article}` (real pages); no summary/AI text found in UI copy beyond static strings (`web-client/src/components/settings/notifications-section.tsx` mentions "summary" only as static UI label)
-- **Re-verify:** `find web-client/src/app -iname "page.tsx"` to confirm page inventory; `grep -rn "summar" web-client/src --include="*.tsx" -i` to check if AI-generated content has been wired into any page yet.
+- **Evidence:** `web-client/src/components/article/ai/article-ai-panel.tsx`; `web-client/src/app/(app)/article/[id]/page.tsx`
+- **Re-verify:** `grep -rn "ArticleAiPanel\|summarizeArticleAction" web-client/src --include="*.tsx"`; exercise widgets against a running stack.
 
 ---
 
