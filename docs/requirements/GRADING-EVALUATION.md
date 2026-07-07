@@ -77,15 +77,16 @@ Actions run history, which isn't visible here.
 
 A real metrics backbone exists (OpenTelemetry in all 3 Spring services +
 `grafana-lgtm` all-in-one, which bundles Grafana/Loki/Tempo/Mimir — i.e. logs
-and tracing infra are already present, not just metrics). But the actual
-*required deliverables* are missing: no exported Grafana dashboard `.json`
-anywhere in the repo, no alert rule file, and `services/gen-ai` has zero
-instrumentation. This matches the rubric's Basic tier almost exactly: "basic
-monitoring setup present but not useful for understanding system behaviour"
-— nothing renders the metrics into an actual dashboard yet.
+and tracing infra are already present, not just metrics). `services/gen-ai` now
+exports OTLP traces (FastAPI auto-instrumentation) and custom LLM metrics
+(request count, latency, errors, token usage when available) to the same
+collector. The remaining gaps are the *required deliverables*: no exported
+Grafana dashboard `.json` anywhere in the repo and no alert rule file. This
+matches the rubric's Basic tier: monitoring backbone is present and gen-ai is
+instrumented, but nothing renders the metrics into an exported dashboard yet.
 
-- **Evidence:** `infra/docker-compose.yaml` (`grafana-lgtm` service); `services/spring/*/build.gradle` (`spring-boot-starter-opentelemetry`); no `*dashboard*.json` or alert-rule file found anywhere
-- **Re-verify:** `find . -iname "*dashboard*.json" -o -iname "*alert*rule*" | grep -v node_modules | grep -v .venv`; `grep -rn "prometheus_client\|opentelemetry" services/gen-ai --include="*.py"`.
+- **Evidence:** `infra/docker-compose.yaml` (`grafana-lgtm` service); `services/spring/*/build.gradle` (`spring-boot-starter-opentelemetry`); `services/gen-ai/app/observability.py`, `app/llm/invoke.py`; no `*dashboard*.json` or alert-rule file found anywhere
+- **Re-verify:** `find . -iname "*dashboard*.json" -o -iname "*alert*rule*" | grep -v node_modules | grep -v .venv`; `grep -rn "opentelemetry" services/gen-ai --include="*.py"`.
 - **Bonus angle:** the LGTM stack already includes Tempo (tracing) and Loki (log aggregation) — exporting a couple of dashboards and one alert rule would clear the baseline requirement *and* put "Advanced Observability" bonus (tracing, log aggregation) within easy reach, since the infra is already deployed.
 
 ### Environment and Reproducibility — **Good**
@@ -169,9 +170,10 @@ even though the deep content would arguably support "Excellent" if surfaced.
   `HorizontalPodAutoscaler` found in `infra/helm` or `infra/k8s` (only a
   `PodDisruptionBudget` exists, which is availability, not autoscaling).
   Re-verify: `grep -rl "HorizontalPodAutoscaler" infra/`.
-- **Advanced Observability** (tracing, log aggregation, custom metrics): not
-  claimed yet, but unusually close — `grafana-lgtm` already bundles Tempo and
-  Loki. See the Runtime and Observability bonus note above.
+- **Advanced Observability** (tracing, log aggregation, custom metrics): partially
+  present — `grafana-lgtm` bundles Tempo and Loki; Spring services and gen-ai
+  export OTLP traces/metrics. Still missing exported dashboards and alert rules.
+  See the Runtime and Observability bonus note above.
 - **Advanced AI** (RAG, vector DB): not started — no vector DB dependency
   found anywhere in `services/gen-ai`.
 - **Additional justified improvements**: `make security-scan`

@@ -52,7 +52,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 07 — Observability
 
 - ⚠️ Metrics collection — implemented via **OpenTelemetry + `grafana-lgtm`** (all-in-one Grafana/Loki/Tempo/Mimir image), not a standalone Prometheus deployment; Spring services depend on `spring-boot-starter-opentelemetry`; **this differs from the letter of the requirement ("Prometheus must be used") even though it satisfies the spirit** (request count/latency/error rate should be derivable from OTel metrics in Mimir/Prometheus-compatible storage) — worth flagging with the tutor if in doubt
-- ❌ GenAI service instrumented — no metrics/tracing instrumentation found in `services/gen-ai`
+- ✅ GenAI service instrumented — OpenTelemetry SDK in `services/gen-ai` (FastAPI traces + custom LLM metrics via OTLP to `grafana-lgtm`)
 - ❌ Grafana dashboards exported as `.json` — none found in the repo
 - ❌ Alert rules — none found (no Prometheus alerting rules, no Grafana alert YAML/JSON)
 

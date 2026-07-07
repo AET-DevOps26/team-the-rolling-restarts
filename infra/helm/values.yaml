@@ -192,6 +192,10 @@ genAi:
       value: openai/gpt-oss-120b
     - name: INTERNAL_API_URL
       value: http://api-gateway:8080
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://grafana-lgtm:4318
+    - name: OTEL_SERVICE_NAME
+      value: gen-ai
   secretEnv:
     - name: LLM_API_KEY
       secretName: llm-credentials

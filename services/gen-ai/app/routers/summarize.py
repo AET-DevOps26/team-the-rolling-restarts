@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
 from app.errors import UpstreamLLMError
+from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import SummarizeRequest, SummarizeResponse
 from app.services.content import get_article_text
@@ -48,7 +49,12 @@ async def summarize(request: SummarizeRequest) -> SummarizeResponse:
 
     model = get_chat_model()
     try:
-        result = model.invoke(messages)
+        result = invoke_chat_model(
+            model,
+            messages,
+            endpoint="/summarize",
+            provider=settings.llm_provider,
+        )
     except Exception as exc:  # noqa: BLE001 - map provider failures to unified API errors
         raise UpstreamLLMError("Failed to generate summary") from exc
 
