@@ -24,8 +24,10 @@ kubectl delete -R -f .
 
 ## What is here
 
-- [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim).
-- [services/](services) contains one service manifest per workload, including `mongodb-service.yml`.
+- [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim) and `grafana-lgtm-deployment.yml` (the monitoring stack).
+- [services/](services) contains one service manifest per workload, including `mongodb-service.yml` and `grafana-lgtm-service.yml`.
+- [configmaps/](configmaps) contains `grafana-lgtm-config.yml`, the Prometheus/dashboard/alerting config for the monitoring stack (hand-maintained — see the comment at the top of that file for what it must stay in sync with).
+- [rbac/](rbac) contains `grafana-lgtm-rbac.yml` — a ServiceAccount + namespaced Role/RoleBinding granting `grafana-lgtm`'s Prometheus `get/list/watch` on `pods` only, needed for per-pod metrics scraping (see `docs/internal/06-observability.md`).
 - [secrets.yml.example](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml.example) is the tracked template for the `mongodb-credentials`, `mongodb-user-credentials`, `jwt-keys`, and `service-credentials` Secrets consumed by MongoDB and the Spring services. Copy it to `secrets.yml` (gitignored) and fill in real values — the file's comments explain each field. Use a sealed-secret or external secret store for any non-local deployment.
 - [ingress.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/ingress.yml) defines the external routing rules.
 
@@ -103,7 +105,7 @@ kubectl get ingress
 - `content-service` listens on port `8082`.
 - `gen-ai` listens on port `8000`.
 - `mongodb` listens on port `27017` (ClusterIP only — not exposed via ingress). user-service uses database `users`, content-service uses database `content`, both via the `*-credentials` Secrets.
-- The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator` → API gateway, `/ai/` → GenAI service, `/` → web client.
+- The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator/health` → API gateway, `/ai/` → GenAI service, `/` → web client. Only `/actuator/health` is publicly routed — `/actuator/prometheus` is reachable internally only (Prometheus scrapes pods directly, not through the ingress).
 - The ingress secret is `rolling-restarts-tls`.
 
 ## Relationship To Helm

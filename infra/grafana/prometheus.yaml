@@ -1,3 +1,8 @@
+# docker-compose only: static DNS-name targets, since compose runs 1 replica per service.
+# The Kubernetes copies (infra/helm/files/grafana/prometheus.yaml,
+# infra/k8s/configmaps/grafana-lgtm-config.yml) use per-pod Kubernetes service discovery
+# instead — a static DNS target resolves to the Service's ClusterIP in Kubernetes, which
+# load-balances across replicas and corrupts rate()-based queries. See docs/internal/06-observability.md.
 ---
 global:
   scrape_native_histograms: true
