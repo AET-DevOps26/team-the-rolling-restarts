@@ -101,15 +101,45 @@ docker run -p 8000:8000 --env-file .env gen-ai-service
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `LLM_PROVIDER` | LLM backend: `logos` or `ollama` | `logos` |
+| `LLM_PROVIDER` | LLM backend: `logos` (cloud) or `ollama` (local) | `logos` |
 | `LLM_BASE_URL` | OpenAI-compatible base URL (Logos) | `https://logos.aet.cit.tum.de/v1` |
-| `LLM_API_KEY` | Bearer token for Logos (`lg-...`) | *(empty — required for Logos calls)* |
+| `LLM_API_KEY` | Bearer token for Logos (`lg-...`; TUM network / eduVPN only) | *(empty — required for Logos calls)* |
 | `LLM_MODEL` | Model identifier | `openai/gpt-oss-120b` |
 | `LLM_TEMPERATURE` | Sampling temperature | `0.2` |
 | `LLM_TIMEOUT_SECONDS` | Logos request timeout (seconds) | `60` |
-| `OLLAMA_BASE_URL` | Ollama HTTP base URL | `http://ollama:11434` |
+| `OLLAMA_BASE_URL` | Ollama HTTP base URL (when `LLM_PROVIDER=ollama`) | `http://ollama:11434` |
 | `INTERNAL_API_URL` | api-gateway base for content reads | `http://api-gateway:8080` |
 | `LOG_LEVEL` | Logging level | `INFO` |
+
+## Running locally with Ollama
+
+Use this path when off the TUM network (e.g. home dev, Azure VM) or for offline demos.
+
+1. From the repo root, start the stack with the Ollama profile:
+
+```bash
+docker compose --env-file infra/.env \
+  -f infra/docker-compose.yaml \
+  -f infra/docker-compose.dev.yaml \
+  --profile local-llm up --build
+```
+
+2. Pull a model into the Ollama container:
+
+```bash
+docker compose exec ollama ollama pull llama3.2
+```
+
+3. Set provider and model in `infra/.env`:
+
+```bash
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.2
+```
+
+4. Restart gen-ai (or the whole stack) so it picks up the new env.
+
+GenAI calls then route to the in-network Ollama service at `http://ollama:11434`.
 
 ## Tests
 
