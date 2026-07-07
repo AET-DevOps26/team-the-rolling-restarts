@@ -41,8 +41,8 @@ webClient:
       cpu: 10m
       memory: 64Mi
     limits:
-      cpu: 100m
-      memory: 128Mi
+      cpu: 70m
+      memory: 110Mi
 
 # API Gateway routes traffic to user-service and content-service.
 apiGateway:
@@ -80,8 +80,8 @@ apiGateway:
       cpu: 50m
       memory: 200Mi
     limits:
-      cpu: 200m
-      memory: 300Mi
+      cpu: 170m
+      memory: 260Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -116,8 +116,8 @@ userService:
       cpu: 50m
       memory: 200Mi
     limits:
-      cpu: 200m
-      memory: 300Mi
+      cpu: 170m
+      memory: 260Mi
   jwtKeys:
     publicKey: ""
     privateKey: ""
@@ -167,8 +167,8 @@ contentService:
       cpu: 50m
       memory: 200Mi
     limits:
-      cpu: 200m
-      memory: 300Mi
+      cpu: 170m
+      memory: 260Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -213,8 +213,8 @@ genAi:
       cpu: 30m
       memory: 64Mi
     limits:
-      cpu: 150m
-      memory: 200Mi
+      cpu: 80m
+      memory: 130Mi
 
 # Database services
 mongodb:
@@ -232,8 +232,8 @@ mongodb:
       cpu: 50m
       memory: 256Mi
     limits:
-      cpu: 200m
-      memory: 512Mi
+      cpu: 120m
+      memory: 260Mi
 
 ingress:
   enabled: true
