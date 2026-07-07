@@ -28,6 +28,10 @@ dependencies {
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
 	runtimeOnly 'io.micrometer:micrometer-registry-influx'
+	// Classic scrape endpoint (/actuator/prometheus), separate from the OTLP push path above.
+	// Only used for the `up{job=...}` liveness signal in Prometheus — the RED dashboard reads
+	// OTLP-derived metrics instead.
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 

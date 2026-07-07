@@ -11,6 +11,10 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 	implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+	// Classic scrape endpoint (/actuator/prometheus), separate from the OTLP push path above.
+	// Only used for the `up{job=...}` liveness signal in Prometheus — the RED dashboard reads
+	// OTLP-derived metrics instead.
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server'
