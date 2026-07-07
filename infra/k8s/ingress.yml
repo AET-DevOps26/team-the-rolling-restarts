@@ -15,8 +15,10 @@ spec:
 
   rules:
     # Single host, path-based routing (mirrors the nginx reverse-proxy and the
-    # Helm ingress): /api,/actuator,/swagger-ui,/v3/api-docs -> api-gateway
+    # Helm ingress): /api,/actuator/health,/swagger-ui,/v3/api-docs -> api-gateway
     # (the gateway fans /api/ai/** out to gen-ai), everything else -> web client.
+    # Only /actuator/health is exposed publicly; Prometheus scrapes api-gateway
+    # directly over the internal network, never through this ingress.
     - host: k8s.rolling-restarts.stud.k8s.aet.cit.tum.de
       http:
         paths:
@@ -27,7 +29,7 @@ spec:
                 name: api-gateway
                 port:
                   number: 8080
-          - path: /actuator
+          - path: /actuator/health
             pathType: Prefix
             backend:
               service:

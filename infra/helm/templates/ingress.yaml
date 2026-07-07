@@ -24,7 +24,7 @@ spec:
                 name: {{ .Values.apiGateway.name }}
                 port:
                   number: {{ .Values.apiGateway.port }}
-          - path: /actuator
+          - path: /actuator/health
             pathType: Prefix
             backend:
               service:
