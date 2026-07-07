@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -56,17 +57,19 @@ def invoke_chat_model(
     *,
     endpoint: str,
     provider: str,
+    invoke_fn: Callable[[], Any] | None = None,
 ) -> Any:
     """Invoke the chat model with shared observability for all LLM-backed endpoints."""
     attributes = {"endpoint": endpoint, "provider": provider}
     start = time.perf_counter()
+    result: Any
 
     with _tracer.start_as_current_span(
         "llm.invoke",
         attributes={"gen_ai.endpoint": endpoint, "gen_ai.provider": provider},
     ):
         try:
-            result = model.invoke(messages)
+            result = invoke_fn() if invoke_fn is not None else model.invoke(messages)
         except Exception:
             _llm_errors.add(1, attributes)
             raise

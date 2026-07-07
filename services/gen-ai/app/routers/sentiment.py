@@ -10,9 +10,11 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.errors import UpstreamLLMError
+from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import SentimentRequest, SentimentResponse
 from app.services.content import get_article_text
+from app.services.source_text import build_source_text, require_processable_source
 
 router = APIRouter()
 
@@ -22,11 +24,6 @@ class SentimentResult(BaseModel):
     score: float = Field(ge=-1.0, le=1.0)
     bias: Literal["left", "center", "right", "unclear"] | None = None
     rationale: str
-
-
-def _build_source_text(*, headline: str, text: str) -> str:
-    parts = [part.strip() for part in (headline, text) if part and part.strip()]
-    return "\n\n".join(parts)
 
 
 def _build_messages(source_text: str, *, json_only: bool = False) -> list[SystemMessage | HumanMessage]:
@@ -73,15 +70,29 @@ def _parse_sentiment_json(content: str) -> dict[str, Any]:
 
 
 def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
+    messages = _build_messages(source_text)
     try:
         structured = model.with_structured_output(SentimentResult)
-        result = structured.invoke(_build_messages(source_text))
+        result = invoke_chat_model(
+            model,
+            messages,
+            endpoint="/sentiment",
+            provider=settings.llm_provider,
+            invoke_fn=lambda: structured.invoke(messages),
+        )
         return _coerce_sentiment_result(result)
     except Exception:
         pass
 
+    fallback_messages = _build_messages(source_text, json_only=True)
     try:
-        result = model.invoke(_build_messages(source_text, json_only=True))
+        result = invoke_chat_model(
+            model,
+            fallback_messages,
+            endpoint="/sentiment",
+            provider=settings.llm_provider,
+            invoke_fn=lambda: model.invoke(fallback_messages),
+        )
         content = result.content if isinstance(result.content, str) else str(result.content)
         parsed = _parse_sentiment_json(content)
         return SentimentResult.model_validate(parsed)
@@ -93,9 +104,11 @@ def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
 async def sentiment(request: SentimentRequest) -> SentimentResponse:
     if request.articleId is not None:
         article = await get_article_text(request.articleId)
-        source_text = _build_source_text(headline=article.headline, text=article.text)
+        source_text = build_source_text(headline=article.headline, text=article.text)
     else:
         source_text = request.text or ""
+
+    require_processable_source(source_text)
 
     model = get_chat_model()
     try:

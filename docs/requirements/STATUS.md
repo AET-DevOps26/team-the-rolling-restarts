@@ -21,7 +21,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ✅ Real user-facing use case — `POST /summarize`, `/explain`, `/sentiment`, `/qa` implemented (gateway: `/api/ai/*`); fetches article text from content-service when `articleId` is supplied; **web client article page** exposes Summary / Explain / Sentiment / Q&A widgets calling `/api/ai/*` via server actions (end-to-end user flow)
-- ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
+- ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`. **Follow-up:** no rate limit or request-size cap on these routes yet — they front a paid Logos LLM; add gateway throttling and/or auth before production abuse.
 - ⚠️ Cloud + local model support — Logos cloud + Ollama local wired via env across compose/helm/k8s (`LLM_PROVIDER=logos|ollama`, compose profile `local-llm`); provider factory (`get_chat_model()`) in gen-ai (PR1)
 - ❌ RAG / vector DB (optional bonus) — not started
 
@@ -59,7 +59,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 08 — Testing
 
 - ✅ Spring unit tests, real assertions, run in CI — api-gateway (5 files, e.g. `SubscriberScopeTest.java`), user-service (6 files, e.g. `AuthControllerTest.java`), content-service (7 files, e.g. `ArticleControllerTest.java`)
-- ✅ GenAI unit tests — `services/gen-ai/tests/test_health.py`, `test_summarize.py`, `test_explain.py`, `test_sentiment.py`, `test_qa.py` (offline mocked pytest)
+- ✅ GenAI unit tests — `services/gen-ai/tests/test_health.py`, `test_summarize.py`, `test_explain.py`, `test_sentiment.py`, `test_qa.py`, `test_observability.py`, `test_metrics.py`, `test_upstream_errors.py` (offline mocked pytest)
 - ❌ Client-side tests — no `*.test.tsx`/`__tests__`, no test runner configured; `web-client/package.json` has no `test` script
 
 ## 09 — Engineering Artefacts
@@ -97,12 +97,10 @@ activity rather than this file.
    problem-statement bullets ("tracks user interactions", "bookmarking") that
    currently have zero implementation, and is the cheapest legitimate option
    given the approaching deadline. Not yet scaffolded.
-2. **GenAI secondary endpoints** — `/summarize` works; `/explain`, `/sentiment`, `/qa`
-   still pending gen-ai PR2. The web client widgets are wired and ready.
-3. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
+2. **No Prometheus/Grafana dashboards or alerts** — OTel + `grafana-lgtm` gives a
    plausible metrics backbone, but the *deliverables* (exported dashboard `.json`,
    an alert rule) don't exist yet.
-4. **No client tests, no GenAI tests** — Spring is the only side with real test
-   coverage.
-5. **Root README is thin** — quick-start, CI/CD, monitoring, and responsibilities
+3. **No client tests** — Spring and GenAI have real test coverage; `web-client` still
+   has no test runner configured.
+4. **Root README is thin** — quick-start, CI/CD, monitoring, and responsibilities
    sections should be pulled up from docs/Makefile into `README.md` itself.

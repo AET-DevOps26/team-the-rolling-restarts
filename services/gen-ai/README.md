@@ -151,6 +151,29 @@ Answer a question grounded in a single article's text (no RAG).
 
 The model answers only from the provided article text; if the answer is not present, it says so.
 
+## Error responses
+
+All endpoints return a unified error body on failure:
+
+```json
+{
+  "timestamp": "2026-07-07T12:00:00Z",
+  "code": 502,
+  "message": "Failed to reach content service",
+  "details": [],
+  "path": "/summarize"
+}
+```
+
+Common status codes:
+
+| Code | When |
+|------|------|
+| 400 | Validation failed, blank input, or fetched article has no content |
+| 404 | Article ID not found in content-service |
+| 502 | Upstream content-service or LLM provider failure |
+| 500 | Unhandled internal error (e.g. misconfigured `LLM_PROVIDER`) |
+
 ## LLM providers
 
 Set `LLM_PROVIDER` to switch backends:
