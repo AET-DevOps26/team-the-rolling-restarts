@@ -39,6 +39,12 @@ async def get_article_text(article_id: str) -> ArticleText:
     paragraphs = [paragraph.strip() for paragraph in body if paragraph and paragraph.strip()]
     text = "\n\n".join(paragraphs)
 
+    # RSS feeds usually only provide a short description (stored as `snippet`), so `body` is
+    # frequently empty. Fall back to the snippet so the LLM has the article text we do have
+    # instead of reasoning from the headline alone.
+    if not text:
+        text = (data.get("snippet") or "").strip()
+
     return ArticleText(
         headline=data.get("headline") or "",
         text=text,
