@@ -1,4 +1,16 @@
-# GENERATED from infra/grafana/* — regenerate, don't hand-edit
+# This file is hand-maintained, not generated. Keep in sync with:
+#   - infra/helm/files/grafana/dashboards/service-overview.json
+#   - infra/helm/files/grafana/provisioning/dashboards/custom-dashboards.yaml
+#   - infra/helm/files/grafana/provisioning/alerting/rules.yaml
+#   (dashboard + provisioning content must be byte-identical to the copies above,
+#   and to infra/grafana/{dashboards,provisioning}/* used by docker-compose)
+#
+# prometheus.yaml is the ONE exception: this file's scrape_configs uses
+# per-pod Kubernetes service discovery (see the "Finding #1" section of
+# .superpowers/sdd/fix-final-review-2-brief.md for why), so it intentionally
+# differs from infra/grafana/prometheus.yaml (docker-compose, static targets)
+# but must stay identical to infra/helm/files/grafana/prometheus.yaml
+# (the other Kubernetes copy).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -46,20 +58,68 @@ data:
     scrape_configs:
       - job_name: api-gateway
         metrics_path: /actuator/prometheus
-        static_configs:
-          - targets: ["api-gateway:8080"]
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: api-gateway
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: (.+)
+            target_label: __address__
+            replacement: ${1}:8080
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
       - job_name: user-service
         metrics_path: /actuator/prometheus
-        static_configs:
-          - targets: ["user-service:8081"]
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: user-service
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: (.+)
+            target_label: __address__
+            replacement: ${1}:8081
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
       - job_name: content-service
         metrics_path: /actuator/prometheus
-        static_configs:
-          - targets: ["content-service:8082"]
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: content-service
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: (.+)
+            target_label: __address__
+            replacement: ${1}:8082
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
       - job_name: gen-ai
         metrics_path: /metrics
-        static_configs:
-          - targets: ["gen-ai:8000"]
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              own_namespace: true
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            regex: gen-ai
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_ip]
+            regex: (.+)
+            target_label: __address__
+            replacement: ${1}:8000
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
 ---
 apiVersion: v1
 kind: ConfigMap

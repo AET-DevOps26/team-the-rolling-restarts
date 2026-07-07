@@ -42,6 +42,7 @@ spec:
       labels:
 {{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 8 }}
     spec:
+      serviceAccountName: {{ .Values.monitoring.name }}
       containers:
         - name: {{ .Values.monitoring.name }}
           image: {{ .Values.monitoring.image }}

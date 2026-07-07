@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-lgtm
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana-lgtm-pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana-lgtm-pod-reader
+subjects:
+  - kind: ServiceAccount
+    name: grafana-lgtm
+roleRef:
+  kind: Role
+  name: grafana-lgtm-pod-reader
+  apiGroup: rbac.authorization.k8s.io
