@@ -31,6 +31,7 @@ public class SecurityConfig {
 								"/api/hello",
 								"/actuator/health",
 								"/actuator/health/**",
+								"/actuator/prometheus",
 								"/favicon.ico",
 								"/swagger-ui/**",
 								"/v3/api-docs/**",
