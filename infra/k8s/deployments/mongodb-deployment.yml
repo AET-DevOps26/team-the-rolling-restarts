@@ -61,11 +61,11 @@ spec:
 
           resources:
             requests:
-              cpu: "100m"
+              cpu: "50m"
               memory: "256Mi"
             limits:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: "120m"
+              memory: "260Mi"
 
           volumeMounts:
             - name: mongodb-data

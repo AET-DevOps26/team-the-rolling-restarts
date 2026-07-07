@@ -64,8 +64,8 @@ spec:
           # Keep in sync with infra/helm/values.yaml (genAi.resources).
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "30m"
+              memory: "64Mi"
             limits:
-              cpu: "300m"
-              memory: "384Mi"
+              cpu: "80m"
+              memory: "130Mi"

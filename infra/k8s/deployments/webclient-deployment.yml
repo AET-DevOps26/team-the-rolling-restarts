@@ -43,8 +43,8 @@ spec:
           # Keep in sync with infra/helm/values.yaml (webClient.resources).
           resources:
             requests:
-              cpu: "50m"
-              memory: "128Mi"
+              cpu: "10m"
+              memory: "64Mi"
             limits:
-              cpu: "200m"
-              memory: "256Mi"
+              cpu: "70m"
+              memory: "110Mi"
