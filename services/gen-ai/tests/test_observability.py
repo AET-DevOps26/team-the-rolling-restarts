@@ -45,3 +45,10 @@ def test_app_starts_without_otlp_endpoint(client: TestClient) -> None:
     )
     assert summarize.status_code == 200
     assert summarize.json()["summary"] == "Observability smoke summary."
+
+
+def test_metrics_endpoint_exposes_prometheus_format(client: TestClient) -> None:
+    response = client.get("/metrics")
+
+    assert response.status_code == 200
+    assert "http_requests_total" in response.text or "http_request_duration_seconds" in response.text
