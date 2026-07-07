@@ -32,6 +32,10 @@ dependencies {
 	// Only used for the `up{job=...}` liveness signal in Prometheus — the RED dashboard reads
 	// OTLP-derived metrics instead.
 	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+	// Bridges Logback log statements into the OTLP logs pipeline (management.opentelemetry
+	// .logging.export.otlp.endpoint only builds the exporter — Spring Boot doesn't
+	// auto-bridge Logback into it).
+	implementation 'io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0'
 
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
@@ -47,5 +51,10 @@ dependencyManagement {
 		mavenBom "io.sentry:sentry-bom:${sentryVersion}"
 		mavenBom "de.codecentric:spring-boot-admin-dependencies:${springBootAdminVersion}"
 		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+		// spring-boot-dependencies only imports io.opentelemetry:opentelemetry-bom (core API),
+		// not the instrumentation-bom-alpha that manages the Logback appender's version. Pinned
+		// to the instrumentation release that pairs with opentelemetry-bom 1.55.0 (Spring Boot
+		// 4.0.6's managed core version) to keep the two in lockstep.
+		mavenBom "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom-alpha:2.21.0-alpha"
 	}
 }
