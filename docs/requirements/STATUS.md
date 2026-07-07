@@ -20,9 +20,9 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 04 — GenAI Component
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
-- ❌ Real user-facing use case — `services/gen-ai/app/main.py` only exposes `/health`; no summarization/explanation/Q&A endpoint is implemented yet despite being described in `services/gen-ai/README.md`
+- ✅ Real user-facing use case — `POST /summarize` implemented (gateway: `/api/ai/summarize`); fetches article text from content-service when `articleId` is supplied
 - ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
-- ❌ Cloud + local model support — only `langchain-openai` is a dependency; no local-model path (GPT4All/LLaMA/Ollama) is wired up; `app/config.py` has an `llm_provider` field but no branching logic uses it
+- ⚠️ Cloud + local model support — Logos (cloud) path implemented via `get_chat_model()` + `LLM_PROVIDER=logos`; Ollama provider branch exists but runtime/container wiring lands in PR3
 - ❌ RAG / vector DB (optional bonus) — not started
 
 ## 05 — Environment & Deployment
@@ -59,7 +59,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 08 — Testing
 
 - ✅ Spring unit tests, real assertions, run in CI — api-gateway (5 files, e.g. `SubscriberScopeTest.java`), user-service (6 files, e.g. `AuthControllerTest.java`), content-service (7 files, e.g. `ArticleControllerTest.java`)
-- ❌ GenAI unit tests — `services/gen-ai/tests/` contains only `__init__.py`; CI explicitly tolerates "no tests collected" (pytest exit code 5 handled as pass)
+- ✅ GenAI unit tests — `services/gen-ai/tests/test_health.py`, `test_summarize.py` (offline mocked pytest)
 - ❌ Client-side tests — no `*.test.tsx`/`__tests__`, no test runner configured; `web-client/package.json` has no `test` script
 
 ## 09 — Engineering Artefacts

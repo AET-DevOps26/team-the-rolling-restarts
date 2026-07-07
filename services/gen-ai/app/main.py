@@ -1,8 +1,12 @@
 import logging
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 
 from app.config import settings
+from app.errors import register_exception_handlers
+from app.routers import summarize
 
 logging.basicConfig(
     level=settings.log_level,
@@ -10,23 +14,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    logger.info("Starting %s v%s", settings.app_name, settings.app_version)
+    yield
+    logger.info("Shutting down %s", settings.app_name)
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
     description="GenAI microservice for article summarization, explanations, and sentiment analysis",
+    lifespan=lifespan,
 )
+
+register_exception_handlers(app)
+app.include_router(summarize.router)
 
 
 @app.get("/health")
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    logger.info(f"Starting {settings.app_name} v{settings.app_version}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event() -> None:
-    logger.info(f"Shutting down {settings.app_name}")
