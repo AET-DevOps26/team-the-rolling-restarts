@@ -242,11 +242,13 @@ jobs:
           APP_PORT=80
           GEN_AI_PORT=8000
           NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-          # NOTE: the Azure VM is NOT on the TUM network, so the Logos cloud endpoint is
-          # unreachable from here. GenAI on the Azure VM needs a self-hosted model (Ollama);
-          # the in-TUM Kubernetes cluster is the target for Logos-backed GenAI.
-          LLM_PROVIDER=${LLM_PROVIDER:-logos}
-          LLM_MODEL=${LLM_MODEL:-openai/gpt-oss-120b}
+          # The Azure VM is NOT on the TUM network, so Logos is unreachable here. GenAI runs
+          # against the self-hosted Ollama defined in docker-compose.azure.yaml. OLLAMA_MODEL
+          # tells that container which model to pull; keep it in sync with LLM_MODEL. Override
+          # via repo vars only if the VM can reach a different endpoint.
+          LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+          LLM_MODEL=${LLM_MODEL:-llama3.2:1b}
+          OLLAMA_MODEL=${LLM_MODEL:-llama3.2:1b}
           LLM_API_KEY=${LLM_API_KEY}
           LOG_LEVEL=INFO
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}
