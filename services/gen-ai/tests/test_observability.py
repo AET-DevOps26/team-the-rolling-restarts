@@ -32,6 +32,19 @@ def test_setup_observability_is_noop_without_endpoint(monkeypatch: pytest.Monkey
     assert setup_observability(fresh_app) is False
 
 
+def test_setup_observability_attaches_log_handler_when_endpoint_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
+
+    import logging
+
+    fresh_app = FastAPI()
+    root_before = len(logging.getLogger().handlers)
+    assert setup_observability(fresh_app) is True
+    root_after = len(logging.getLogger().handlers)
+
+    assert root_after == root_before + 1
+
+
 def test_app_starts_without_otlp_endpoint(client: TestClient) -> None:
     assert os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") is None
 

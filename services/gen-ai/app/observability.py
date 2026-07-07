@@ -13,6 +13,9 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -58,10 +61,20 @@ def setup_observability(app: FastAPI) -> bool:
     meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
     metrics.set_meter_provider(meter_provider)
 
+    logger_provider = LoggerProvider(resource=resource)
+    logger_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
+    logging.getLogger().addHandler(LoggingHandler(logger_provider=logger_provider))
+
     try:
         from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
-        LoggingInstrumentor().instrument(set_logging_format=True)
+        # enable_log_auto_instrumentation=False: we already attach our own
+        # resource-bound LoggingHandler above; the library's built-in
+        # auto-instrumentation would otherwise add a second (no-op, since no
+        # global logger provider is set) handler to the root logger.
+        LoggingInstrumentor().instrument(
+            set_logging_format=True, enable_log_auto_instrumentation=False
+        )
     except Exception:  # noqa: BLE001 - logging instrumentation is optional
         logger.debug("Logging instrumentation unavailable; continuing without it")
 
