@@ -87,7 +87,11 @@ apiGateway:
       memory: 200Mi
     limits:
       cpu: 170m
-      memory: 260Mi
+      # 400Mi (not the original 260Mi): api-gateway measured at 276-290Mi idle even before this
+      # branch's OTLP instrumentation, and was observed OOMKilling live under smoke-test load at
+      # 260Mi. Raising the limit is free against the AET fair-use `requests` budget (unchanged
+      # above). See docs/internal/06-observability.md.
+      memory: 400Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -129,7 +133,9 @@ userService:
       memory: 200Mi
     limits:
       cpu: 170m
-      memory: 260Mi
+      # 400Mi: see api-gateway's resources block above — user-service OOMKilled live under
+      # smoke-test load at the original 260Mi limit.
+      memory: 400Mi
   jwtKeys:
     publicKey: ""
     privateKey: ""
@@ -186,7 +192,8 @@ contentService:
       memory: 200Mi
     limits:
       cpu: 170m
-      memory: 260Mi
+      # 400Mi: see api-gateway's resources block above — same OOM risk applies to content-service.
+      memory: 400Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:

@@ -84,22 +84,34 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   approach needs cluster-scoped RBAC (`nodes/metrics`, `nodes/proxy`) that this course cluster
   doesn't grant to namespaced tenants (verified: `kubectl auth can-i create clusterrole` → `no`,
   checked against the real cluster, not assumed).
-- **OPEN / DEFERRED — the Spring services' 260Mi memory *limit* is below their measured usage
-  and will OOMKill.** Measured on the live `kubernetes-test` namespace (`kubectl top pod`, July
-  2026, running the pre-instrumentation image `2dedb24` — i.e. *before* this branch's OTLP
-  metrics/traces/logs export was even added): api-gateway 276–290Mi, user-service 268–285Mi,
-  content-service 254–269Mi, all idle. This branch trims their limit to **260Mi**, which several
-  pods already exceed before adding instrumentation overhead — a guaranteed OOMKill on deploy. The
-  fix is to raise the *limit* (not the request): at the default **1 replica** the namespace has
-  ~1080Mi of headroom (used ~1920Mi of the 3000Mi `limits.memory` quota), so bumping Spring to a
-  safe ~360–400Mi limit fits easily. It does **not** fit at 2 replicas *with* the 640Mi monitoring
-  bundle co-located (2400Mi Spring + 640Mi + the rest exceeds 3000Mi) — co-locating monitoring
-  structurally requires 1 replica. Per the AET fair-use policy the *reserved* quantity is
-  `requests` (team cap 4 vCPU / 6 GB across all namespaces), not `limits`, so raising the limit is
-  "free" against the team budget. **Decision deferred by the team** (replica count, final limits,
-  and whether to slim the JVM footprint — SerialGC / lower `MaxRAMPercentage` / native image — are
-  all still open); do not treat the current 260Mi as validated. `values-dev.yaml` is pinned to 1
-  replica; `values-prod.yaml` is still 2.
+- **FIXED — the Spring services' memory limit was raised from 260Mi to 400Mi after it caused a
+  real, reproducible OOMKill.** Originally measured idle-only on the pre-instrumentation image
+  `2dedb24` (api-gateway 276–290Mi, user-service 268–285Mi, content-service 254–269Mi) and left as
+  an open/deferred decision. That deferral held until a live `make smoke-test-k8s` run against the
+  fully-instrumented images actually OOMKilled `user-service` (`kubectl describe pod` showed
+  `lastState.terminated.reason: OOMKilled`, exit code 137) mid-test, right after it served the
+  suite's `POST /auth/register` and `POST /auth/login` calls — pushing it just over the 260Mi
+  limit. The ~70s restart (RSA keypair reload + Spring Boot boot) window then made every
+  subsequent smoke-test call that needed a JWT fail with connection-refused/timeout, so the
+  script's `[ -n "$token" ]` guards cascaded into `skip "... (no token)"` across RSS source
+  lifecycle, protected endpoints, service-scope enforcement, and the shared-source lifecycle
+  sections — most of the suite reading as "skipped" from one dead pod, not independent failures.
+  Fixed by raising the *limit* (not the request) to **400Mi** for api-gateway, user-service, and
+  content-service in both `infra/helm/values.yaml` and the raw `infra/k8s/deployments/*.yml`
+  manifests. Re-verified live: `helm upgrade` applied cleanly, all three pods rolled out with no
+  further OOMKill, and a fresh `make smoke-test-k8s` passed 34/34 (the one skip is the expected
+  Loki check — Grafana isn't reachable without a port-forward on this target). Post-fix idle
+  usage: api-gateway/user-service ~258Mi, content-service ~265Mi, all comfortably under 400Mi.
+  Fits at the default **1 replica**: new total `limits.memory` across the namespace is 2340Mi of
+  the 3000Mi quota (660Mi headroom), up from ~1920Mi before. Per the AET fair-use policy the
+  *reserved* quantity is `requests` (team cap 4 vCPU / 6 GB across all namespaces), not `limits`,
+  so this was "free" against the team budget — only `limits` changed, `requests` stayed at 200Mi.
+  **Still open:** it does **not** fit at 2 replicas *with* the 640Mi monitoring bundle co-located
+  (2 × 3 × 400Mi = 2400Mi Spring + 640Mi + the rest exceeds 3000Mi) — co-locating monitoring
+  structurally requires 1 replica, so the replica-count-vs-monitoring tradeoff for
+  `values-prod.yaml` (still 2 replicas, monitoring not deployed there) remains a team decision.
+  Slimming the JVM footprint (SerialGC / lower `MaxRAMPercentage` / native image) also remains
+  unexplored, should more headroom ever be needed.
 - The Kubernetes resource budget for `grafana-lgtm` is tight (see `infra/helm/values.yaml`'s
   `monitoring.resources` and the trimmed limits on every other service) — every other service's
   Helm `values.yaml` and raw `infra/k8s/deployments/*.yml` limits were trimmed to make room for
