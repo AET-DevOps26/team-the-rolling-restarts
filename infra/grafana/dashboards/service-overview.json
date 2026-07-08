@@ -135,8 +135,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m]))",
-          "legendFormat": "__auto",
+          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)",
+          "legendFormat": "{{job}}",
           "range": true,
           "refId": "A"
         }
@@ -232,8 +232,8 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\", status=~\"5..|5xx\"}[5m])) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m]))\n\n",
-          "legendFormat": "__auto",
+          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\", status=~\"5..|5xx\"}[5m])) by (job) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)\n\n",
+          "legendFormat": "{{job}}",
           "range": true,
           "refId": "A"
         }
@@ -413,10 +413,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le, job))",
           "format": "time_series",
           "instant": false,
-          "legendFormat": "95th",
+          "legendFormat": "{{job}} 95th",
           "range": true,
           "refId": "A"
         },
@@ -427,9 +427,9 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "histogram_quantile(0.5, sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le))",
+          "expr": "histogram_quantile(0.5, sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le, job))",
           "hide": false,
-          "legendFormat": "50th",
+          "legendFormat": "{{job}} 50th",
           "range": true,
           "refId": "B"
         }
