@@ -84,6 +84,16 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   approach needs cluster-scoped RBAC (`nodes/metrics`, `nodes/proxy`) that this course cluster
   doesn't grant to namespaced tenants (verified: `kubectl auth can-i create clusterrole` → `no`,
   checked against the real cluster, not assumed).
+- The `otel-lgtm` image's own bundled **"RED Metrics (native histogram)" dashboard is expected to
+  stay empty.** Verified directly against the live Prometheus: our services expose 2,622 classic
+  bucketed histogram series (`_bucket`/`_count`/`_sum` — from Micrometer's Prometheus registry for
+  the 3 Spring services and `prometheus-fastapi-instrumentator` for gen-ai) and **zero** true
+  Prometheus native-histogram series (`histogram_quantile`-free single-series-per-metric exposition
+  format). This dashboard is one of the image's own defaults, not something built by this branch —
+  our "Service Overview" dashboard already covers RED metrics using the classic histograms we
+  actually emit. Populating the native-histogram dashboard would require reconfiguring Micrometer's
+  Prometheus registry (and gen-ai's instrumentator) to emit that exposition format, a separate,
+  non-trivial change across all 4 services — decided not worth pursuing for now.
 - **FIXED — the Spring services' memory limit was raised from 260Mi to 400Mi after it caused a
   real, reproducible OOMKill.** Originally measured idle-only on the pre-instrumentation image
   `2dedb24` (api-gateway 276–290Mi, user-service 268–285Mi, content-service 254–269Mi) and left as
