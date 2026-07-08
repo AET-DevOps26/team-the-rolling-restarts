@@ -6,11 +6,10 @@
 #   and to infra/grafana/{dashboards,provisioning}/* used by docker-compose)
 #
 # prometheus.yaml is the ONE exception: this file's scrape_configs uses
-# per-pod Kubernetes service discovery (see the "Finding #1" section of
-# .superpowers/sdd/fix-final-review-2-brief.md for why), so it intentionally
-# differs from infra/grafana/prometheus.yaml (docker-compose, static targets)
-# but must stay identical to infra/helm/files/grafana/prometheus.yaml
-# (the other Kubernetes copy).
+# per-pod Kubernetes service discovery (see docs/internal/06-observability.md
+# for why), so it intentionally differs from infra/grafana/prometheus.yaml
+# (docker-compose, static targets) but must stay identical to
+# infra/helm/files/grafana/prometheus.yaml (the other Kubernetes copy).
 apiVersion: v1
 kind: ConfigMap
 metadata:
