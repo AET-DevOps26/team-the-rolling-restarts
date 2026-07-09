@@ -661,6 +661,7 @@ data:
     providers:
       - name: "Service Overview (committed)"
         type: file
+        folder: "Service Health"
         options:
           path: /otel-lgtm/grafana-dashboards-custom/service-overview.json
           foldersFromFilesStructure: false

@@ -157,6 +157,11 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   `Role`/`RoleBinding` (`get/list/watch` on `pods` only) so Prometheus can do per-pod service
   discovery — `infra/k8s/rbac/grafana-lgtm-rbac.yml` (raw manifests) and
   `infra/helm/templates/monitoring-rbac.yaml` (Helm), following the same pattern.
+- The "Service Overview" dashboard's provisioning provider sets `folder: "Service Health"`
+  (`infra/grafana/provisioning/dashboards/custom-dashboards.yaml`) so it's filed alongside the 2
+  alert rules there instead of Grafana's root folder — otherwise the "Service Health" folder holds
+  only alert rules and looks empty when browsing **Dashboards** (alerts and dashboards share one
+  folder namespace, but the Dashboards browser only lists dashboards).
 
 ## Re-verify
 

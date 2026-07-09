@@ -88,15 +88,15 @@ You don't normally call these by hand — they're wired into every service's env
   exemplar/trace correlation.
 - **Dashboards**: `infra/grafana/dashboards/service-overview.json` ("Service Overview") — request
   rate, error rate, and duration percentiles per service, filterable by the `job` template
-  variable. The image's own bundled "RED Metrics (classic histogram)" and "JVM Metrics" dashboards
-  are also still available alongside it. The image's third bundled dashboard, "RED Metrics (native
-  histogram)", is intentionally removed — our services only ever emit classic bucketed Prometheus
-  histograms, not true native histograms, so it would always be empty (see
-  `docs/internal/06-observability.md`'s Known gaps).
+  variable. Filed under the **"Service Health"** folder (Dashboards nav), alongside the alert
+  rules below. The image's own bundled "RED Metrics (classic histogram)" and "JVM Metrics"
+  dashboards are also still available (in the root folder). The image's third bundled dashboard,
+  "RED Metrics (native histogram)", is intentionally removed — our services only ever emit
+  classic bucketed Prometheus histograms, not true native histograms, so it would always be empty
+  (see `docs/internal/06-observability.md`'s Known gaps).
 - **Alerts**: `infra/grafana/provisioning/alerting/rules.yaml` — slow response time (p95 request
   duration > 1s for 5 minutes) and service down (`up == 0` for 2 minutes), both under the
-  "Service Health" folder. Note: that folder only holds these 2 alert rules, no dashboards — if
-  you browse **Dashboards → Service Health** it'll look empty; the rules themselves are under
+  "Service Health" folder alongside the Service Overview dashboard. The rules themselves are under
   **Alerting → Alert rules → Service Health**.
 
 In Kubernetes/Helm, these same provisioning files are not read directly from `infra/grafana/` —
