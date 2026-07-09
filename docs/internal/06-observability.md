@@ -45,7 +45,12 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   before this work).
 - Dashboard: `infra/grafana/dashboards/service-overview.json` (adapted from the image's own
   bundled RED-metrics dashboard), provisioned automatically in both docker-compose and
-  Kubernetes/Helm.
+  Kubernetes/Helm. Request Rate, Error Rate, and Duration percentiles all group by `job` with an
+  explicit `{{job}}` legend (fixed from a bare `sum()`/`__auto` that collapsed every service into
+  one blended, unlabeled line whenever the `$job` variable was at its default "All"). The Duration
+  Heatmap's Y axis uses a log2 scale, not linear — Micrometer/Prometheus's default histogram
+  buckets span ~1ms to ~10s, so a linear axis compressed nearly every sub-100ms bucket into an
+  unreadable sliver at the bottom.
 - Alerts: `infra/grafana/provisioning/alerting/rules.yaml` — slow response time (p95 > 1s) and
   service down (`up == 0`).
 - Log export is wired up and was verified end-to-end (not just configured): all 4 services
@@ -84,16 +89,25 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   approach needs cluster-scoped RBAC (`nodes/metrics`, `nodes/proxy`) that this course cluster
   doesn't grant to namespaced tenants (verified: `kubectl auth can-i create clusterrole` → `no`,
   checked against the real cluster, not assumed).
-- The `otel-lgtm` image's own bundled **"RED Metrics (native histogram)" dashboard is expected to
-  stay empty.** Verified directly against the live Prometheus: our services expose 2,622 classic
-  bucketed histogram series (`_bucket`/`_count`/`_sum` — from Micrometer's Prometheus registry for
-  the 3 Spring services and `prometheus-fastapi-instrumentator` for gen-ai) and **zero** true
-  Prometheus native-histogram series (`histogram_quantile`-free single-series-per-metric exposition
-  format). This dashboard is one of the image's own defaults, not something built by this branch —
-  our "Service Overview" dashboard already covers RED metrics using the classic histograms we
-  actually emit. Populating the native-histogram dashboard would require reconfiguring Micrometer's
-  Prometheus registry (and gen-ai's instrumentator) to emit that exposition format, a separate,
-  non-trivial change across all 4 services — decided not worth pursuing for now.
+- **REMOVED — the `otel-lgtm` image's own bundled "RED Metrics (native histogram)" dashboard.**
+  It would always stay empty: verified directly against the live Prometheus that our services
+  expose 2,622 classic bucketed histogram series (`_bucket`/`_count`/`_sum` — from Micrometer's
+  Prometheus registry for the 3 Spring services and `prometheus-fastapi-instrumentator` for
+  gen-ai) and **zero** true Prometheus native-histogram series. Populating it would require
+  reconfiguring Micrometer's Prometheus registry (and gen-ai's instrumentator) to emit that
+  exposition format — a separate, non-trivial change across all 4 services, not worth it since
+  our own "Service Overview" dashboard already covers RED metrics with the classic histograms we
+  actually emit. Removed by overriding the image's own
+  `/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml` (same override pattern
+  already used for `prometheus.yaml`) with a trimmed copy that keeps its other two providers — "RED
+  Metrics (classic histogram)" and "JVM Metrics" — and drops only the native-histogram one. See
+  `infra/grafana/provisioning/dashboards/default-dashboards-override.yaml` (docker-compose),
+  `infra/helm/files/grafana/provisioning/dashboards/default-dashboards-override.yaml` +
+  `infra/helm/templates/monitoring.yaml` (Helm), and the `default-dashboards-override.yaml` key in
+  `infra/k8s/configmaps/grafana-lgtm-config.yml` + the matching mount in
+  `infra/k8s/deployments/grafana-lgtm-deployment.yml` (raw k8s). Verified live against
+  docker-compose: dashboard list dropped from 4 to 3, all other panels unaffected, `make
+  smoke-test` still 35/35.
 - **FIXED — the Spring services' memory limit was raised from 260Mi to 400Mi after it caused a
   real, reproducible OOMKill.** Originally measured idle-only on the pre-instrumentation image
   `2dedb24` (api-gateway 276–290Mi, user-service 268–285Mi, content-service 254–269Mi) and left as

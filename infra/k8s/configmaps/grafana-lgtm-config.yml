@@ -383,7 +383,8 @@ data:
                   "viz": false
                 },
                 "scaleDistribution": {
-                  "type": "linear"
+                  "log": 2,
+                  "type": "log"
                 }
               },
               "unitScale": true
@@ -656,12 +657,26 @@ metadata:
 data:
   custom-dashboards.yaml: |
     apiVersion: 1
-    
+
     providers:
       - name: "Service Overview (committed)"
         type: file
         options:
           path: /otel-lgtm/grafana-dashboards-custom/service-overview.json
+          foldersFromFilesStructure: false
+  default-dashboards-override.yaml: |
+    apiVersion: 1
+
+    providers:
+      - name: "RED Metrics (classic histogram)"
+        type: file
+        options:
+          path: /otel-lgtm/grafana-dashboard-red-metrics-classic.json
+          foldersFromFilesStructure: false
+      - name: "JVM Metrics"
+        type: file
+        options:
+          path: /otel-lgtm/grafana-dashboard-jvm-metrics.json
           foldersFromFilesStructure: false
   rules.yaml: |
     apiVersion: 1

@@ -45,6 +45,9 @@ spec:
               mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
               subPath: custom-dashboards.yaml
             - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml
+              subPath: default-dashboards-override.yaml
+            - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
               subPath: rules.yaml
       volumes:

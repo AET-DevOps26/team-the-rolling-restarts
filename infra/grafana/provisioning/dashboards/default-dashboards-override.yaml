@@ -1,0 +1,21 @@
+# Overrides the grafana/otel-lgtm image's own built-in
+# /otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml (same pattern as this
+# repo's prometheus.yaml override). The image ships 3 providers there: "RED Metrics (classic
+# histogram)", "RED Metrics (exponential/native histogram)", and "JVM Metrics". The native
+# histogram one is dropped here — none of our services emit true Prometheus native histograms
+# (only classic bucketed ones, see docs/internal/06-observability.md), so that dashboard can
+# never show data. The other two still point at their original image-internal JSON paths, so no
+# dashboard content is duplicated here, only the provider list.
+apiVersion: 1
+
+providers:
+  - name: "RED Metrics (classic histogram)"
+    type: file
+    options:
+      path: /otel-lgtm/grafana-dashboard-red-metrics-classic.json
+      foldersFromFilesStructure: false
+  - name: "JVM Metrics"
+    type: file
+    options:
+      path: /otel-lgtm/grafana-dashboard-jvm-metrics.json
+      foldersFromFilesStructure: false

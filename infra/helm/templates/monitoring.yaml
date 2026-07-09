@@ -21,6 +21,8 @@ metadata:
 data:
   custom-dashboards.yaml: |
 {{ .Files.Get "files/grafana/provisioning/dashboards/custom-dashboards.yaml" | indent 4 }}
+  default-dashboards-override.yaml: |
+{{ .Files.Get "files/grafana/provisioning/dashboards/default-dashboards-override.yaml" | indent 4 }}
   rules.yaml: |
 {{ .Files.Get "files/grafana/provisioning/alerting/rules.yaml" | indent 4 }}
 ---
@@ -62,6 +64,9 @@ spec:
             - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
               subPath: custom-dashboards.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml
+              subPath: default-dashboards-override.yaml
             - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
               subPath: rules.yaml

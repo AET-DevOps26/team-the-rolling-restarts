@@ -255,7 +255,8 @@
               "viz": false
             },
             "scaleDistribution": {
-              "type": "linear"
+              "log": 2,
+              "type": "log"
             }
           },
           "unitScale": true
