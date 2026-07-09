@@ -108,6 +108,35 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   `infra/k8s/deployments/grafana-lgtm-deployment.yml` (raw k8s). Verified live against
   docker-compose: dashboard list dropped from 4 to 3, all other panels unaffected, `make
   smoke-test` still 35/35.
+- **FORKED — the `otel-lgtm` image's bundled "RED Metrics (classic histogram)" dashboard.** Its
+  Request Rate and Error Rate panels had the exact same bug our own Service Overview dashboard
+  had: `sum(...)` with no `by (job)` grouping and `legendFormat: __auto`, so with the `$job`
+  variable defaulted to "All" every service collapsed into one blended line whose legend showed
+  the raw PromQL query text instead of a service name (reported directly by a user browsing this
+  dashboard). Since it's baked into the image, not a file we control, fixing it required forking a
+  copy into this repo (same override-the-image-path pattern used to remove the native-histogram
+  dashboard above): `infra/grafana/dashboards/red-metrics-classic.json` is a copy of the image's
+  original with `by (job)` grouping + `{{job}}` legends added to Request Rate/Error Rate, `by (le,
+  job)` + `{{job}} 95th`/`{{job}} 50th` added to Duration percentiles, and the Duration Heatmap's
+  Y-axis switched from linear to log2 (same fixes as Service Overview). The
+  `default-dashboards-override.yaml` provider for this dashboard now points at our own mounted
+  copy (`/otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json`) instead of the image's
+  internal path; "JVM Metrics" is untouched and still points at the image's own file. Also applied
+  to Service Overview's own Duration Heatmap: added a `{{le}}` legend (was unset, rendering as the
+  raw label set e.g. `{le="+Inf"}` in the tooltip). Verified live: dashboard list still 3 entries,
+  fixed queries confirmed via the Grafana API, `make smoke-test` still 35/35 (warm).
+- **Under investigation, not yet resolved — a random-UUID legend reported in "JVM Metrics."** A
+  user reported seeing a UUID (e.g. `28ee8462-0835-48c9-9d4f-cf016016d91b`) as a graph legend in
+  this dashboard. Ruled out so far: our services' classic-scrape `instance` label (readable, e.g.
+  `user-service:8081`); our services' OTLP-push metrics, which carry **no** `instance` or
+  `service_instance_id` label at all (confirmed directly against Prometheus — just `job` +
+  `service_name`); and the bundled OTel Collector's own self-monitoring job (`otelcol-contrib`,
+  whose `instance` genuinely is a random UUID) — its metric names don't overlap with any panel in
+  this dashboard, and the dashboard's own `$job`/`$instance` variables are already scoped to
+  JVM-only metric names, not the unrestricted `.+` that "All" implies elsewhere. The UUID may have
+  come from an earlier container incarnation during this session (identifiers like this can be
+  regenerated per-process). Needs a fresh repro with the exact panel name + legend text before a
+  fix can be targeted — do not guess further without that.
 - **FIXED — the Spring services' memory limit was raised from 260Mi to 400Mi after it caused a
   real, reproducible OOMKill.** Originally measured idle-only on the pre-instrumentation image
   `2dedb24` (api-gateway 276–290Mi, user-service 268–285Mi, content-service 254–269Mi) and left as

@@ -89,11 +89,13 @@ You don't normally call these by hand — they're wired into every service's env
 - **Dashboards**: `infra/grafana/dashboards/service-overview.json` ("Service Overview") — request
   rate, error rate, and duration percentiles per service, filterable by the `job` template
   variable. Filed under the **"Service Health"** folder (Dashboards nav), alongside the alert
-  rules below. The image's own bundled "RED Metrics (classic histogram)" and "JVM Metrics"
-  dashboards are also still available (in the root folder). The image's third bundled dashboard,
-  "RED Metrics (native histogram)", is intentionally removed — our services only ever emit
-  classic bucketed Prometheus histograms, not true native histograms, so it would always be empty
-  (see `docs/internal/06-observability.md`'s Known gaps).
+  rules below. `infra/grafana/dashboards/red-metrics-classic.json` ("RED Metrics (classic
+  histogram)") is a forked copy of the image's own bundled dashboard with the same per-job legend
+  fixes applied (its original had the identical blended-line/raw-query-as-legend bug this repo
+  fixed in Service Overview). "JVM Metrics" is still the image's unmodified original. The image's
+  third bundled dashboard, "RED Metrics (native histogram)", is intentionally removed — our
+  services only ever emit classic bucketed Prometheus histograms, not true native histograms, so
+  it would always be empty (see `docs/internal/06-observability.md`'s Known gaps).
 - **Alerts**: `infra/grafana/provisioning/alerting/rules.yaml` — slow response time (p95 request
   duration > 1s for 5 minutes) and service down (`up == 0` for 2 minutes), both under the
   "Service Health" folder alongside the Service Overview dashboard. The rules themselves are under

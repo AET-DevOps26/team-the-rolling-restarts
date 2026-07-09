@@ -41,6 +41,9 @@ spec:
             - name: dashboard
               mountPath: /otel-lgtm/grafana-dashboards-custom/service-overview.json
               subPath: service-overview.json
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json
+              subPath: red-metrics-classic.json
             - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
               subPath: custom-dashboards.yaml

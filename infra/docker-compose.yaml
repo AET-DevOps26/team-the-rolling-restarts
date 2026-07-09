@@ -216,6 +216,7 @@ services:
     volumes:
       - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
       - ./grafana/dashboards/service-overview.json:/otel-lgtm/grafana-dashboards-custom/service-overview.json:ro
+      - ./grafana/dashboards/red-metrics-classic.json:/otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json:ro
       - ./grafana/provisioning/dashboards/custom-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml:ro
       - ./grafana/provisioning/dashboards/default-dashboards-override.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
       - ./grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml:ro
