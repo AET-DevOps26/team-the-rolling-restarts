@@ -99,7 +99,34 @@ You don't normally call these by hand — they're wired into every service's env
 - **Alerts**: `infra/grafana/provisioning/alerting/rules.yaml` — slow response time (p95 request
   duration > 1s for 5 minutes) and service down (`up == 0` for 2 minutes), both under the
   "Service Health" folder alongside the Service Overview dashboard. The rules themselves are under
-  **Alerting → Alert rules → Service Health**.
+  **Alerting → Alert rules → Service Health**. These two already satisfy the course's "at least
+  one meaningful alert rule" requirement (the requirement text names these exact two examples).
+  **Not yet wired up: actual notification delivery.** `infra/grafana/provisioning/alerting/`
+  only provisions `rules.yaml` — no contact point, no notification policy, and no SMTP config
+  exist anywhere in this repo. A firing alert changes state (visible under **Alerting → Alert
+  rules** if someone opens Grafana and looks) but nothing pages a person via email/Slack/webhook.
+  Grafana's built-in default contact point exists implicitly, but with no SMTP server configured
+  it has nowhere to deliver to.
+
+### Planned follow-up (not yet implemented)
+
+- **A third, more targeted alert: MongoDB dependency health.** The two current alerts only see
+  "is the service's own HTTP port reachable" (`up`) and "is it slow" — neither distinguishes a
+  service being down because *it* crashed from a service being up but unable to reach MongoDB
+  (exactly what happened on the live `kubernetes-test` deploy: MongoDB was OOMKilled mid
+  first-boot, never finished creating its `root` user, and every dependent service crash-looped
+  on auth failures — `service down` would eventually catch this once restarts exhaust the pod's
+  readiness budget, but a dedicated alert would catch it faster and name the actual cause).
+  Leading approach to implement later: Spring Boot auto-configures Micrometer's
+  `MongoMetricsCommandListener`/`MongoMetricsConnectionPoolListener` when a MongoDB driver +
+  Micrometer are both on the classpath (already true for user-service and content-service),
+  which exposes `mongodb_driver_commands_seconds_count{status="FAILED", ...}` and
+  connection-pool-size metrics per service — worth confirming these are actually emitted by our
+  current setup before writing the rule, then alerting on a sustained rate of `FAILED` commands
+  or an absent/zero connection pool.
+- **Real notification delivery.** Add a contact point (Slack webhook or email via SMTP) and a
+  notification policy routing the "Service Health" folder's alerts to it, so firing alerts
+  actually reach a person instead of only being visible if someone opens Grafana and checks.
 
 In Kubernetes/Helm, these same provisioning files are not read directly from `infra/grafana/` —
 Helm's `.Files.Get` can't escape the chart root (`infra/helm/`), so `infra/helm/files/grafana/`
