@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
 from app.main import app
-from app.observability import setup_observability
+from app.observability import _build_resource, setup_observability
 
 
 class FakeChatModel:
@@ -65,3 +65,21 @@ def test_metrics_endpoint_exposes_prometheus_format(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert "http_requests_total" in response.text or "http_request_duration_seconds" in response.text
+
+
+def test_build_resource_defaults_service_instance_id_to_hostname(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OTEL_RESOURCE_ATTRIBUTES", raising=False)
+    monkeypatch.setenv("HOSTNAME", "gen-ai-abc123")
+
+    resource = _build_resource()
+
+    assert resource.attributes["service.instance.id"] == "gen-ai-abc123"
+
+
+def test_build_resource_respects_explicit_service_instance_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OTEL_RESOURCE_ATTRIBUTES", "service.instance.id=explicit-id")
+    monkeypatch.setenv("HOSTNAME", "gen-ai-abc123")
+
+    resource = _build_resource()
+
+    assert resource.attributes["service.instance.id"] == "explicit-id"

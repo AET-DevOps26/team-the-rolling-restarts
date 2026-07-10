@@ -36,6 +36,12 @@ def _build_resource() -> Resource:
         attributes[key.strip()] = value.strip()
 
     service_name = os.environ.get("OTEL_SERVICE_NAME", _DEFAULT_SERVICE_NAME)
+    # Without an explicit service.instance.id, the OTel SDK generates a fresh random UUID per
+    # process start, which our OTLP receiver promotes straight to Prometheus's `instance` label —
+    # showing up as an unreadable UUID in any dashboard legend that formats on {{instance}}.
+    # HOSTNAME is set by both Docker and Kubernetes for every container (the pod name in k8s),
+    # giving a stable, readable value with no extra env var wiring needed.
+    attributes.setdefault("service.instance.id", os.environ.get("HOSTNAME", service_name))
     return Resource.create({"service.name": service_name, **attributes})
 
 
