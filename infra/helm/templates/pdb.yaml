@@ -1,3 +1,5 @@
+{{/* Gated on appWorkloads.enabled — see templates/deployment.yaml. */}}
+{{- if .Values.appWorkloads.enabled }}
 {{- $apps := list
   (dict "key" "webClient" "cfg" .Values.webClient)
   (dict "key" "apiGateway" "cfg" .Values.apiGateway)
@@ -25,5 +27,6 @@ spec:
   selector:
     matchLabels:
       app: {{ $cfg.name }}
+{{- end }}
 {{- end }}
 {{- end }}

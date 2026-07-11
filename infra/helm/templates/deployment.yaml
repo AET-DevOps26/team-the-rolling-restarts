@@ -1,4 +1,7 @@
-{{/* Render the deployments from the same template to keep the chart small. */}}
+{{/* Render the deployments from the same template to keep the chart small. Gated on
+appWorkloads.enabled so `make helm-destroy` can tear these down without touching
+grafana-lgtm (templates/monitoring.yaml), which has no such guard. */}}
+{{- if .Values.appWorkloads.enabled }}
 {{- $apps := list
   (dict "key" "webClient" "cfg" .Values.webClient)
   (dict "key" "apiGateway" "cfg" .Values.apiGateway)
@@ -92,4 +95,5 @@ spec:
             periodSeconds: 10
           resources:
 {{ toYaml (default $.Values.global.resources $cfg.resources) | nindent 12 }}
+{{- end }}
 {{- end }}

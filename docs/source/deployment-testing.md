@@ -328,6 +328,20 @@ kubectl logs -l app=user-service --tail=50
 kubectl logs -l app=content-service --tail=50
 ```
 
+The commands above only see the **app namespace**. `grafana-lgtm` (Prometheus/Grafana/Tempo/Loki/
+Pyroscope) runs in its own dedicated namespace (`rolling-restarts-monitoring` by default) with its
+own `ResourceQuota` — it won't show up in the pod list above even though it carries the same
+`app.kubernetes.io/part-of=newsGenAI` label, since that label match is still scoped to whatever
+namespace `kubectl` is currently pointed at:
+
+```bash
+kubectl get pods,svc -n rolling-restarts-monitoring -l app=grafana-lgtm
+```
+
+See [monitoring.md](monitoring.md) for the full port-forward walkthrough (Grafana UI, direct
+Prometheus queries, what's provisioned automatically) — reaching it works the same way as the
+app-namespace port-forwards above, just with `-n rolling-restarts-monitoring` added.
+
 #### Connect MongoDB Compass (K8s)
 
 MongoDB is only accessible inside the cluster. Use `kubectl port-forward` to tunnel the connection to your machine:
@@ -361,7 +375,10 @@ kubectl describe pod -l app=api-gateway | grep -A3 "Startup:"
 ### Tear down (K8s)
 
 ```bash
-make helm-destroy
+make helm-destroy       # tears down the app workloads (including mongodb's data) only —
+                         # grafana-lgtm's monitoring stack (dashboards, metrics/log/trace history)
+                         # keeps running untouched
+make helm-destroy-all   # full teardown: also removes grafana-lgtm and uninstalls the release
 ```
 
 ---

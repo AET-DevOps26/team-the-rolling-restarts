@@ -249,6 +249,21 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
     monitoring-related files only, using `helm upgrade --reuse-values` so it never needs the app
     secrets or image-values `deploy_kubernetes.yml` requires. Shares that workflow's `deploy-k8s`
     concurrency group to prevent two `helm upgrade` calls racing on the same release.
+- **FIXED — `make helm-destroy` used to `helm uninstall` the entire release, wiping
+  `grafana-lgtm` (and its now-persistent dashboards/metrics/log/trace history) along with the app
+  workloads every time.** Gated all 7 app-workload templates (`deployment.yaml`, `databases.yaml`,
+  `service.yaml`, `serviceaccount.yaml`, `secrets.yaml`, `pdb.yaml`, `ingress.yaml`) behind a new
+  `appWorkloads.enabled` value (default `true`); `templates/monitoring.yaml`/`monitoring-rbac.yaml`
+  carry no such guard. `helm-destroy` now runs `helm upgrade --set appWorkloads.enabled=false`
+  instead of `helm uninstall` — the release stays installed, re-rendered without the app
+  resources, and `grafana-lgtm` keeps running untouched. Verified via `helm template --set
+  appWorkloads.enabled=false`: renders exactly the 9 monitoring resources (3 ConfigMaps, 1
+  Deployment, 1 PVC, 1 Role, 1 RoleBinding, 1 Service, 1 ServiceAccount) and nothing else — no
+  orphaned app Secrets/PDBs/ServiceAccounts left behind, since those were the ones initially
+  missed before checking `ls infra/helm/templates/` turned up `pdb.yaml`/`secrets.yaml`/
+  `service.yaml`/`serviceaccount.yaml` as additional app-only files needing the same guard. A new
+  `helm-destroy-all` target (`helm uninstall`) covers the rare case of actually wanting to remove
+  monitoring too.
 - `infra/helm/files/grafana/*` is a manually-copied duplicate of most of `infra/grafana/*` —
   Helm's `.Files.Get` can't escape the chart root (`infra/helm/`), so the config files had to be
   copied in rather than referenced directly. Nothing in CI enforces the two stay in sync; if

@@ -1,3 +1,11 @@
+# Toggle for `make helm-destroy`: rendering the app workloads (web-client, api-gateway,
+# user-service, content-service, gen-ai, mongodb, ingress) is gated on this so `helm upgrade
+# --set appWorkloads.enabled=false` tears down only those resources — including mongodb's data,
+# same as a full uninstall always has — while leaving grafana-lgtm's monitoring stack (not gated
+# on this) running untouched. Never set to false for a normal deploy.
+appWorkloads:
+  enabled: true
+
 # Shared defaults used by every workload in the chart.
 global:
   registry: ghcr.io/aet-devops26/team-the-rolling-restarts

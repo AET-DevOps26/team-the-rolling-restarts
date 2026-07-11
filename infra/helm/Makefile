@@ -1,4 +1,4 @@
-.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets ensure-monitoring-namespace
+.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-destroy-all helm-setup helm-secrets ensure-monitoring-namespace
 
 HELM ?= helm
 RELEASE ?= newsgenai
@@ -41,7 +41,8 @@ help:
 	  '  make helm-install             - install the release' \
 	  '  make helm-upgrade             - upgrade an existing release' \
 	  '  make helm-deploy              - upgrade or install in one step' \
-	  '  make helm-destroy             - uninstall the release' \
+	  '  make helm-destroy             - tear down the app workloads only (grafana-lgtm survives)' \
+	  '  make helm-destroy-all         - tear down everything, including grafana-lgtm; uninstalls the release' \
 	  '  make helm-secrets             - generate secrets-values.yaml (RSA key, random Mongo password, service secret)' \
 	  '' \
 	  'Default ENV=dev: staging TLS + a dev.-prefixed host (values-dev.yaml) so a manual deploy' \
@@ -79,8 +80,18 @@ helm-upgrade: ensure-monitoring-namespace
 helm-deploy: ensure-monitoring-namespace
 	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
-## Remove the release from the cluster.
+## Tear down only the app workloads (web-client, api-gateway, user-service, content-service,
+## gen-ai, mongodb, ingress) — including mongodb's data, same as a full uninstall always has —
+## while leaving grafana-lgtm's monitoring stack (dashboards, metrics/log/trace history) running
+## untouched. Uses `helm upgrade` (not uninstall), re-rendering the release with those resources
+## removed rather than deleting the release itself — grafana-lgtm keeps rendering unconditionally
+## since templates/monitoring.yaml has no appWorkloads.enabled guard.
 helm-destroy:
+	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET) --set appWorkloads.enabled=false
+
+## Full teardown: also removes grafana-lgtm and uninstalls the release entirely. Rarely what you
+## want — prefer `make helm-destroy` unless you're intentionally decommissioning monitoring too.
+helm-destroy-all:
 	$(HELM) uninstall $(RELEASE)
 
 ## Generate a working secrets-values.yaml with all five required secrets: Mongo credentials,

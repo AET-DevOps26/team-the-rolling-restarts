@@ -3,7 +3,7 @@
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
        azure-cicd-setup azure-provider-register azure-vm-docker azure-gh-vars azure-cicd-help \
-       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets \
+       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-destroy-all helm-setup helm-secrets \
        docs-serve \
        security-scan score
 
@@ -59,7 +59,8 @@ help:
 	  '  make helm-secrets      - generate secrets-values.yaml (RSA key, random Mongo password, service secret)' \
 	  '  make push-images REGISTRY=... - build+push your own test images and write image-values.yaml' \
 	  '  make helm-deploy       - install or upgrade the Helm release (ENV=prod for production TLS)' \
-	  '  make helm-destroy      - uninstall the Helm release' \
+	  '  make helm-destroy      - tear down the app workloads only (grafana-lgtm survives)' \
+	  '  make helm-destroy-all  - tear down everything, including grafana-lgtm; uninstalls the release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
 	  '' \
 	  'Documentation:' \
@@ -375,7 +376,7 @@ azure-cicd-help:
 	  'Then trigger: gh workflow run deploy-azure.yml --repo $(GH_REPO)'
 
 # --- Helm (delegates to infra/helm/Makefile) ---
-helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets:
+helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-destroy-all helm-setup helm-secrets:
 	$(MAKE) -C $(HELM_DIR) $@
 
 # --- Documentation ---

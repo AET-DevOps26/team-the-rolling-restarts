@@ -230,6 +230,16 @@ explicitly naming the `ServiceAccount`'s namespace — a standard, fully-support
 avoids needing a `ClusterRole`/`ClusterRoleBinding` (this cluster's RBAC does not permit creating
 those: confirmed via `kubectl auth can-i create clusterrole` returning `no`).
 
+**`make helm-destroy` doesn't touch it**: rendering every app-workload template (`deployment.yaml`,
+`databases.yaml`, `service.yaml`, `serviceaccount.yaml`, `secrets.yaml`, `pdb.yaml`, and
+`ingress.yaml`) is gated behind `appWorkloads.enabled` (`infra/helm/values.yaml`, default `true`).
+`make helm-destroy` runs `helm upgrade --set appWorkloads.enabled=false` — re-rendering the release
+with those resources removed (including `mongodb`'s data, same as a full uninstall always has) —
+rather than `helm uninstall`, so `templates/monitoring.yaml`/`monitoring-rbac.yaml` (which carry no
+such guard) keep rendering unconditionally and `grafana-lgtm` is left running. Use `make
+helm-destroy-all` for the rare case you actually want to remove monitoring too (a real `helm
+uninstall`, tearing down the whole release).
+
 **Persistence**: `grafana-lgtm` has a `PersistentVolumeClaim` mounted at `/data` — verified by
 inspecting the image directly (`docker run --entrypoint sh grafana/otel-lgtm@sha256:... -c
 'grep storage.tsdb.path run-prometheus.sh'` etc.) rather than assumed: Prometheus

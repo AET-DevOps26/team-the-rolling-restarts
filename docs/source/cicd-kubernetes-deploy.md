@@ -213,6 +213,9 @@ helm history newsgenai -n deployment
 - **`pending-install` / `another operation in progress`:** a previous Helm
   release is stuck. Clean up with `helm uninstall newsgenai -n deployment` or,
   if that fails, `kubectl delete secret -n deployment -l name=newsgenai,owner=helm`.
+  Unlike `make helm-destroy` (which only tears down the app workloads), a raw `helm uninstall`
+  here removes `grafana-lgtm`'s monitoring stack too — it's a genuine full recovery, not the
+  everyday teardown path.
 - **`context deadline exceeded`:** pods didn't become ready within the 5-minute
   timeout. Check pod events and logs for image pull errors or crash loops.
 - **Image pull errors:** ensure the cluster can reach `ghcr.io` and, for

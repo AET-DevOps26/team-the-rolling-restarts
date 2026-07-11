@@ -1,5 +1,6 @@
-{{/* Render the external ingress only when explicitly enabled. */}}
-{{- if .Values.ingress.enabled }}
+{{/* Render the external ingress only when explicitly enabled, and only alongside the app
+workloads it routes to (routing to nothing during `make helm-destroy` is meaningless). */}}
+{{- if and .Values.ingress.enabled .Values.appWorkloads.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
