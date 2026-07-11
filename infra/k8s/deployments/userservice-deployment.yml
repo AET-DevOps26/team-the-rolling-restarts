@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: user-service
+        monitoring: "true"
+      annotations:
+        prometheus.io/port: "8081"
+        prometheus.io/path: /actuator/prometheus
     spec:
       containers:
         - name: user-service
@@ -84,15 +88,17 @@ spec:
             failureThreshold: 30
             periodSeconds: 10
 
-          # Keep in sync with infra/helm/values.yaml (userService.resources) — trimmed to make
-          # room for grafana-lgtm in the same namespace; see infra/helm/values.yaml's monitoring
-          # block for the full budget.
+          # Keep in sync with infra/helm/values.yaml (userService.resources). See
+          # docs/source/monitoring.md's "Kubernetes resource budget" section for the full
+          # per-service distribution across the namespace's 4 CPU / 6144Mi quota at 3 replicas
+          # each.
           resources:
             requests:
-              cpu: "50m"
-              memory: "200Mi"
+              cpu: "60m"
+              memory: "210Mi"
             limits:
-              cpu: "170m"
-              # 400Mi: measured OOMKill live at 260Mi under smoke-test load; see
-              # docs/internal/06-observability.md.
-              memory: "400Mi"
+              cpu: "220m"
+              # 460Mi: measured live climbing steadily across 3 idle readings (70-72% -> 78-81%
+              # -> 82-86% of 400Mi), notably higher than content-service's stable 75-77% on the
+              # same limit — 400Mi wasn't enough margin. See docs/internal/06-observability.md.
+              memory: "460Mi"

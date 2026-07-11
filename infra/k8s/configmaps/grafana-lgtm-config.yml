@@ -8,12 +8,16 @@
 # prometheus.yaml is the ONE exception: this file's scrape_configs uses
 # per-pod Kubernetes service discovery (see docs/internal/06-observability.md
 # for why), so it intentionally differs from infra/grafana/prometheus.yaml
-# (docker-compose, static targets) but must stay identical to
-# infra/helm/files/grafana/prometheus.yaml (the other Kubernetes copy).
+# (docker-compose, static targets). It is ALSO the one place this copy cannot be
+# byte-identical to infra/helm/files/grafana/prometheus.yaml: that Helm copy is rendered through
+# `tpl` so `{{ .Release.Namespace }}` resolves to the real app namespace automatically, but this
+# raw-manifest copy has no templating — replace <APP_NAMESPACE> below with your actual app
+# namespace before applying (see docs/source/infra/k8s/kubernetes.md).
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-prometheus-config
+  namespace: rolling-restarts-monitoring
 data:
   prometheus.yaml: |
     ---
@@ -55,75 +59,40 @@ data:
         # A 10min time window is enough because it can easily absorb retries and network delays.
         out_of_order_time_window: 10m
     scrape_configs:
-      - job_name: api-gateway
-        metrics_path: /actuator/prometheus
+      # Single generic label/annotation-based auto-discovery job, replacing one hardcoded
+      # job_name block per service: any pod in the app namespace carrying `monitoring: "true"`
+      # is scraped automatically, with its port/path read from `prometheus.io/port`/
+      # `prometheus.io/path` annotations. Onboarding a new service means adding those to its pod
+      # template — no prometheus.yaml edit needed. `job` is set from the pod's `app` label so
+      # existing dashboards/alerts filtering `job=~"api-gateway|..."` keep working unchanged.
+      # Replace <APP_NAMESPACE> with your actual app namespace — see the ConfigMap-level comment
+      # above.
+      - job_name: kubernetes-pods
         kubernetes_sd_configs:
           - role: pod
             namespaces:
-              own_namespace: true
+              names: ["<APP_NAMESPACE>"]
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app]
-            regex: api-gateway
+          - source_labels: [__meta_kubernetes_pod_label_monitoring]
+            regex: "true"
             action: keep
-          - source_labels: [__meta_kubernetes_pod_ip]
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
             regex: (.+)
+            target_label: __metrics_path__
+          - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: (.+);(.+)
             target_label: __address__
-            replacement: ${1}:8080
+            replacement: ${1}:${2}
           - source_labels: [__meta_kubernetes_pod_name]
             target_label: instance
-      - job_name: user-service
-        metrics_path: /actuator/prometheus
-        kubernetes_sd_configs:
-          - role: pod
-            namespaces:
-              own_namespace: true
-        relabel_configs:
           - source_labels: [__meta_kubernetes_pod_label_app]
-            regex: user-service
-            action: keep
-          - source_labels: [__meta_kubernetes_pod_ip]
-            regex: (.+)
-            target_label: __address__
-            replacement: ${1}:8081
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: instance
-      - job_name: content-service
-        metrics_path: /actuator/prometheus
-        kubernetes_sd_configs:
-          - role: pod
-            namespaces:
-              own_namespace: true
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app]
-            regex: content-service
-            action: keep
-          - source_labels: [__meta_kubernetes_pod_ip]
-            regex: (.+)
-            target_label: __address__
-            replacement: ${1}:8082
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: instance
-      - job_name: gen-ai
-        metrics_path: /metrics
-        kubernetes_sd_configs:
-          - role: pod
-            namespaces:
-              own_namespace: true
-        relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app]
-            regex: gen-ai
-            action: keep
-          - source_labels: [__meta_kubernetes_pod_ip]
-            regex: (.+)
-            target_label: __address__
-            replacement: ${1}:8000
-          - source_labels: [__meta_kubernetes_pod_name]
-            target_label: instance
+            target_label: job
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-dashboard
+  namespace: rolling-restarts-monitoring
 data:
   service-overview.json: |
     {
@@ -1252,6 +1221,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-provisioning
+  namespace: rolling-restarts-monitoring
 data:
   custom-dashboards.yaml: |
     apiVersion: 1

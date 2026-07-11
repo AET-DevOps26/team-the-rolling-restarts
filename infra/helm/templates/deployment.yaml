@@ -31,6 +31,12 @@ spec:
     metadata:
       labels:
 {{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 8 }}
+{{- with $cfg.metricsPath }}
+        monitoring: "true"
+      annotations:
+        prometheus.io/port: {{ $cfg.port | quote }}
+        prometheus.io/path: {{ . | quote }}
+{{- end }}
     spec:
       serviceAccountName: {{ $cfg.name }}
       {{- with $.Values.imagePullSecrets }}

@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: gen-ai
+        monitoring: "true"
+      annotations:
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
     spec:
       containers:
         - name: gen-ai
@@ -61,11 +65,16 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
 
-          # Keep in sync with infra/helm/values.yaml (genAi.resources).
+          # Keep in sync with infra/helm/values.yaml (genAi.resources). 130Mi: measured live at a
+          # stable 34-39% of 180Mi across multiple readings (idle usage only ever 62-71Mi) —
+          # gen-ai never runs any model locally (ChatOllama/ChatOpenAI in app/llm/provider.py are
+          # both thin HTTP clients; Ollama, when used, is a separate container that doesn't exist
+          # in Kubernetes at all), so this consistent margin funds user-service's increase. See
+          # docs/source/monitoring.md's "Kubernetes resource budget" section.
           resources:
             requests:
               cpu: "30m"
-              memory: "64Mi"
+              memory: "80Mi"
             limits:
-              cpu: "80m"
+              cpu: "100m"
               memory: "130Mi"

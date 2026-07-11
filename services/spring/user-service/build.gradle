@@ -5,6 +5,10 @@ plugins {
 
 springBoot {
 	mainClass = 'rolling_restarts.user.UserServiceApplication'
+	// Generates META-INF/build-info.properties, which Spring Boot's ProjectInfoAutoConfiguration
+	// picks up to auto-register a BuildProperties bean (used by BuildInfoMetrics to expose the
+	// deployed version as a Prometheus metric — see docs/source/monitoring.md).
+	buildInfo()
 }
 
 dependencies {

@@ -28,11 +28,11 @@ open http://localhost:3001          # or whatever LGTM_GRAFANA_PORT is set to in
 ### Kubernetes (Helm or raw manifests)
 
 There is **no ingress** for `grafana-lgtm` — reach it with a port-forward to the ClusterIP
-Service:
+Service. It runs in its own namespace (`monitoring.namespace` in `infra/helm/values.yaml`,
+currently `rolling-restarts-monitoring`), separate from the app workloads:
 
 ```sh
-# pick your namespace (kubernetes-test, your dev namespace, prod, …)
-kubectl port-forward svc/grafana-lgtm 3001:3000 -n <namespace>
+kubectl port-forward svc/grafana-lgtm 3001:3000 -n rolling-restarts-monitoring
 # then open:
 open http://localhost:3001
 ```
@@ -40,7 +40,7 @@ open http://localhost:3001
 If you're not sure it's running:
 
 ```sh
-kubectl get pods,svc -n <namespace> -l app=grafana-lgtm
+kubectl get pods,svc -n rolling-restarts-monitoring -l app=grafana-lgtm
 ```
 
 ### Once you're in Grafana
@@ -66,8 +66,8 @@ docker exec rolling-restarts-grafana-lgtm-1 \
   curl -s 'http://localhost:9090/api/v1/query?query=up'
 
 # Kubernetes: the Service only exposes 3000/4317/4318, so port-forward to the POD's 9090
-kubectl port-forward "$(kubectl get pod -n <namespace> -l app=grafana-lgtm -o name)" \
-  9090:9090 -n <namespace>
+kubectl port-forward "$(kubectl get pod -n rolling-restarts-monitoring -l app=grafana-lgtm -o name)" \
+  9090:9090 -n rolling-restarts-monitoring
 # then browse http://localhost:9090
 ```
 
@@ -198,13 +198,152 @@ Prometheus to scrape each node's kubelet cAdvisor endpoint, which requires clust
 cluster: `kubectl auth can-i create clusterrole` returns `no`, confirmed against the real
 cluster rather than assumed from documentation.
 
+## Monitoring runs in its own namespace
+
+`grafana-lgtm` is deployed into a dedicated namespace (`monitoring.namespace` in
+`infra/helm/values.yaml`, currently `rolling-restarts-monitoring`), separate from the app
+workloads' namespace. It has its own `ResourceQuota`, isolating it from app-namespace pressure and
+making its own upgrades/troubleshooting independent of the app release. This namespace must exist
+*before* `helm upgrade --install` runs — Helm's `--create-namespace` only auto-creates its own
+install-target namespace, not other namespaces referenced by templates via an explicit
+`metadata.namespace`. `.github/workflows/deploy_kubernetes.yml` creates it idempotently
+(`kubectl create namespace ... --dry-run=client -o yaml | kubectl apply -f -`) before deploying;
+for a manual `make helm-deploy`, create it once yourself (`kubectl create namespace
+rolling-restarts-monitoring`).
+
+A second CI/CD workflow, `.github/workflows/deploy_monitoring.yml`, redeploys *only* when
+monitoring-related files change (`infra/grafana/**`, `infra/helm/files/grafana/**`, the monitoring
+Helm templates, or the raw-manifest equivalents) — path-filtered so a dashboard/alert-rule tweak
+doesn't need to wait on the full app CI/build pipeline (irrelevant here anyway, since `grafana-lgtm`
+runs an upstream public image this repo never builds). It uses `helm upgrade --reuse-values`
+rather than the full secrets/image-values setup `deploy_kubernetes.yml` needs, so it never touches
+mongo/JWT/service-client secrets or image tags — only the monitoring-related values. It shares that
+workflow's `deploy-k8s` concurrency group so the two never run `helm upgrade` against the same
+release simultaneously. Requires the release to already exist (the very first install must go
+through `deploy_kubernetes.yml`).
+
+Cross-namespace RBAC: Prometheus (inside `grafana-lgtm`) needs to discover pods over in the app
+namespace, but its `ServiceAccount` lives in the monitoring namespace. The `Role`/`RoleBinding`
+granting `get/list/watch` on `pods` are created *in the app namespace* (a `RoleBinding` must live
+in the same namespace as the pods it grants access to), with the `RoleBinding`'s `subject`
+explicitly naming the `ServiceAccount`'s namespace — a standard, fully-supported RBAC feature that
+avoids needing a `ClusterRole`/`ClusterRoleBinding` (this cluster's RBAC does not permit creating
+those: confirmed via `kubectl auth can-i create clusterrole` returning `no`).
+
+**Persistence**: `grafana-lgtm` has a `PersistentVolumeClaim` mounted at `/data` — verified by
+inspecting the image directly (`docker run --entrypoint sh grafana/otel-lgtm@sha256:... -c
+'grep storage.tsdb.path run-prometheus.sh'` etc.) rather than assumed: Prometheus
+(`--storage.tsdb.path=/data/prometheus`), Grafana (`GF_PATHS_DATA=/data/grafana/data`), Loki
+(`/data/loki`), Tempo (`/data/tempo/{wal,blocks}`), and Pyroscope (`/data/pyroscope`) all persist
+under this single path. Before this, the stack had **no persistence at all** — every pod restart
+silently lost all dashboards, metrics history, logs, traces, and profiles.
+
+**Label/annotation-based auto-discovery**: `infra/helm/files/grafana/prometheus.yaml`'s
+`scrape_configs` is a single generic job (previously one hardcoded `job_name` block per service).
+Any pod in the app namespace carrying the `monitoring: "true"` label is scraped automatically,
+with its port/path read from `prometheus.io/port`/`prometheus.io/path` annotations
+(`infra/helm/templates/deployment.yaml` sets both on any workload with a `metricsPath` value in
+`values.yaml`). `job` is relabeled from the pod's `app` label so existing dashboards/alerts
+filtering `job=~"api-gateway|..."` keep working unchanged. Onboarding a new service means adding
+the label + annotations to its pod template — no `prometheus.yaml` edit needed.
+
+**Version visibility**: every service exposes a static `app_build_info` gauge (always `1`, with
+`service`/`version` labels) — `BuildInfoMetrics.java` for the 3 Spring services (backed by
+Spring Boot's `buildInfo()` Gradle task + auto-configured `BuildProperties` bean) and a
+`prometheus_client.Gauge` set at startup in `services/gen-ai/app/main.py`. Lets a dashboard panel
+or an ad hoc query correlate a metric/behavior change with the release that caused it.
+
+**What we deliberately did *not* adopt from the general "Kubernetes monitoring best practices"
+list**, and why:
+
+- **ServiceMonitor/PodMonitor CRDs** — these are Prometheus Operator resources. This stack runs
+  the bundled `grafana/otel-lgtm` image (its own embedded Prometheus, configured via a static
+  `prometheus.yaml` file), not the Prometheus Operator. Adopting CRD-based discovery would mean
+  replacing the entire monitoring architecture with a full `kube-prometheus-stack`-style
+  installation — a much larger undertaking than this project's scope, and not something to do
+  silently as a side effect of a namespace split.
+- **Auth (SSO/basic auth) and TLS for Grafana/Prometheus** — already addressed at the network
+  layer instead: neither is exposed via any ingress (confirmed: only one ingress resource in this
+  repo, routing `/api/`, `/actuator/health`, and `/` — nothing for `grafana-lgtm`), reachable only
+  via `kubectl port-forward`, which is itself already encrypted (the Kubernetes API server
+  connection). Grafana's anonymous-Admin default is a deliberate, previously-documented tradeoff
+  under that network-isolation model, not an oversight — revisit if that model ever changes (e.g.
+  if `grafana-lgtm` gets its own ingress route).
+- **A `PrometheusRule`-based "pod restart count > 5" alert** — the underlying metric
+  (`kube_pod_container_status_restarts_total`) comes from `kube-state-metrics`, a separate
+  exporter not currently deployed. Adding it is plausible (it can run with namespace-scoped RBAC
+  rather than the `ClusterRole` this cluster's RBAC won't grant), but it's a new workload with its
+  own resource cost, and out of scope for this pass — worth a dedicated follow-up rather than
+  folding in silently. `PrometheusRule` CRDs have the same Operator-dependency issue as
+  ServiceMonitor/PodMonitor above; the existing `rules.yaml`-based alert provisioning (see
+  "Alerting" below) is the equivalent for this stack's architecture.
+
 ## Kubernetes resource budget
 
-`grafana-lgtm` runs inside the same quota-constrained namespace as every other service (2 CPU /
-3000Mi hard limit, verified empirically against the live cluster at the real 2-replicas-per-service
-production configuration). To make room for it, every other service's resource limits were
-trimmed in both `infra/helm/values.yaml` and the raw `infra/k8s/deployments/*.yml` manifests.
-Even with that trimming, the final margin is small — roughly 210m CPU / 60Mi memory across the
-whole namespace. Treat this as something to check, not fire-and-forget: run
-`kubectl top pod -n <namespace>` after deploying, and adjust `monitoring.resources` (or the other
-services' trimmed limits) if usage is running close to the edge.
+The cluster's separate `kubernetes-test` namespace was retired earlier — manual/dev deploys and
+the CD-managed release share one app namespace. That namespace's `ResourceQuota` was later split
+further to carve out the dedicated monitoring namespace above: what was a single **4 CPU /
+6144Mi** quota is now **3500m CPU / 5244Mi memory** for the app namespace plus a separate **500m
+CPU / 900Mi memory** for the monitoring namespace (`3500+500=4000m`, `5244+900=6144Mi` — the same
+total pool, not additional capacity; confirmed live via `kubectl describe resourcequota` in both
+namespaces). Both quotas enforce only `limits.cpu`/`limits.memory`, not `requests` — so requests
+are free to size for realistic steady-state usage without touching either quota.
+
+App-namespace resource limits are sized so that **api-gateway, user-service, content-service,
+gen-ai, and web-client can each run 3 replicas simultaneously** (headroom for a future HPA),
+alongside `mongodb` (`replicas: 1`, not horizontally replicated):
+
+| Service | Replicas | Request (CPU/Mem) | Limit (CPU/Mem) | ×N limit CPU | ×N limit Mem |
+| --- | --- | --- | --- | --- | --- |
+| web-client | 3 | 20m / 90Mi | 100m / 200Mi | 300m | 600Mi |
+| api-gateway | 3 | 60m / 180Mi | 220m / 330Mi | 660m | 990Mi |
+| user-service | 3 | 60m / 210Mi | 220m / 460Mi | 660m | 1380Mi |
+| content-service | 3 | 60m / 210Mi | 220m / 400Mi | 660m | 1200Mi |
+| gen-ai | 3 | 30m / 80Mi | 100m / 130Mi | 300m | 390Mi |
+| mongodb | 1 | 100m / 256Mi | 250m / 512Mi | 250m | 512Mi |
+| **App total** | | | | **2830m / 3500m (81%)** | **5072Mi / 5244Mi (96.7%)** |
+| grafana-lgtm | 1 | 100m / 480Mi | 400m / 850Mi | 400m | 850Mi |
+| **Monitoring total** | | | | **400m / 500m (80%)** | **850Mi / 900Mi (94.4%)** |
+
+Headroom: app namespace **670m CPU (19%)**, **172Mi memory (3.3%)**; monitoring namespace
+**100m CPU (20%)**, **50Mi memory (5.6%)**. This table has gone through several live-data-driven
+revisions already (see `docs/internal/06-observability.md` for the full incident history) — treat
+the numbers as a snapshot, not a one-time decision:
+
+- **mongodb is at 512Mi** (not the 260Mi it was briefly cut to) — that cut left almost no headroom
+  above the 256Mi request and caused a live OOMKill during first-boot init (WiredTiger cache
+  warmup + root user creation), which interrupted init before the root user existed and left every
+  dependent service permanently failing auth even after Mongo itself recovered. Live idle usage
+  measured at a stable 30% of this limit (~155Mi) — the 512Mi exists for headroom during that
+  one-time init spike, not steady-state.
+- **api-gateway is at 330Mi** — an intermediate 300Mi trim was measured live at 85-90% utilization
+  at idle (too tight) and reverted.
+- **user-service is at 460Mi, higher than content-service's 400Mi** despite near-identical code
+  shape — live idle measurements across three separate snapshots showed user-service climbing
+  steadily (70-72% -> 78-81% -> 82-86% of 400Mi) while content-service stayed flat around 75-77%
+  on the same limit. The cause of the difference hasn't been root-caused yet (worth investigating:
+  auth/JWT-path caching, connection pool behavior); 460Mi restores headroom in the meantime.
+- **gen-ai is at 130Mi** — it never runs a model locally (both `ChatOllama` and `ChatOpenAI` in
+  `app/llm/provider.py` are thin HTTP clients; the only place Ollama itself runs is a separate
+  container behind docker-compose's `local-llm` profile, which doesn't exist in Kubernetes at
+  all), and live idle usage measured a stable 34-39% across multiple readings — this consistent
+  margin funds user-service's increase above.
+- **grafana-lgtm is at 850Mi/400m**, in its own namespace with its own 900Mi/500m quota (see
+  above) — it OOMKilled live (exit 137) after ~28 minutes while a dashboard was being actively
+  browsed, back when it ran at 640Mi/350m co-located in the app namespace. Idle usage alone was
+  already 467Mi (73% of that prior limit); viewing a dashboard adds real load on top, since every
+  panel fires a PromQL range query that Prometheus (bundled in the same container as Grafana/
+  Tempo/Loki/Pyroscope) has to evaluate and decompress from its TSDB. A later idle reading at a
+  900Mi limit showed 58% (530Mi) and an active-browsing reading showed 80% (725Mi) — 850Mi keeps
+  that same real margin while leaving some of the dedicated namespace's own quota spare.
+- **web-client is at 200Mi** — an earlier 230Mi bump (after 2/3 pods measured at ~80% of a 180Mi
+  limit) turned out more generous than needed once measured live (41-63% of 230Mi), so it was
+  trimmed back to help fund user-service's increase.
+- Requests stay below limits (roughly 35–65%) since they aren't quota-constrained, but are sized
+  to be meaningful bases for CPU-utilization-based autoscaling later (a razor-thin request makes
+  an HPA's target-utilization percentage nearly meaningless).
+
+Treat the 2.8% memory margin as something to check continuously, not fire-and-forget: run
+`kubectl top pod -n <namespace>` regularly and adjust the table above if usage is running close to
+the edge, especially before actually turning on 3 replicas or an HPA. user-service's still-rising
+trend is the one line item most likely to need another look.

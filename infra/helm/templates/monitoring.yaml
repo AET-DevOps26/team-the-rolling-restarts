@@ -2,14 +2,19 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-prometheus-config
+  namespace: {{ .Values.monitoring.namespace }}
 data:
+  # Rendered with `tpl` (not a plain .Files.Get) so the app-namespace placeholder inside the file
+  # can resolve to {{ .Release.Namespace }} — this ConfigMap lives in monitoring.namespace, but
+  # Prometheus's kubernetes_sd_configs needs to discover pods over in the app namespace instead.
   prometheus.yaml: |
-{{ .Files.Get "files/grafana/prometheus.yaml" | indent 4 }}
+{{ tpl (.Files.Get "files/grafana/prometheus.yaml") $ | indent 4 }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-dashboard
+  namespace: {{ .Values.monitoring.namespace }}
 data:
   service-overview.json: |
 {{ .Files.Get "files/grafana/dashboards/service-overview.json" | indent 4 }}
@@ -20,6 +25,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-provisioning
+  namespace: {{ .Values.monitoring.namespace }}
 data:
   custom-dashboards.yaml: |
 {{ .Files.Get "files/grafana/provisioning/dashboards/custom-dashboards.yaml" | indent 4 }}
@@ -28,10 +34,23 @@ data:
   rules.yaml: |
 {{ .Files.Get "files/grafana/provisioning/alerting/rules.yaml" | indent 4 }}
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.monitoring.name }}-data
+  namespace: {{ .Values.monitoring.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.monitoring.storage }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Values.monitoring.name }}
+  namespace: {{ .Values.monitoring.namespace }}
   labels:
 {{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
 spec:
@@ -57,6 +76,8 @@ spec:
           resources:
 {{ toYaml .Values.monitoring.resources | nindent 12 }}
           volumeMounts:
+            - name: data
+              mountPath: /data
             - name: prometheus-config
               mountPath: /otel-lgtm/prometheus.yaml
               subPath: prometheus.yaml
@@ -76,6 +97,9 @@ spec:
               mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
               subPath: rules.yaml
       volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.monitoring.name }}-data
         - name: prometheus-config
           configMap:
             name: grafana-lgtm-prometheus-config
@@ -90,6 +114,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Values.monitoring.name }}
+  namespace: {{ .Values.monitoring.namespace }}
   labels:
 {{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
 spec:

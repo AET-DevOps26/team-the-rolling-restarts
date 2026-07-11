@@ -155,22 +155,100 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   further OOMKill, and a fresh `make smoke-test-k8s` passed 34/34 (the one skip is the expected
   Loki check — Grafana isn't reachable without a port-forward on this target). Post-fix idle
   usage: api-gateway/user-service ~258Mi, content-service ~265Mi, all comfortably under 400Mi.
-  Fits at the default **1 replica**: new total `limits.memory` across the namespace is 2340Mi of
-  the 3000Mi quota (660Mi headroom), up from ~1920Mi before. Per the AET fair-use policy the
-  *reserved* quantity is `requests` (team cap 4 vCPU / 6 GB across all namespaces), not `limits`,
-  so this was "free" against the team budget — only `limits` changed, `requests` stayed at 200Mi.
-  **Still open:** it does **not** fit at 2 replicas *with* the 640Mi monitoring bundle co-located
-  (2 × 3 × 400Mi = 2400Mi Spring + 640Mi + the rest exceeds 3000Mi) — co-locating monitoring
-  structurally requires 1 replica, so the replica-count-vs-monitoring tradeoff for
-  `values-prod.yaml` (still 2 replicas, monitoring not deployed there) remains a team decision.
-  Slimming the JVM footprint (SerialGC / lower `MaxRAMPercentage` / native image) also remains
-  unexplored, should more headroom ever be needed.
-- The Kubernetes resource budget for `grafana-lgtm` is tight (see `infra/helm/values.yaml`'s
-  `monitoring.resources` and the trimmed limits on every other service) — every other service's
-  Helm `values.yaml` and raw `infra/k8s/deployments/*.yml` limits were trimmed to make room for
-  it inside the namespace's hard quota (2 CPU / 3000Mi `limits`, verified empirically against the
-  live cluster: quota reported `limits.cpu 2`, `limits.memory 3000Mi`). At 1 replica the fit is
-  comfortable; see the OOM item above for the 2-replica case.
+- **RESOLVED — the `kubernetes-test` namespace was retired; manual/dev deploys and the CD-managed
+  release now share a single namespace**, which merged what used to be two separate 2 CPU /
+  3000Mi `ResourceQuota`s into one **4 CPU / 6144Mi** quota (confirmed live via `kubectl describe
+  resourcequota`: it enforces only `limits.cpu`/`limits.memory`, not `requests`). This resolves
+  the earlier "doesn't fit at 2 replicas with monitoring co-located" gap noted below — the full
+  distribution across all services, sized so **api-gateway/user-service/content-service/gen-ai/
+  web-client can each run 3 replicas simultaneously** (headroom for a future HPA) alongside the
+  `mongodb`/`grafana-lgtm` singletons, is documented in `docs/source/monitoring.md`'s "Kubernetes
+  resource budget" section. As part of this redistribution, **mongodb's limit was restored from
+  260Mi to 512Mi** — the 260Mi limit had caused a live OOMKill during first-boot init (WiredTiger
+  cache warmup + root user creation), interrupting init before the root user existed and leaving
+  every dependent service permanently failing auth (`UserNotFound`) even after Mongo itself
+  recovered; **gen-ai's limit was raised from 130Mi to 180Mi** (FastAPI, LangChain, the OTel SDK,
+  and the `prometheus-fastapi-instrumentator` scrape endpoint together need a bit more than the
+  prior cut left it — but not much more: gen-ai never runs a model locally in any deployment
+  target. Both `ChatOllama` and `ChatOpenAI` in `app/llm/provider.py` are thin HTTP clients;
+  Ollama itself only ever runs as a separate container gated behind docker-compose's `local-llm`
+  profile and doesn't exist in Kubernetes at all, so live idle usage measured at only 24-27% of an
+  already-generous 260Mi test limit); and **api-gateway/user-service/content-service's CPU limit
+  was raised back from 170m to 220m** to reduce throttling risk under the new OTel
+  instrumentation's per-request work. Slimming the JVM footprint (SerialGC / lower
+  `MaxRAMPercentage` / native image) remains unexplored, should more headroom ever be needed as
+  replica counts or an HPA are turned on.
+- **FIXED — `grafana-lgtm` OOMKilled live (exit 137) after ~28 minutes, while its dashboards were
+  being actively browsed via `kubectl port-forward` following a `make helm-deploy`.** Idle usage
+  alone was already 467Mi (73% of its 640Mi limit) with nobody viewing Grafana at all; opening a
+  dashboard adds real load on top of that baseline, since every panel fires a PromQL range query
+  that Prometheus — bundled in the same container as Grafana/Tempo/Loki/Pyroscope — has to
+  evaluate and decompress from its TSDB, and only 173Mi (27%) of headroom wasn't enough to absorb
+  that. Fixed by raising the limit to **900Mi** (and the CPU limit from 350m to 450m, since PromQL
+  evaluation is CPU-bound too) in both `infra/helm/values.yaml` and
+  `infra/k8s/deployments/grafana-lgtm-deployment.yml`, funded by the gen-ai/api-gateway trims
+  above as part of the same namespace-consolidation redistribution. A later idle reading at 900Mi
+  showed 58% (530Mi) and a later active-browsing reading showed 80% (725Mi) — consistent with
+  900Mi covering both idle and active use with real margin.
+- **ONGOING — a follow-up round of live `kubectl top pod` measurements after the above fixes
+  landed found two more adjustments needed**, applied to `infra/helm/values.yaml` and every raw
+  `infra/k8s/deployments/*.yml` manifest:
+  - **api-gateway's 300Mi trim (from the redistribution above) was too aggressive** — measured
+    live at 85-90% of 300Mi at idle. Reverted to **330Mi**.
+  - **user-service needed to grow from 400Mi to 460Mi.** Three separate idle `kubectl top pod`
+    readings, taken minutes apart, showed it climbing steadily — 70-72% -> 78-81% -> 82-86% of
+    400Mi — while content-service, on the identical 400Mi limit with a similar codebase shape,
+    stayed flat around 75-77% the whole time. The cause of user-service's specific growth pattern
+    hasn't been root-caused yet (worth investigating: JWT/auth-path caching, connection pool
+    behavior) — 460Mi restores headroom as a mitigation, not a fix, and this is the one line item
+    in the resource budget most likely to need another look.
+  - Funded by trimming **gen-ai to 130Mi** (measured live at a stable 34-39% of 180Mi across
+    multiple readings — comfortable margin to give up) and **web-client back down to 200Mi** (the
+    230Mi bump from the fix above turned out more generous than needed once measured live at
+    41-63%). Net result: total memory usage actually rose slightly (5942Mi -> 5972Mi of 6144Mi,
+    margin down from 3.3% to 2.8%), funding the user-service increase mostly out of gen-ai/
+    web-client's spare headroom rather than growing the whole namespace's footprint.
+- **DONE — `grafana-lgtm` moved into its own dedicated namespace** (`rolling-restarts-monitoring`),
+  separate from the app workloads, adopting several general Kubernetes-monitoring practices that
+  weren't in place before:
+  - **Namespace isolation**: the app namespace's `ResourceQuota` was correspondingly split —
+    confirmed live via `kubectl describe resourcequota` in both namespaces — from a single
+    4000m/6144Mi to **3500m/5244Mi (app) + 500m/900Mi (monitoring)**, the same total pool, not
+    additional capacity. grafana-lgtm's limit was resized from 900Mi/450m to **850Mi/400m** to fit
+    under its namespace's own quota with margin, rather than consuming the entire thing.
+  - **Cross-namespace RBAC**: the `Role`/`RoleBinding` granting Prometheus `get/list/watch` on
+    `pods` had to move to the app namespace (where the pods actually are), with the
+    `RoleBinding`'s `subject` explicitly naming the `ServiceAccount`'s namespace
+    (`rolling-restarts-monitoring`) — verified this doesn't require a `ClusterRole`/
+    `ClusterRoleBinding` (still blocked on this cluster: `kubectl auth can-i create clusterrole`
+    still returns `no`), since a namespaced `RoleBinding` can reference a subject from a different
+    namespace natively.
+  - **Persistence added for the first time**: a `PersistentVolumeClaim` mounted at `/data`.
+    Previously `grafana-lgtm` had *no* persistence at all — every pod restart silently lost all
+    dashboards, metrics history, logs, traces, and profiles. The mount path was verified by
+    inspecting the image directly (`docker run --entrypoint sh grafana/otel-lgtm@sha256:... -c
+    'grep storage.tsdb.path run-prometheus.sh'`, etc.), not assumed: Prometheus, Grafana, Loki,
+    Tempo, and Pyroscope all persist under this single `/data` root.
+  - **Label/annotation-based auto-discovery**: replaced 4 hardcoded per-service `job_name` blocks
+    in `prometheus.yaml` with a single generic job keyed on a `monitoring: "true"` pod label plus
+    `prometheus.io/port`/`prometheus.io/path` annotations (set by
+    `infra/helm/templates/deployment.yaml` on any workload with a `metricsPath` value). Onboarding
+    a future service needs only those label/annotations, not a `prometheus.yaml` edit.
+  - **Version-info metric added**: a static `app_build_info` gauge (value 1, `service`/`version`
+    labels) on every service — `BuildInfoMetrics.java` (new, identical across all 3 Spring
+    services, backed by a new `buildInfo()` Gradle task each) and a `prometheus_client.Gauge` in
+    gen-ai's `main.py`.
+  - **Explicitly not adopted** (see `docs/source/monitoring.md`'s rationale): ServiceMonitor/
+    PodMonitor CRDs and `PrometheusRule` (both require the Prometheus Operator, which this stack's
+    bundled-image architecture doesn't use — adopting them means replacing the whole monitoring
+    stack, out of scope here); Grafana/Prometheus auth or TLS (already addressed at the network
+    layer — no ingress route for grafana-lgtm, reachable only via `kubectl port-forward`); a
+    `kube_pod_container_status_restarts_total`-based alert (needs deploying `kube-state-metrics`,
+    a new workload with its own cost — flagged as a follow-up, not folded in silently).
+  - **New CI/CD workflow**: `.github/workflows/deploy_monitoring.yml`, path-filtered to
+    monitoring-related files only, using `helm upgrade --reuse-values` so it never needs the app
+    secrets or image-values `deploy_kubernetes.yml` requires. Shares that workflow's `deploy-k8s`
+    concurrency group to prevent two `helm upgrade` calls racing on the same release.
 - `infra/helm/files/grafana/*` is a manually-copied duplicate of most of `infra/grafana/*` —
   Helm's `.Files.Get` can't escape the chart root (`infra/helm/`), so the config files had to be
   copied in rather than referenced directly. Nothing in CI enforces the two stay in sync; if

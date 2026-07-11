@@ -67,8 +67,13 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Spring memory limit raised 260Mi → 400Mi after it caused a real live OOMKill during
   `make smoke-test-k8s` (user-service crashed mid-login, cascading "no token" skips through the
   rest of the suite). Re-verified: `helm upgrade` applied, all 3 pods rolled out clean, 34/34
-  smoke checks now pass at 1 replica (2340Mi/3000Mi namespace quota used). Still open: doesn't fit
-  at 2 replicas with monitoring co-located — see `docs/internal/06-observability.md`
+  smoke checks now pass
+- ✅ `kubernetes-test` namespace retired — manual/dev deploys and the CD-managed release now share
+  one namespace with a merged **4 CPU / 6144Mi** quota. Resources redistributed so
+  api-gateway/user-service/content-service/gen-ai/web-client can each run 3 replicas simultaneously
+  (headroom for a future HPA); mongodb's limit restored 260Mi → 512Mi (the 260Mi cut had caused a
+  live OOMKill during first-boot init, permanently breaking Mongo auth for dependent services) —
+  see `docs/internal/06-observability.md` and `docs/source/monitoring.md`
 - ⚠️ No per-pod resource-usage metrics in Kubernetes — cluster RBAC doesn't allow the
   cluster-scoped access the cAdvisor scrape approach needs (verified, not just assumed)
 - ⚠️ Security fix applied along the way: `/actuator/prometheus` was briefly reachable

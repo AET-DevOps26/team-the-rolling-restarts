@@ -10,6 +10,14 @@ It is intentionally separate from:
 - `upload_images.yml` — builds and pushes images to GHCR, then uploads an
   `image-values` artifact consumed by this workflow.
 - `deploy-azure.yml` — deploys to the Azure VM with Docker Compose.
+- `deploy_monitoring.yml` — a lighter sibling that redeploys only `grafana-lgtm` (its own
+  namespace, `rolling-restarts-monitoring`) when monitoring-related files change
+  (`infra/grafana/**`, the monitoring Helm templates, etc.). It doesn't wait on
+  `build-and-package`/CI at all — `grafana-lgtm` runs an upstream public image this repo never
+  builds — and uses `helm upgrade --reuse-values` so it never needs the app secrets or
+  image-values this workflow does. It shares this workflow's `deploy-k8s` concurrency group so
+  the two never run `helm upgrade` against the same release at the same time. Requires this
+  workflow to have deployed the release at least once already.
 
 ## Pipeline overview
 
@@ -129,22 +137,33 @@ The generated file overrides:
 
 ## Resource quotas
 
-The Helm chart's resource limits are sized to fit within a namespace quota of
-**2 CPU / 3 GB memory** (1 replica per workload):
+`grafana-lgtm` runs in its own dedicated namespace (`monitoring.namespace` in
+`infra/helm/values.yaml`, currently `rolling-restarts-monitoring`) with its own `ResourceQuota`,
+separate from the app workloads' namespace — see `docs/source/monitoring.md`'s "Monitoring runs
+in its own namespace" section. The app namespace's quota is **3500m CPU / 5244Mi memory**, sized
+with headroom for **api-gateway, user-service, content-service, gen-ai, and web-client to each run
+3 replicas simultaneously** (in anticipation of a future HPA), alongside the `mongodb` singleton
+(`replicas: 1`, not horizontally scaled):
 
-| Workload | CPU limit | Memory limit |
-| --- | --- | --- |
-| web-client | 250m | 384Mi |
-| api-gateway | 350m | 448Mi |
-| user-service | 350m | 448Mi |
-| content-service | 350m | 448Mi |
-| gen-ai | 250m | 384Mi |
-| mongodb | 150m | 384Mi |
-| **Total** | **1700m** | **2496Mi** |
+| Workload | Replicas | CPU limit | Memory limit | ×N CPU | ×N Memory |
+| --- | --- | --- | --- | --- | --- |
+| web-client | 3 | 100m | 200Mi | 300m | 600Mi |
+| api-gateway | 3 | 220m | 330Mi | 660m | 990Mi |
+| user-service | 3 | 220m | 460Mi | 660m | 1380Mi |
+| content-service | 3 | 220m | 400Mi | 660m | 1200Mi |
+| gen-ai | 3 | 100m | 130Mi | 300m | 390Mi |
+| mongodb | 1 | 250m | 512Mi | 250m | 512Mi |
+| **App total** | | | | **2830m / 3500m** | **5072Mi / 5244Mi** |
 
-If your namespace has a `ResourceQuota`, ensure it allows at least these
-totals. Running with `values-prod.yaml` (2 replicas) requires proportionally
-more quota.
+The monitoring namespace's quota is a separate **500m CPU / 900Mi memory**:
+
+| Workload | Replicas | CPU limit | Memory limit |
+| --- | --- | --- | --- |
+| grafana-lgtm | 1 | 400m | 850Mi |
+
+See `docs/source/monitoring.md`'s "Kubernetes resource budget" section for the full rationale.
+If your namespaces have smaller `ResourceQuota`s, scale these down and reduce `global.replicas`
+(`values-prod.yaml` runs at 2 replicas) accordingly.
 
 ## Security notes
 

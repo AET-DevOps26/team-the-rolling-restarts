@@ -1,10 +1,15 @@
-.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets
+.PHONY: help helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets ensure-monitoring-namespace
 
 HELM ?= helm
 RELEASE ?= newsgenai
 CHART ?= .
 ENV ?= dev
 MONGO_USER ?= root
+# Must match monitoring.namespace in values.yaml. grafana-lgtm deploys into its own namespace,
+# which Helm's --create-namespace does NOT auto-create (that flag only covers Helm's own
+# install-target namespace, not other namespaces referenced by templates via an explicit
+# metadata.namespace) — so it must exist before install/upgrade runs, or those fail outright.
+MONITORING_NAMESPACE ?= rolling-restarts-monitoring
 
 # Auto-detect secrets-values.yaml if present, unless overridden
 ifneq ($(wildcard secrets-values.yaml),)
@@ -42,7 +47,9 @@ help:
 	  'Default ENV=dev: staging TLS + a dev.-prefixed host (values-dev.yaml) so a manual deploy' \
 	  'does not collide with the CD release on the shared ingress. Set ENV=prod for the prod host + TLS.' \
 	  'Override the ingress host: HELM_HOST=my-host.example.com' \
-	  'secrets-values.yaml is auto-included if present (override: SECRETS=)'
+	  'secrets-values.yaml is auto-included if present (override: SECRETS=)' \
+	  'helm-install/helm-upgrade/helm-deploy idempotently create the monitoring namespace first' \
+	  '(MONITORING_NAMESPACE, default rolling-restarts-monitoring) if it does not already exist.'
 
 ## Lint the chart before rendering or installing.
 helm-lint:
@@ -54,16 +61,22 @@ helm-setup:
 helm-template:
 	$(HELM) template $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
+## Idempotent: only creates the namespace if it doesn't already exist. Never touches anything
+## already inside it (existing PVC data, running pods, etc. are left exactly as they are) — this
+## is a plain `kubectl apply` of just the Namespace object, not a recreate.
+ensure-monitoring-namespace:
+	kubectl create namespace $(MONITORING_NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
+
 ## Install the chart into a namespace.
-helm-install:
+helm-install: ensure-monitoring-namespace
 	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Upgrade an existing release.
-helm-upgrade:
+helm-upgrade: ensure-monitoring-namespace
 	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Install or upgrade in one command.
-helm-deploy:
+helm-deploy: ensure-monitoring-namespace
 	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
 
 ## Remove the release from the cluster.

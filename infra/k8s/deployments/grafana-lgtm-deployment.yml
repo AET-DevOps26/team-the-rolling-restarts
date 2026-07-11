@@ -1,7 +1,20 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-lgtm-data
+  namespace: rolling-restarts-monitoring
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana-lgtm
+  namespace: rolling-restarts-monitoring
   labels:
     app: grafana-lgtm
 spec:
@@ -25,16 +38,24 @@ spec:
             - containerPort: 4317
             - containerPort: 4318
 
-          # Keep in sync with infra/helm/values.yaml (monitoring.resources).
+          # Keep in sync with infra/helm/values.yaml (monitoring.resources). 850Mi/400m (not
+          # 900Mi/450m): the dedicated rolling-restarts-monitoring namespace has its own
+          # ResourceQuota (500m CPU / 900Mi memory hard limit, confirmed live via
+          # `kubectl describe resourcequota -n rolling-restarts-monitoring`) — grafana-lgtm is
+          # the only workload there, but sizing exactly at the ceiling leaves zero headroom for
+          # anything else ever added. 850Mi/400m still covers the active-dashboard-browsing OOM
+          # this stack hit before (measured at 725Mi/80% of a 900Mi limit under that load).
           resources:
             requests:
               cpu: "100m"
-              memory: "400Mi"
+              memory: "480Mi"
             limits:
-              cpu: "350m"
-              memory: "640Mi"
+              cpu: "400m"
+              memory: "850Mi"
 
           volumeMounts:
+            - name: data
+              mountPath: /data
             - name: prometheus-config
               mountPath: /otel-lgtm/prometheus.yaml
               subPath: prometheus.yaml
@@ -54,6 +75,9 @@ spec:
               mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
               subPath: rules.yaml
       volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-lgtm-data
         - name: prometheus-config
           configMap:
             name: grafana-lgtm-prometheus-config

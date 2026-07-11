@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: grafana-lgtm
+  namespace: rolling-restarts-monitoring
 spec:
   selector:
     app: grafana-lgtm

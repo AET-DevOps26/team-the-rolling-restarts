@@ -40,11 +40,13 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
 
-          # Keep in sync with infra/helm/values.yaml (webClient.resources).
+          # Keep in sync with infra/helm/values.yaml (webClient.resources). 200Mi: 230Mi fixed the
+          # earlier tightness with more room than needed (measured live at 41-63% afterward);
+          # trimmed back to fund user-service's increase.
           resources:
             requests:
-              cpu: "10m"
-              memory: "64Mi"
+              cpu: "20m"
+              memory: "90Mi"
             limits:
-              cpu: "70m"
-              memory: "110Mi"
+              cpu: "100m"
+              memory: "200Mi"

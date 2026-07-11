@@ -12,4 +12,4 @@ host: dev.rolling-restarts.stud.k8s.aet.cit.tum.de
 # chart default (global.replicas in values.yaml) but is pinned explicitly here so the dev
 # path is unambiguous. Production (values-prod.yaml) overrides this to 2.
 global:
-  replicas: 1
+  replicas: 3

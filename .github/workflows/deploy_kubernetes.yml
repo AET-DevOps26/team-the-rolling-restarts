@@ -85,6 +85,15 @@ jobs:
           echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
+      # grafana-lgtm now deploys into its own namespace (monitoring.namespace in
+      # infra/helm/values.yaml), separate from the app release namespace. Helm's
+      # --create-namespace only auto-creates its OWN install-target namespace, not other
+      # namespaces referenced by templates via an explicit metadata.namespace — so this must
+      # exist before `helm upgrade --install` runs, or that step fails outright. Idempotent: a
+      # no-op if it already exists.
+      - name: Ensure monitoring namespace exists
+        run: kubectl create namespace rolling-restarts-monitoring --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Validate required secrets
         env:
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
