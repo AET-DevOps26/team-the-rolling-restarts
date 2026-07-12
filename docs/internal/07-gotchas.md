@@ -142,6 +142,27 @@ fallback for a missing bind-mount source (silently auto-creating it as an empty 
 the container. If you add a *third* way to deploy to that VM, remember this file tree needs
 syncing there too — nothing enforces it generically.
 
+## gen-ai's custom OTel instruments must be created after `setup_observability()`, not before
+
+`app/main.py` used to import the routers (`from app.routers import explain, qa, sentiment,
+summarize`) at module top level, before calling `setup_observability(app)`. Each router
+transitively imports `app/llm/invoke.py`, which creates its tracer/meter and all its instruments
+(`gen_ai.llm.requests`, `.latency`, `.errors`, `.{prompt,completion}_tokens`) **at module import
+time** — so they were binding to OpenTelemetry's default no-op providers instead of the real ones
+`setup_observability()` configures moments later. Confirmed live: `gen_ai_llm_requests_total`
+never reached Prometheus no matter how long you waited or how many LLM calls were made, leaving
+the "GenAI Overview" Grafana dashboard permanently empty — while FastAPI's own auto-instrumented
+spans worked fine the whole time (that instrumentation lives *inside* `setup_observability()`
+itself, so it was never affected). Fixed by moving the router import to after
+`setup_observability(app)` runs. **Still unresolved**: the custom `llm.invoke` trace span from the
+same module doesn't appear even after this fix, unlike the metrics — confirmed via direct trace
+inspection (Tempo). Doesn't block the dashboard (reads metrics, not traces), but worth
+understanding if anyone relies on trace-level LLM visibility.
+
+```sh
+grep -n "from app.routers import" services/gen-ai/app/main.py   # should be AFTER setup_observability(app)
+```
+
 ## Article search is fully implemented but broken live — missing MongoDB text index, not a stub
 
 `web-client`'s search bar (`components/layout/topbar-search.tsx`) and `content-service`'s

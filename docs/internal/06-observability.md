@@ -432,6 +432,22 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   self-healing (the `--create-namespace` fix, `Ensure monitoring namespace exists` step) remain
   worth keeping since they cover the *other* half of a wipe correctly, but a full recovery still
   needs a manual Rancher-side step first.
+- **FIXED — the "GenAI Overview" dashboard never actually populated with data, discovered live on
+  a real local docker-compose run.** `app/main.py` imported the routers (which transitively import
+  `app/llm/invoke.py`) before calling `setup_observability(app)` — `invoke.py` creates its tracer/
+  meter and all custom instruments (`gen_ai.llm.requests`, `.latency`, `.errors`,
+  `.{prompt,completion}_tokens`) at module import time, so they bound to OpenTelemetry's default
+  no-op providers instead of the real ones configured moments later. Confirmed via direct
+  inspection: a real trace for an actual LLM call showed FastAPI's own auto-instrumented spans
+  (`POST /qa` etc. — that instrumentation runs *inside* `setup_observability()`, unaffected) but
+  no `llm.invoke` span at all, and `gen_ai_llm_requests_total` never appeared in Prometheus no
+  matter how long the wait or how many calls were made. Fixed by moving the router import to
+  after `setup_observability(app)`; re-verified live — a fresh LLM call now produces a real
+  `gen_ai_llm_requests_total` series with correct `endpoint`/`provider` labels. **Not fully
+  resolved**: the custom `llm.invoke` *span* still doesn't appear in traces even after this fix
+  (metrics work, traces still don't, from the identical import-order pattern) — a separate,
+  not-yet-understood gap, tracked in `07-gotchas.md`, that doesn't block the dashboard since it
+  reads metrics rather than traces.
 
 ## Re-verify
 
