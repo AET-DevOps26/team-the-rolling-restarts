@@ -34,6 +34,19 @@ Ingress host configured: `rolling-restarts.stud.k8s.aet.cit.tum.de`
 cluster hostname. **Reachability not verified from this sandbox (no network
 egress)** — check manually.
 
+**RBAC is Rancher-managed, not git-managed.** Access to the `deployment` and
+`rolling-restarts-monitoring` namespaces comes from Rancher's own
+project/namespace association, tied to a Keycloak OIDC group
+(`devops26-team-the-rolling-restarts`) — not a plain Kubernetes
+Role/RoleBinding this repo defines anywhere. If a namespace is ever deleted
+directly via `kubectl` (rather than through Rancher), that project
+association breaks and does not come back just from recreating the
+namespace at the raw Kubernetes API level (`kubectl create namespace` or
+Helm's `--create-namespace`) — confirmed live, see
+`docs/internal/06-observability.md`'s disaster-recovery entry. Recovering
+from that requires going through Rancher (`rancher.ase.cit.tum.de`)
+directly; nothing in this repo's CI/CD can do it.
+
 ## Kubernetes — raw manifests (`infra/k8s/`)
 
 Dual approach alongside Helm: `deployments/*.yml` and `services/*.yml` for

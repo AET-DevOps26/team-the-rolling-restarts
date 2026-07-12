@@ -407,6 +407,31 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   switching the Ansible role to install Docker the same way (`get.docker.com`, gated on a `which
   docker` idempotency check mirroring `azure-vm-docker`'s own `command -v docker` guard) so both
   provisioning paths always agree regardless of which one runs first.
+- **IMPORTANT — a manually-wiped Kubernetes namespace (`deployment` or
+  `rolling-restarts-monitoring`) does NOT fully self-heal via `kubectl`/Helm alone, discovered
+  live after a real manual wipe.** `deploy_kubernetes.yml`'s `helm upgrade --install
+  --create-namespace` (added as a disaster-recovery safeguard) recreates the bare Namespace
+  object fine, and a `ResourceQuota` reappears automatically (confirmed live: creating
+  `rolling-restarts-monitoring` via a plain `kubectl create namespace` got its correct 500m/900Mi
+  quota back within the same session, no manual step needed) — but **RBAC access does not**. This
+  course's Kubernetes cluster is Rancher-managed (`docs/internal/04-infra-and-deploy.md`), and
+  access to these namespaces is granted through Rancher's own project/namespace association tied
+  to a Keycloak OIDC group (`devops26-team-the-rolling-restarts` — confirmed via `kubectl auth
+  whoami`, same identity, `u-imzi563an6`, used both locally and by CI's `KUBECONFIG_BASE64`).
+  Deleting a namespace directly via `kubectl` (bypassing Rancher's own lifecycle) breaks that
+  project association; recreating the namespace at the raw Kubernetes API level (via `kubectl` or
+  Helm's `--create-namespace`) does not restore it. Reproduced live: after a manual wipe, the very
+  next `helm upgrade --install` failed immediately with `secrets is forbidden: User
+  "u-imzi563an6" cannot list resource "secrets" ... in the namespace "deployment"` — Helm
+  couldn't even query for its own release state, confirmed independently via `kubectl auth can-i
+  list secrets -n rolling-restarts-monitoring` / `create secrets` both returning `no` even in the
+  still-`Terminating` (not yet fully deleted) monitoring namespace. **Fix requires going through
+  Rancher (`rancher.ase.cit.tum.de`)** — re-associate the namespace with the team's project (or
+  recreate it through Rancher's own UI/API in the first place, which sets up that association
+  automatically) — nothing in this repo's git/CI/Helm can restore it. Namespace + quota
+  self-healing (the `--create-namespace` fix, `Ensure monitoring namespace exists` step) remain
+  worth keeping since they cover the *other* half of a wipe correctly, but a full recovery still
+  needs a manual Rancher-side step first.
 
 ## Re-verify
 
@@ -424,4 +449,6 @@ diff <(sed -n '/scrape_configs:/,$p' infra/helm/files/grafana/prometheus.yaml) \
 kubectl auth can-i list pods --namespace=<namespace>
 kubectl get deployment grafana-lgtm -n <namespace>
 kubectl top pod -n <namespace>
+kubectl auth whoami                                   # confirm identity, e.g. u-imzi563an6
+kubectl auth can-i list secrets -n <namespace>         # RBAC access check after any namespace wipe
 ```
