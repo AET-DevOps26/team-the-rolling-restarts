@@ -12,7 +12,14 @@ in the working tree — exclude it from any `find`/`grep` over this directory).
 - `app/config.py` — Logos defaults (`llm_provider=logos`, `openai/gpt-oss-120b`,
   Logos base URL, Ollama URL, `internal_api_url` for gateway content reads).
 - `app/llm/provider.py` — `get_chat_model()` factory branches on `logos` vs
-  `ollama` (no network at import time).
+  `ollama` (no network at import time). **Only these two values are handled** — anything else
+  (e.g. `LLM_PROVIDER=openai`) raises `ValueError` rather than falling back to anything; see
+  [07-gotchas.md](07-gotchas.md). `logos` is TUM-network-only — reachable from the Kubernetes
+  cluster, not from the Azure VM.
+- `app/observability.py` — OTel traces + custom `gen_ai_llm_*` metrics (requests, errors, latency,
+  prompt/completion tokens), tagged by `endpoint`/`provider`; see
+  `docs/internal/06-observability.md` for the exact metric names and the "GenAI Overview" Grafana
+  dashboard built from them.
 - `app/services/content.py` — `get_article_text()` fetches articles via httpx
   from `{INTERNAL_API_URL}/api/content/articles/{id}`; 404 → `ArticleNotFoundError`.
 - `app/routers/summarize.py` — summarization endpoint with length/style prompts.

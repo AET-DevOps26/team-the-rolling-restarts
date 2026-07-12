@@ -13,7 +13,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 03 — System Architecture
 
 - ✅ Client/server/DB/GenAI separation — `web-client/`, `services/spring/*`, MongoDB, `services/gen-ai/`
-- ❌ ≥3 Spring microservices with distinct responsibilities — only **2 qualify**: `user-service` (auth/profiles), `content-service` (RSS/articles). `api-gateway` is routing/JWT-validation infrastructure, not a business-domain service, so it doesn't count toward the "≥3 microservices" requirement. A third service is needed — see decision below.
+- ✅ ≥3 microservices with distinct responsibilities — `user-service` (auth/profiles), `content-service` (RSS/articles), and `services/gen-ai` (summarize/explain/sentiment/qa) count as the three, **per course clarification obtained via Artemis** confirming gen-ai counts toward this even though it isn't Spring Boot. `api-gateway` remains routing/JWT-validation infrastructure, not a business-domain service, and still doesn't count on its own. Note: the literal text in `03-system-architecture.md` ("The server side must be implemented in Spring Boot and must consist of at least three microservices") reads as Spring-specific taken alone — this clarification resolves that ambiguity in our favor; re-verify if it's ever challenged. No third Spring service is needed as a result — the previously-planned Interaction/Bookmarks service (see below) is no longer required.
 - ✅ Documented API contract — `api/openapi.yaml`, generated code-first (`docs/source/openapi-workflow.md`)
 - ⚠️ Documented DB schema — MongoDB is schemaless; no dedicated schema doc beyond entity classes, no migration tool
 
@@ -22,7 +22,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ✅ Real user-facing use case — `POST /summarize`, `/explain`, `/sentiment`, `/qa` implemented (gateway: `/api/ai/*`); fetches article text from content-service when `articleId` is supplied; **web client article page** exposes Summary / Explain / Sentiment / Q&A widgets calling `/api/ai/*` via server actions (end-to-end user flow)
 - ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
-- ⚠️ Cloud + local model support — Logos cloud + Ollama local wired via env across compose/helm/k8s (`LLM_PROVIDER=logos|ollama`, compose profile `local-llm`); provider factory (`get_chat_model()`) in gen-ai (PR1)
+- ⚠️ Cloud + local model support — code supports both (`get_chat_model()` branches on `LLM_PROVIDER=logos|ollama`), but **only `logos` is actually working, and only on Kubernetes**: `logos` (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only, unreachable from the Azure VM deployment, and no Ollama instance is actually provisioned/running in *any* current deployment target (the `ollama` compose service exists but is gated behind the `local-llm` profile, which nothing in either deploy path activates). Confirmed live: gen-ai's LLM endpoints (`/summarize`, `/explain`, `/sentiment`, `/qa`) work end-to-end on Kubernetes; all 4 fail on the Azure VM. See `docs/internal/07-gotchas.md` and `docs/internal/06-observability.md`.
 - ❌ RAG / vector DB (optional bonus) — not started
 
 ## 05 — Environment & Deployment
@@ -45,8 +45,9 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Local security/quality scanning — `make security-scan` (`infra/scripts/security-scan.sh`) runs gitleaks, hadolint, kics, zizmor, typos, npm audit, a CODEOWNERS coverage check, and trivy/dockle against locally-built images, in parallel, writing SARIF 2.1.0 to `output/`; `make score` views results in the `guestlecture` TUI. Local/manual only — not invoked from any `.github/workflows/*.yml`, so it doesn't close the CI static-analysis gap above. See `docs/source/security-scanning.md`.
 - ⚠️ Pre-commit/pre-push secret scanning — shared `infra/scripts/gitleaks-check.sh` blocks commits (staged-diff scan) and pushes (scans every commit range being pushed) that introduce secrets, same tool/config as above. Only active once a contributor runs `pre-commit install` + `make install-hooks`; nothing enforces that on a fresh clone, and both are bypassable with `--no-verify` — so it's a local guard rail, not a guarantee.
 - ✅ Auto-build & push images — `.github/workflows/upload_images.yml` (multi-arch, GHCR)
-- ✅ Auto-deploy to Kubernetes on merge to main — `.github/workflows/deploy_kubernetes.yml` (triggers on the build workflow completing for `main`, runs `helm upgrade --install`)
-- ✅ Secrets used via GitHub Actions secrets, not hardcoded — confirmed in deploy workflows
+- ✅ Auto-deploy to Kubernetes on merge to main — `.github/workflows/deploy_kubernetes.yml` (triggers on the build workflow completing for `main`, runs `helm upgrade --install --create-namespace`). Manual `workflow_dispatch` redeploys the last successful build on whichever branch it's run against (real images + CI gate, not a placeholder fallback). `--create-namespace` recovers from the app namespace being wiped, though RBAC access on this Rancher-managed cluster still needs a manual Rancher-side step first if that ever happens for real — see `docs/internal/06-observability.md`.
+- ✅ Auto-deploy monitoring-only changes — `.github/workflows/deploy_monitoring.yml`, path-filtered to `infra/grafana/**`/Helm monitoring templates/raw-manifest equivalents, so a dashboard tweak doesn't need the full app build pipeline
+- ✅ Secrets used via GitHub Actions secrets, not hardcoded — confirmed in deploy workflows (including `LLM_API_KEY`, previously missing from the Kubernetes deploy's secrets wiring — fixed this round, see `docs/internal/05-ci-cd-workflows.md`)
 - ✅ Docs auto-published — `.github/workflows/publish_docs.yml` (PlantUML + MkDocs + Redoc → GitHub Pages)
 
 ## 07 — Observability
@@ -63,7 +64,10 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
   red-metrics-classic,genai-overview,webclient-overview}.json`, all filed under the "Service
   Health" folder
 - ✅ Alert rules — `infra/grafana/provisioning/alerting/rules.yaml` (slow response time, service
-  down)
+  down). Satisfies the "at least one meaningful alert rule" requirement literally, but
+  ⚠️ **notification delivery is deliberately deferred**: no contact point/notification
+  policy/SMTP exists, so a firing alert is only visible if someone opens Grafana and looks —
+  clarification requested via Artemis on what's actually expected here before wiring it up.
 - ✅ Log aggregation — application logs from all 4 services reach Loki via OTLP;
   `infra/scripts/smoke-test.sh` cross-checks its own requests appear there (real per-request log
   lines come from a new `RequestLoggingFilter` on all 3 Spring services, added for exactly this)
@@ -92,7 +96,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ Spring unit tests, real assertions, run in CI — api-gateway (5 files, e.g. `SubscriberScopeTest.java`), user-service (6 files, e.g. `AuthControllerTest.java`), content-service (7 files, e.g. `ArticleControllerTest.java`)
 - ✅ GenAI unit tests — `services/gen-ai/tests/test_health.py`, `test_summarize.py`, `test_explain.py`, `test_sentiment.py`, `test_qa.py` (offline mocked pytest)
-- ❌ Client-side tests — no `*.test.tsx`/`__tests__`, no test runner configured; `web-client/package.json` has no `test` script
+- ⚠️ Client-side tests — a real Vitest runner is configured (`package.json`'s `"test": "vitest run"`), with 5 `*.test.ts` files (`lib/api/client.test.ts`, `lib/format/{time,html,color,rss-url}.test.ts`) covering utility/data-layer logic. No component/page-level (`*.test.tsx`) or E2E coverage yet — still a real gap, just not a "zero test runner" one anymore.
 
 ## 09 — Engineering Artefacts
 
@@ -120,26 +124,41 @@ activity rather than this file.
 
 ## Where the biggest gaps are right now
 
-1. **Only 2 of the required ≥3 Spring microservices count** — `api-gateway`
-   doesn't qualify as a business-domain microservice. Decision: add a third
-   service, **Interaction/Bookmarks** (owns view/bookmark/ignore events; exposes
-   `POST /interactions`, `GET /users/{id}/bookmarks`, `GET /users/{id}/history`).
-   Chosen over a Notification or Recommendation service because it's
-   self-contained (no changes needed to existing services), maps directly to
-   problem-statement bullets ("tracks user interactions", "bookmarking") that
-   currently have zero implementation, and is the cheapest legitimate option
-   given the approaching deadline. Not yet scaffolded.
-2. **GenAI secondary endpoints** — `/summarize` works; `/explain`, `/sentiment`, `/qa`
-   still pending gen-ai PR2. The web client widgets are wired and ready.
-3. ~~**No Prometheus/Grafana dashboards or alerts**~~ — done: a real Prometheus (bundled in
-   `grafana/otel-lgtm`), an exported dashboard (`infra/grafana/dashboards/service-overview.json`),
-   and alert rules (`infra/grafana/provisioning/alerting/rules.yaml`) are wired up and deployed to
-   both docker-compose and Kubernetes/Helm, plus log export to Loki from all 4 services. See
-   `docs/internal/06-observability.md` and `docs/source/monitoring.md` for details and known gaps
-   (no per-pod K8s resource panel; tight K8s resource budget; manual `infra/helm/files/grafana/*`
-   sync).
-4. **No client tests, no GenAI tests** — Spring is the only side with real test
-   coverage.
-5. **Root README is thin** — quick-start, CI/CD, and responsibilities sections should still be
+1. ~~**Only 2 of the required ≥3 Spring microservices count**~~ — resolved: per course
+   clarification via Artemis, gen-ai counts as one of the ≥3 microservices alongside
+   `user-service`/`content-service`, so no third Spring service (the previously-planned
+   Interaction/Bookmarks service) is needed after all. See §03 above.
+2. ~~**GenAI secondary endpoints**~~ — done: `/summarize`, `/explain`, `/sentiment`, `/qa` are all
+   implemented, with web-client widgets wired to each via server actions.
+3. ~~**No Prometheus/Grafana dashboards or alerts**~~ — done, and expanded further: a real
+   Prometheus (bundled in `grafana/otel-lgtm`), 4 exported dashboards (Service Overview, RED
+   Metrics classic, GenAI Overview, Web Client Overview — the latter two added this round), and
+   alert rules are wired up and deployed to both docker-compose and Kubernetes/Helm, plus log
+   export to Loki from all 4 services (web-client traces added this round too, via `@vercel/otel`).
+   See `docs/internal/06-observability.md` and `docs/source/monitoring.md` for details and
+   remaining known gaps (below).
+4. ~~**No client tests**~~ — resolved: web-client has a real Vitest setup (`package.json`'s
+   `"test": "vitest run"`) with real test files (e.g. `lib/api/client.test.ts`). GenAI still has
+   its own separate, already-passing pytest suite.
+5. **Alerting rules exist but don't notify anyone** — no contact point/notification policy/SMTP
+   is configured, so a firing alert is only visible if someone opens Grafana and looks.
+   **Deliberately deferred pending clarification requested via Artemis** on what's actually
+   expected here — not an oversight.
+6. **The Azure VM deployment's gen-ai LLM calls don't work** — `logos`
+   (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only, unreachable from Azure's public cloud,
+   and no Ollama instance is provisioned there either. Kubernetes works fully (same network as
+   Logos). Two real fixes not yet decided between: provision Ollama on the VM for real, or point
+   the existing `logos`-shaped code path at a real OpenAI-compatible endpoint + key. See
+   `docs/internal/07-gotchas.md`.
+7. **No TLS on the Azure VM** — the auth cookie's `Secure` flag broke login persistence there
+   until fixed with an explicit `COOKIE_SECURE` env var (see `docs/internal/06-observability.md`);
+   real TLS (tracked as issue #90) would let that resolve more cleanly and match Kubernetes, which
+   already has TLS via cert-manager.
+8. **Root README is thin** — quick-start, CI/CD, and responsibilities sections should still be
    pulled up from docs/Makefile into `README.md` itself. A monitoring section has since been
-   added (see 10 above).
+   added (see §10 below).
+9. **Article search is broken live** — fully implemented (real MongoDB `@TextIndexed` fields,
+   `TextCriteria` query, full frontend wiring), but fails with `text index required for $text
+   query (IndexNotFound)` since Spring Data MongoDB's `auto-index-creation` defaults to `false`
+   and nothing creates the index another way. Small fix, not yet done — see
+   `docs/internal/07-gotchas.md`.
