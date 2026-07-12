@@ -15,8 +15,11 @@ services:
       # container runtime, not baked into the image at build time — the same image works
       # correctly across every deployment target this way.
       API_BASE_URL: http://reverse-proxy
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana-lgtm:4318
+      OTEL_SERVICE_NAME: web-client
     networks:
       - frontend
+      - backend
 
   reverse-proxy:
     image: nginx:alpine

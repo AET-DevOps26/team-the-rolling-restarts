@@ -181,6 +181,27 @@ but not yet done — don't assume this is an intentional gap or a stub feature.
 grep -rn "auto-index-creation" services/spring/content-service/src/main/resources/   # currently empty
 ```
 
+## `web-client` couldn't reach `grafana-lgtm` locally — two separate Docker Compose networks, not an OTel bug
+
+`infra/docker-compose.yaml` declares two bridge networks, `frontend` and `backend`; a service can
+only resolve another by container name if they share at least one. `web-client` was declared only
+on `frontend`, while `grafana-lgtm` (and every other backend service) is only on `backend` —
+`api-gateway` is the sole exception, deliberately dual-homed on both since it's the one frontend
+service that also talks to backend services directly. This meant `web-client`'s OTel exporter could
+never reach `grafana-lgtm:4318` locally: `getaddrinfo ENOTFOUND grafana-lgtm` from inside the
+container, confirmed via a raw Node.js `http.request` test. Everything else about the setup was
+already correct (env vars, `instrumentation.ts`'s `register()` executing and reaching
+`registerOTel()`, `@vercel/otel`'s default OTLP protocol) — it looked like an OTel/Next.js
+configuration problem for a long time before the actual network topology was checked. Fixed by
+adding `web-client` to the `backend` network too, matching `api-gateway`'s pattern. **Kubernetes was
+never affected** — there's no equivalent network partitioning between pods/Services there, which is
+why "it worked on k9s before" was a real, confusing signal pointing away from docker-compose-specific
+causes.
+
+```sh
+grep -A2 "networks:" infra/docker-compose.yaml   # web-client should list both frontend and backend
+```
+
 ## A manually-wiped Kubernetes namespace does not fully self-heal
 
 `ResourceQuota` reappears automatically on a fresh namespace (a cluster-level admission policy,
