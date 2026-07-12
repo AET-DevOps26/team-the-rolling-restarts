@@ -111,6 +111,13 @@ unrelated pull-based path) kept working and masked it.
   third bundled dashboard, "RED Metrics (native histogram)", is intentionally removed — our
   services only ever emit classic bucketed Prometheus histograms, not true native histograms, so
   it would always be empty (see `docs/internal/06-observability.md`'s Known gaps).
+  `infra/grafana/dashboards/genai-overview.json` ("GenAI Overview") reads gen-ai's custom LLM
+  metrics (request/error rate, latency, token usage per `endpoint`/`provider`) — see
+  `docs/internal/06-observability.md` for the exact metric names.
+  `infra/grafana/dashboards/webclient-overview.json` ("Web Client Overview") reads
+  `traces_spanmetrics_*`, RED-style metrics that Tempo's metrics-generator derives automatically
+  from web-client's OTel traces (web-client has no scrapable Prometheus endpoint of its own — see
+  "Traces" below). All 4 dashboards are filed under **"Service Health"**.
 - **Alerts**: `infra/grafana/provisioning/alerting/rules.yaml` — slow response time (p95 request
   duration > 1s for 5 minutes) and service down (`up == 0` for 2 minutes), both under the
   "Service Health" folder alongside the Service Overview dashboard. The rules themselves are under
@@ -162,6 +169,20 @@ Two independent paths feed the same Prometheus:
    `/actuator/prometheus` and gen-ai's `/metrics`. This exists purely to give Prometheus a real
    `up{job=...}` signal for the service-down alert; OTLP-pushed metrics never populate `up`
    because that's only generated for pull/scrape targets.
+
+## Traces
+
+All 4 app services (api-gateway, user-service, content-service, gen-ai, **and now web-client**)
+push OTel traces via OTLP to `grafana-lgtm`. web-client (Next.js) uses `@vercel/otel` in
+`web-client/instrumentation.ts` — a no-op unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, gated to
+the Node runtime only (`NEXT_RUNTIME === "nodejs"`, since Next.js calls `register()` in both the
+Node and Edge runtimes and the OTel SDK components here don't run in Edge). Unlike the other 3
+services, web-client has no `/actuator/prometheus`-style scrape endpoint of its own — its RED
+metrics (Web Client Overview dashboard) instead come from `traces_spanmetrics_*`, span metrics
+that Tempo's bundled metrics-generator derives automatically from any traces it receives. This
+also means web-client's own outbound `fetch` calls (e.g. to api-gateway) show up as
+`SPAN_KIND_CLIENT` spans, giving a rough view of downstream call health without any extra
+instrumentation.
 
 ## Logs
 

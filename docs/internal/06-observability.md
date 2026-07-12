@@ -331,6 +331,49 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   "red-metrics"]`) and RED Metrics classic (`["service-health", "red-metrics",
   "classic-histogram"]`) — both were previously `[]`, unlike the image's own JVM Metrics
   dashboard, which already ships tags.
+- **New dashboard: `infra/grafana/dashboards/genai-overview.json` ("GenAI Overview").** Reads
+  gen-ai's own custom OTel metrics (`services/gen-ai/app/llm/invoke.py`,
+  `gen_ai_llm_{requests,errors,latency_seconds,prompt_tokens,completion_tokens}_total`), tagged by
+  `endpoint` (`/summarize`/`/explain`/`/sentiment`/`/qa`) and `provider` (`logos`/`ollama`) —
+  request rate, error rate, p95/p50 latency, and token-usage rate, each broken out by
+  endpoint/provider via `$endpoint`/`$provider` template variables. Filed under "Service Health"
+  with `tags: ["service-health", "genai", "llm"]`. Wired into provisioning the same way as the
+  other dashboards (`custom-dashboards.yaml` provider, ConfigMap + volumeMount in
+  `infra/helm/templates/monitoring.yaml` / `infra/k8s/deployments/grafana-lgtm-deployment.yml` /
+  `infra/k8s/configmaps/grafana-lgtm-config.yml`). Verified live: correct folder/tags via the
+  Grafana API, and the raw `gen_ai_llm_requests_total` counter confirmed present in Prometheus
+  after real triggered LLM calls (a `rate()`-based panel reading empty with only a couple of test
+  calls in the window is expected PromQL behavior — `rate()` needs 2+ samples inside the query
+  window — not a dashboard bug).
+- **web-client OpenTelemetry instrumentation added** (`web-client/instrumentation.ts`, using
+  `@vercel/otel@2.1.3`), the last of the 4 app services to get OTel wired up. Registers only when
+  `NEXT_RUNTIME === "nodejs"` (Next.js calls `register()` in both the Node and Edge runtimes, and
+  the OTel SDK components here don't run in Edge) and `OTEL_EXPORTER_OTLP_ENDPOINT` is set — a
+  no-op guard mirroring gen-ai's `setup_observability()`. `traceExporter: "auto"` auto-respects
+  the standard `OTEL_EXPORTER_OTLP_*` env vars for traces; there's no equivalent "auto" for
+  metrics in `@vercel/otel`, so a `PeriodicExportingMetricReader` + `OTLPMetricExporter` (both with
+  no explicit args — they read the same standard OTLP env vars) is constructed explicitly for
+  `metricReaders`. Wired to `http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318` (Helm,
+  via the same `tpl` mechanism as the other 3 services) / the hardcoded FQDN (raw manifests), plus
+  `OTEL_SERVICE_NAME=web-client`. Image rebuilt and redeployed; verified live via Tempo's
+  `/api/search` API — `service.name=web-client` traces present with real span names (`GET /`) and
+  durations after generating traffic against the pod.
+- **New dashboard: `infra/grafana/dashboards/webclient-overview.json` ("Web Client Overview").**
+  Unlike the other 3 services, web-client has no scrapable Prometheus endpoint of its own — this
+  dashboard instead reads `traces_spanmetrics_calls_total`/`traces_spanmetrics_latency_bucket`,
+  RED-style span metrics that Tempo's bundled metrics-generator derives automatically from any
+  received traces (confirmed live: these series already existed in Prometheus for all 4 services,
+  not something that needed enabling). Panels: page request rate and error rate (`service=
+  "web-client", span_kind="SPAN_KIND_SERVER"`, grouped by `span_name` e.g. `"GET /"`), p95/p50
+  latency percentiles via `histogram_quantile` on the same label set, and a downstream fetch-call
+  rate panel (`span_kind="SPAN_KIND_CLIENT"`, e.g. `"fetch GET http://api-gateway:8080/..."`) —
+  web-client's own outbound calls to api-gateway, auto-captured by `@vercel/otel`'s default
+  `fetch` instrumentation. `$route` template variable filters by `span_name`. Filed under "Service
+  Health" with `tags: ["service-health", "web-client", "traces"]`. Every panel query was checked
+  against live Prometheus data before being written into the dashboard JSON (per this repo's
+  verify-before-guessing convention) — the error-rate panel reads 0 series in practice since no
+  requests have actually errored yet, same non-bug pattern as GenAI Overview's sparse-data
+  `rate()` panels.
 
 ## Re-verify
 

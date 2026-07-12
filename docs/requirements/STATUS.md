@@ -55,7 +55,13 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
   from all 3 Spring services + gen-ai, plus a classic scrape path for liveness (`up{job=...}`)
 - ✅ GenAI service instrumented — OpenTelemetry SDK in `services/gen-ai` (FastAPI traces + custom
   LLM metrics via OTLP to `grafana-lgtm`), plus a `/metrics` scrape endpoint
-- ✅ Grafana dashboard exported as `.json` — `infra/grafana/dashboards/service-overview.json`
+- ✅ web-client instrumented — `@vercel/otel` in `web-client/instrumentation.ts` exports OTel
+  traces via OTLP; unlike the other 3 services it has no scrapable metrics endpoint of its own, so
+  its RED metrics come from Tempo's metrics-generator (`traces_spanmetrics_*`) instead. All 4 app
+  services now export traces.
+- ✅ Grafana dashboards exported as `.json` — `infra/grafana/dashboards/{service-overview,
+  red-metrics-classic,genai-overview,webclient-overview}.json`, all filed under the "Service
+  Health" folder
 - ✅ Alert rules — `infra/grafana/provisioning/alerting/rules.yaml` (slow response time, service
   down)
 - ✅ Log aggregation — application logs from all 4 services reach Loki via OTLP;

@@ -20,6 +20,10 @@ data:
 {{ .Files.Get "files/grafana/dashboards/service-overview.json" | indent 4 }}
   red-metrics-classic.json: |
 {{ .Files.Get "files/grafana/dashboards/red-metrics-classic.json" | indent 4 }}
+  genai-overview.json: |
+{{ .Files.Get "files/grafana/dashboards/genai-overview.json" | indent 4 }}
+  webclient-overview.json: |
+{{ .Files.Get "files/grafana/dashboards/webclient-overview.json" | indent 4 }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -87,6 +91,12 @@ spec:
             - name: dashboard
               mountPath: /otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json
               subPath: red-metrics-classic.json
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/genai-overview.json
+              subPath: genai-overview.json
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/webclient-overview.json
+              subPath: webclient-overview.json
             - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
               subPath: custom-dashboards.yaml
