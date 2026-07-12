@@ -133,6 +133,7 @@ jobs:
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
         run: |
           umask 077
           python3 -c '
@@ -155,7 +156,10 @@ jobs:
                       "publicKey": os.environ["JWT_RSA_PUBLIC_KEY"],
                       "privateKey": os.environ["JWT_RSA_PRIVATE_KEY"],
                   }
-              }
+              },
+              "genAi": {
+                  "llmApiKey": QuotedStr(os.environ.get("LLM_API_KEY", "")),
+              },
           }
           data["userService"]["serviceClientSecret"] = QuotedStr(os.environ.get("SERVICE_CLIENT_SECRET", ""))
           yaml.dump(data, sys.stdout, default_flow_style=False)
