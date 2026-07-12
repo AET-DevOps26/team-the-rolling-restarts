@@ -265,6 +265,12 @@ jobs:
           OVERRIDE_B64="$(base64 -w0 infra/docker-compose.azure.yaml)"
           NGINX_B64="$(base64 -w0 infra/nginx/default.conf)"
           ENV_B64="$(base64 -w0 deploy.env)"
+          # docker-compose.yaml's grafana-lgtm service bind-mounts ./grafana/prometheus.yaml,
+          # ./grafana/dashboards/*.json, and ./grafana/provisioning/**/*.yaml relative to
+          # DEPLOY_DIR — without this, those host paths never exist and Docker's fallback
+          # (auto-creating a missing bind source as an empty directory) breaks the mount
+          # ("not a directory") the same way it did for the Ansible-deployed path.
+          GRAFANA_B64="$(tar -czf - -C infra grafana | base64 -w0)"
 
           # Header: inject values (expanded) as quoted shell assignments.
           cat > remote-deploy.sh <<EOF
@@ -277,6 +283,7 @@ jobs:
           OVERRIDE_B64="${OVERRIDE_B64}"
           NGINX_B64="${NGINX_B64}"
           ENV_B64="${ENV_B64}"
+          GRAFANA_B64="${GRAFANA_B64}"
           EOF
 
           # Body: static logic (quoted heredoc, nothing expanded here).
@@ -286,6 +293,10 @@ jobs:
           printf '%s' "$OVERRIDE_B64" | base64 -d > "$DEPLOY_DIR/docker-compose.azure.yaml"
           mkdir -p "$DEPLOY_DIR/nginx"
           printf '%s' "$NGINX_B64"    | base64 -d > "$DEPLOY_DIR/nginx/default.conf"
+          # Wipe first: self-heals any stale state (including Docker's own directory-autocreation
+          # poisoning from a prior failed deploy), same as the Ansible app role's grafana sync.
+          rm -rf "$DEPLOY_DIR/grafana"
+          printf '%s' "$GRAFANA_B64" | base64 -d | tar -xzf - -C "$DEPLOY_DIR"
           umask 077
           printf '%s' "$ENV_B64" | base64 -d > "$DEPLOY_DIR/.env"
           printf '%s' "$ACR_TOKEN" | docker login "$ACR_LOGIN_SERVER" \
