@@ -41,6 +41,10 @@ webClient:
     # Service name works here same as it does for every other service's internal calls.
     - name: API_BASE_URL
       value: http://api-gateway:8080
+    # This deployment target has real TLS (cert-manager/nginx-ingress) — see issue #90 for why
+    # this can't just be inferred from NODE_ENV.
+    - name: COOKIE_SECURE
+      value: "true"
     - name: OTEL_EXPORTER_OTLP_ENDPOINT
       value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318
     - name: OTEL_SERVICE_NAME

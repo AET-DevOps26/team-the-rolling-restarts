@@ -28,6 +28,10 @@ spec:
             # container runtime, not baked into the image at build time.
             - name: API_BASE_URL
               value: http://api-gateway:8080
+            # This deployment target has real TLS (cert-manager/nginx-ingress) — see issue #90
+            # for why this can't just be inferred from NODE_ENV.
+            - name: COOKIE_SECURE
+              value: "true"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: http://grafana-lgtm.rolling-restarts-monitoring:4318
             - name: OTEL_SERVICE_NAME
