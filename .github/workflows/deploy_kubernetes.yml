@@ -115,7 +115,7 @@ jobs:
       # exist before `helm upgrade --install` runs, or that step fails outright. Idempotent: a
       # no-op if it already exists.
       - name: Ensure monitoring namespace exists
-        run: kubectl create namespace rolling-restarts-monitoring --dry-run=client -o yaml | kubectl apply -f -
+        run: kubectl create namespace monitoring-rolling-restarts --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Validate required secrets
         env:
@@ -171,7 +171,7 @@ jobs:
 
       # --create-namespace only covers the release's own target namespace (the current
       # kubeconfig context's namespace, "deployment") — a no-op if it already exists, so this is
-      # safe on every normal deploy. It does NOT cover rolling-restarts-monitoring, which is a
+      # safe on every normal deploy. It does NOT cover monitoring-rolling-restarts, which is a
       # different namespace referenced via an explicit metadata.namespace in the chart's own
       # templates — that's why the separate step above exists for it.
       - name: Deploy with Helm

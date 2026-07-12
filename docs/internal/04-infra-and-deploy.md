@@ -35,7 +35,7 @@ cluster hostname. **Reachability not verified from this sandbox (no network
 egress)** — check manually.
 
 **RBAC is Rancher-managed, not git-managed.** Access to the `deployment` and
-`rolling-restarts-monitoring` namespaces comes from Rancher's own
+`monitoring-rolling-restarts` namespaces comes from Rancher's own
 project/namespace association, tied to a Keycloak OIDC group
 (`devops26-team-the-rolling-restarts`) — not a plain Kubernetes
 Role/RoleBinding this repo defines anywhere. If a namespace is ever deleted

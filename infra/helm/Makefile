@@ -9,7 +9,7 @@ MONGO_USER ?= root
 # which Helm's --create-namespace does NOT auto-create (that flag only covers Helm's own
 # install-target namespace, not other namespaces referenced by templates via an explicit
 # metadata.namespace) — so it must exist before install/upgrade runs, or those fail outright.
-MONITORING_NAMESPACE ?= rolling-restarts-monitoring
+MONITORING_NAMESPACE ?= monitoring-rolling-restarts
 
 # Auto-detect secrets-values.yaml if present, unless overridden
 ifneq ($(wildcard secrets-values.yaml),)
@@ -50,7 +50,7 @@ help:
 	  'Override the ingress host: HELM_HOST=my-host.example.com' \
 	  'secrets-values.yaml is auto-included if present (override: SECRETS=)' \
 	  'helm-install/helm-upgrade/helm-deploy idempotently create the monitoring namespace first' \
-	  '(MONITORING_NAMESPACE, default rolling-restarts-monitoring) if it does not already exist.'
+	  '(MONITORING_NAMESPACE, default monitoring-rolling-restarts) if it does not already exist.'
 
 ## Lint the chart before rendering or installing.
 helm-lint:

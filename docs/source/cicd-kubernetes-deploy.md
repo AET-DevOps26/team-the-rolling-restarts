@@ -11,7 +11,7 @@ It is intentionally separate from:
   `image-values` artifact consumed by this workflow.
 - `deploy-azure.yml` — deploys to the Azure VM with Docker Compose.
 - `deploy_monitoring.yml` — a lighter sibling that redeploys only `grafana-lgtm` (its own
-  namespace, `rolling-restarts-monitoring`) when monitoring-related files change
+  namespace, `monitoring-rolling-restarts`) when monitoring-related files change
   (`infra/grafana/**`, the monitoring Helm templates, etc.). It doesn't wait on
   `build-and-package`/CI at all — `grafana-lgtm` runs an upstream public image this repo never
   builds — and uses `helm upgrade --reuse-values` so it never needs the app secrets or
@@ -138,7 +138,7 @@ The generated file overrides:
 ## Resource quotas
 
 `grafana-lgtm` runs in its own dedicated namespace (`monitoring.namespace` in
-`infra/helm/values.yaml`, currently `rolling-restarts-monitoring`) with its own `ResourceQuota`,
+`infra/helm/values.yaml`, currently `monitoring-rolling-restarts`) with its own `ResourceQuota`,
 separate from the app workloads' namespace — see `docs/source/monitoring.md`'s "Monitoring runs
 in its own namespace" section. The app namespace's quota is **3500m CPU / 5244Mi memory**, sized
 with headroom for **api-gateway, user-service, content-service, gen-ai, and web-client to each run

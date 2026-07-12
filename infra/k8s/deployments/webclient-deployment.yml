@@ -33,7 +33,7 @@ spec:
             - name: COOKIE_SECURE
               value: "true"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://grafana-lgtm.rolling-restarts-monitoring:4318
+              value: http://grafana-lgtm.monitoring-rolling-restarts:4318
             - name: OTEL_SERVICE_NAME
               value: web-client
 

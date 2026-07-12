@@ -50,7 +50,7 @@ jobs:
           chmod 600 ~/.kube/config
 
       - name: Ensure monitoring namespace exists
-        run: kubectl create namespace rolling-restarts-monitoring --dry-run=client -o yaml | kubectl apply -f -
+        run: kubectl create namespace monitoring-rolling-restarts --dry-run=client -o yaml | kubectl apply -f -
 
       # --reuse-values: this deploy only ever touches infra/grafana/* content, never secrets or
       # image tags, so it reuses whatever the last full deploy_kubernetes.yml run already set for
@@ -68,22 +68,22 @@ jobs:
         if: failure()
         run: |
           echo "::group::Pods"
-          kubectl get pods -n rolling-restarts-monitoring -o wide || true
+          kubectl get pods -n monitoring-rolling-restarts -o wide || true
           echo "::endgroup::"
           echo "::group::Recent events"
-          kubectl get events -n rolling-restarts-monitoring --sort-by=.lastTimestamp | tail -40 || true
+          kubectl get events -n monitoring-rolling-restarts --sort-by=.lastTimestamp | tail -40 || true
           echo "::endgroup::"
           echo "::group::describe deployment/grafana-lgtm"
-          kubectl describe deployment grafana-lgtm -n rolling-restarts-monitoring 2>/dev/null | sed -n '/Conditions:/,/Events:/p' || true
+          kubectl describe deployment grafana-lgtm -n monitoring-rolling-restarts 2>/dev/null | sed -n '/Conditions:/,/Events:/p' || true
           echo "::endgroup::"
           echo "::group::logs grafana-lgtm (current)"
-          kubectl logs -n rolling-restarts-monitoring -l app=grafana-lgtm --tail=100 2>/dev/null || true
+          kubectl logs -n monitoring-rolling-restarts -l app=grafana-lgtm --tail=100 2>/dev/null || true
           echo "::endgroup::"
           echo "::group::logs grafana-lgtm (previous)"
-          kubectl logs -n rolling-restarts-monitoring -l app=grafana-lgtm --previous --tail=100 2>/dev/null || true
+          kubectl logs -n monitoring-rolling-restarts -l app=grafana-lgtm --previous --tail=100 2>/dev/null || true
           echo "::endgroup::"
 
       - name: Verify deployment
         run: |
-          kubectl rollout status deployment/grafana-lgtm -n rolling-restarts-monitoring --timeout=120s
+          kubectl rollout status deployment/grafana-lgtm -n monitoring-rolling-restarts --timeout=120s
           echo "grafana-lgtm rolled out successfully."

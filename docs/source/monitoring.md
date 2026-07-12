@@ -29,10 +29,10 @@ open http://localhost:3001          # or whatever LGTM_GRAFANA_PORT is set to in
 
 There is **no ingress** for `grafana-lgtm` — reach it with a port-forward to the ClusterIP
 Service. It runs in its own namespace (`monitoring.namespace` in `infra/helm/values.yaml`,
-currently `rolling-restarts-monitoring`), separate from the app workloads:
+currently `monitoring-rolling-restarts`), separate from the app workloads:
 
 ```sh
-kubectl port-forward svc/grafana-lgtm 3001:3000 -n rolling-restarts-monitoring
+kubectl port-forward svc/grafana-lgtm 3001:3000 -n monitoring-rolling-restarts
 # then open:
 open http://localhost:3001
 ```
@@ -40,7 +40,7 @@ open http://localhost:3001
 If you're not sure it's running:
 
 ```sh
-kubectl get pods,svc -n rolling-restarts-monitoring -l app=grafana-lgtm
+kubectl get pods,svc -n monitoring-rolling-restarts -l app=grafana-lgtm
 ```
 
 ### Once you're in Grafana
@@ -66,8 +66,8 @@ docker exec rolling-restarts-grafana-lgtm-1 \
   curl -s 'http://localhost:9090/api/v1/query?query=up'
 
 # Kubernetes: the Service only exposes 3000/4317/4318, so port-forward to the POD's 9090
-kubectl port-forward "$(kubectl get pod -n rolling-restarts-monitoring -l app=grafana-lgtm -o name)" \
-  9090:9090 -n rolling-restarts-monitoring
+kubectl port-forward "$(kubectl get pod -n monitoring-rolling-restarts -l app=grafana-lgtm -o name)" \
+  9090:9090 -n monitoring-rolling-restarts
 # then browse http://localhost:9090
 ```
 
@@ -237,7 +237,7 @@ cluster rather than assumed from documentation.
 ## Monitoring runs in its own namespace
 
 `grafana-lgtm` is deployed into a dedicated namespace (`monitoring.namespace` in
-`infra/helm/values.yaml`, currently `rolling-restarts-monitoring`), separate from the app
+`infra/helm/values.yaml`, currently `monitoring-rolling-restarts`), separate from the app
 workloads' namespace. It has its own `ResourceQuota`, isolating it from app-namespace pressure and
 making its own upgrades/troubleshooting independent of the app release. This namespace must exist
 *before* `helm upgrade --install` runs — Helm's `--create-namespace` only auto-creates its own
@@ -245,7 +245,7 @@ install-target namespace, not other namespaces referenced by templates via an ex
 `metadata.namespace`. `.github/workflows/deploy_kubernetes.yml` creates it idempotently
 (`kubectl create namespace ... --dry-run=client -o yaml | kubectl apply -f -`) before deploying;
 for a manual `make helm-deploy`, create it once yourself (`kubectl create namespace
-rolling-restarts-monitoring`).
+monitoring-rolling-restarts`).
 
 A second CI/CD workflow, `.github/workflows/deploy_monitoring.yml`, redeploys *only* when
 monitoring-related files change (`infra/grafana/**`, `infra/helm/files/grafana/**`, the monitoring

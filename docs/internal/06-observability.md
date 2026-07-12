@@ -208,7 +208,7 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
     41-63%). Net result: total memory usage actually rose slightly (5942Mi -> 5972Mi of 6144Mi,
     margin down from 3.3% to 2.8%), funding the user-service increase mostly out of gen-ai/
     web-client's spare headroom rather than growing the whole namespace's footprint.
-- **DONE — `grafana-lgtm` moved into its own dedicated namespace** (`rolling-restarts-monitoring`),
+- **DONE — `grafana-lgtm` moved into its own dedicated namespace** (`monitoring-rolling-restarts`),
   separate from the app workloads, adopting several general Kubernetes-monitoring practices that
   weren't in place before:
   - **Namespace isolation**: the app namespace's `ResourceQuota` was correspondingly split —
@@ -219,7 +219,7 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   - **Cross-namespace RBAC**: the `Role`/`RoleBinding` granting Prometheus `get/list/watch` on
     `pods` had to move to the app namespace (where the pods actually are), with the
     `RoleBinding`'s `subject` explicitly naming the `ServiceAccount`'s namespace
-    (`rolling-restarts-monitoring`) — verified this doesn't require a `ClusterRole`/
+    (`monitoring-rolling-restarts`) — verified this doesn't require a `ClusterRole`/
     `ClusterRoleBinding` (still blocked on this cluster: `kubectl auth can-i create clusterrole`
     still returns `no`), since a namespaced `RoleBinding` can reference a subject from a different
     namespace natively.
@@ -308,7 +308,7 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   `OTEL_EXPORTER_OTLP_ENDPOINT` (gen-ai) all still pointed at the bare hostname `grafana-lgtm`,
   which only resolves within the same namespace — confirmed live via `kubectl exec ... python3 -c
   "socket.gethostbyname('grafana-lgtm')"` failing with `Name or service not known` from a pod in
-  the app namespace, while `grafana-lgtm.rolling-restarts-monitoring` resolved fine. Caught by
+  the app namespace, while `grafana-lgtm.monitoring-rolling-restarts` resolved fine. Caught by
   triggering a real gen-ai `/summarize` call and finding zero `gen_ai_llm_*` metrics in Prometheus
   afterward (gen-ai's custom OTel counters only ever reach Prometheus via this OTLP push path,
   unlike its classic-scraped `http_request_duration_seconds_*`). Fixed by pointing every OTLP
@@ -408,11 +408,11 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   docker` idempotency check mirroring `azure-vm-docker`'s own `command -v docker` guard) so both
   provisioning paths always agree regardless of which one runs first.
 - **IMPORTANT — a manually-wiped Kubernetes namespace (`deployment` or
-  `rolling-restarts-monitoring`) does NOT fully self-heal via `kubectl`/Helm alone, discovered
+  `monitoring-rolling-restarts`) does NOT fully self-heal via `kubectl`/Helm alone, discovered
   live after a real manual wipe.** `deploy_kubernetes.yml`'s `helm upgrade --install
   --create-namespace` (added as a disaster-recovery safeguard) recreates the bare Namespace
   object fine, and a `ResourceQuota` reappears automatically (confirmed live: creating
-  `rolling-restarts-monitoring` via a plain `kubectl create namespace` got its correct 500m/900Mi
+  `monitoring-rolling-restarts` via a plain `kubectl create namespace` got its correct 500m/900Mi
   quota back within the same session, no manual step needed) — but **RBAC access does not**. This
   course's Kubernetes cluster is Rancher-managed (`docs/internal/04-infra-and-deploy.md`), and
   access to these namespaces is granted through Rancher's own project/namespace association tied
@@ -424,7 +424,7 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   next `helm upgrade --install` failed immediately with `secrets is forbidden: User
   "u-imzi563an6" cannot list resource "secrets" ... in the namespace "deployment"` — Helm
   couldn't even query for its own release state, confirmed independently via `kubectl auth can-i
-  list secrets -n rolling-restarts-monitoring` / `create secrets` both returning `no` even in the
+  list secrets -n monitoring-rolling-restarts` / `create secrets` both returning `no` even in the
   still-`Terminating` (not yet fully deleted) monitoring namespace. **Fix requires going through
   Rancher (`rancher.ase.cit.tum.de`)** — re-associate the namespace with the team's project (or
   recreate it through Rancher's own UI/API in the first place, which sets up that association

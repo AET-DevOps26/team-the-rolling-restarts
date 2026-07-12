@@ -13,7 +13,7 @@ embedded `prometheus.yaml` with your actual app namespace, then apply everything
 ```bash
 cd infra/k8s
 cp secrets.yml.example secrets.yml   # then fill in real values (see the comments inside)
-kubectl create namespace rolling-restarts-monitoring   # one-time
+kubectl create namespace monitoring-rolling-restarts   # one-time
 kubectl apply -R -f .
 ```
 
@@ -71,9 +71,9 @@ Use the Helm chart when you want reusable installs, upgrades, shared configurati
 
 ## Cluster Notes
 
-If you need to adjust your current kubectl context, do that outside the manifests themselves. The repository does not assume a namespace in these files — **except** `grafana-lgtm`, which now runs in its own dedicated namespace: its ServiceAccount, Deployment, Service, PVC, and ConfigMaps hardcode `namespace: rolling-restarts-monitoring` (that name must already exist — `kubectl create namespace rolling-restarts-monitoring` — before applying). This is deliberate: it isolates the monitoring stack's own `ResourceQuota` from the app workloads', and it's a fixed project-level name rather than a per-user choice, unlike the app namespace.
+If you need to adjust your current kubectl context, do that outside the manifests themselves. The repository does not assume a namespace in these files — **except** `grafana-lgtm`, which now runs in its own dedicated namespace: its ServiceAccount, Deployment, Service, PVC, and ConfigMaps hardcode `namespace: monitoring-rolling-restarts` (that name must already exist — `kubectl create namespace monitoring-rolling-restarts` — before applying). This is deliberate: it isolates the monitoring stack's own `ResourceQuota` from the app workloads', and it's a fixed project-level name rather than a per-user choice, unlike the app namespace.
 
-One consequence: `grafana-lgtm-rbac.yml`'s `Role`/`RoleBinding` have *no* namespace field (they rely on whatever `-n <app-namespace>` you apply the directory with, same as everything else) — a `RoleBinding` must live in the same namespace as the pods it grants access to, which is the app namespace, not `rolling-restarts-monitoring` where the `ServiceAccount` itself lives. The `RoleBinding`'s `subject` names that namespace explicitly instead.
+One consequence: `grafana-lgtm-rbac.yml`'s `Role`/`RoleBinding` have *no* namespace field (they rely on whatever `-n <app-namespace>` you apply the directory with, same as everything else) — a `RoleBinding` must live in the same namespace as the pods it grants access to, which is the app namespace, not `monitoring-rolling-restarts` where the `ServiceAccount` itself lives. The `RoleBinding`'s `subject` names that namespace explicitly instead.
 
 Another: `configmaps/grafana-lgtm-config.yml`'s embedded `prometheus.yaml` has a literal `<APP_NAMESPACE>` placeholder in its `kubernetes_sd_configs` — replace it with your actual app namespace before applying. The Helm chart doesn't have this problem (that file is rendered with `tpl`, so `{{ .Release.Namespace }}` resolves automatically), but raw manifests have no templating step.
 

@@ -40,11 +40,11 @@ spec:
             - name: JWT_ISSUER_URI
               value: "http://user-service:8081"
             - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
-              value: "http://grafana-lgtm.rolling-restarts-monitoring:4318/v1/metrics"
+              value: "http://grafana-lgtm.monitoring-rolling-restarts:4318/v1/metrics"
             - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
-              value: "http://grafana-lgtm.rolling-restarts-monitoring:4318/v1/traces"
+              value: "http://grafana-lgtm.monitoring-rolling-restarts:4318/v1/traces"
             - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
-              value: "http://grafana-lgtm.rolling-restarts-monitoring:4318/v1/logs"
+              value: "http://grafana-lgtm.monitoring-rolling-restarts:4318/v1/logs"
             - name: CORS_ALLOWED_ORIGINS
               value: "https://rolling-restarts.stud.k8s.aet.cit.tum.de"
 

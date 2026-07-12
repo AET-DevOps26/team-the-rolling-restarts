@@ -17,7 +17,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-prometheus-config
-  namespace: rolling-restarts-monitoring
+  namespace: monitoring-rolling-restarts
 data:
   prometheus.yaml: |
     ---
@@ -92,7 +92,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-dashboard
-  namespace: rolling-restarts-monitoring
+  namespace: monitoring-rolling-restarts
 data:
   service-overview.json: |
     {
@@ -2351,7 +2351,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-lgtm-provisioning
-  namespace: rolling-restarts-monitoring
+  namespace: monitoring-rolling-restarts
 data:
   custom-dashboards.yaml: |
     apiVersion: 1

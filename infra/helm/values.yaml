@@ -315,7 +315,7 @@ monitoring:
   # Must already exist before `helm upgrade --install` — Helm only auto-creates its own
   # `--create-namespace` target (the release/app namespace), not other namespaces referenced by
   # templates. CI creates it idempotently in .github/workflows/deploy_kubernetes.yml.
-  namespace: rolling-restarts-monitoring
+  namespace: monitoring-rolling-restarts
   image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
   # PVC for /data — Grafana, Prometheus, Loki, Tempo, and Pyroscope all persist under this single
   # path in the image (verified directly: run-prometheus.sh's --storage.tsdb.path, run-grafana.sh's
@@ -332,7 +332,7 @@ monitoring:
     limits:
       # 850Mi/400m (not 900Mi/450m): the dedicated monitoring namespace's own ResourceQuota is a
       # hard 500m CPU / 900Mi memory ceiling (confirmed live via `kubectl describe resourcequota
-      # -n rolling-restarts-monitoring`) — grafana-lgtm is the only workload in that namespace, but
+      # -n monitoring-rolling-restarts`) — grafana-lgtm is the only workload in that namespace, but
       # sizing exactly at the ceiling leaves zero headroom for anything else ever added there.
       # 850Mi/400m leaves ~6%/20% margin while still covering the active-dashboard-browsing OOM
       # this stack hit before (measured at 725Mi/80% of a 900Mi limit under that load).

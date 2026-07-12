@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: grafana-lgtm-data
-  namespace: rolling-restarts-monitoring
+  namespace: monitoring-rolling-restarts
 spec:
   accessModes:
     - ReadWriteOnce
@@ -14,7 +14,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grafana-lgtm
-  namespace: rolling-restarts-monitoring
+  namespace: monitoring-rolling-restarts
   labels:
     app: grafana-lgtm
 spec:
@@ -39,9 +39,9 @@ spec:
             - containerPort: 4318
 
           # Keep in sync with infra/helm/values.yaml (monitoring.resources). 850Mi/400m (not
-          # 900Mi/450m): the dedicated rolling-restarts-monitoring namespace has its own
+          # 900Mi/450m): the dedicated monitoring-rolling-restarts namespace has its own
           # ResourceQuota (500m CPU / 900Mi memory hard limit, confirmed live via
-          # `kubectl describe resourcequota -n rolling-restarts-monitoring`) — grafana-lgtm is
+          # `kubectl describe resourcequota -n monitoring-rolling-restarts`) — grafana-lgtm is
           # the only workload there, but sizing exactly at the ceiling leaves zero headroom for
           # anything else ever added. 850Mi/400m still covers the active-dashboard-browsing OOM
           # this stack hit before (measured at 725Mi/80% of a 900Mi limit under that load).
