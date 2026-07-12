@@ -74,11 +74,11 @@ apiGateway:
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
     - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
-      value: http://grafana-lgtm:4318/v1/metrics
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/metrics
     - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318/v1/traces
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/traces
     - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318/v1/logs
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/logs
     # CORS_ALLOWED_ORIGINS is injected by templates/deployment.yaml as https://<.Values.host>
     # so it always matches the ingress origin (and the dev host override) without drifting.
   # Pod-annotation target for Prometheus's label/annotation-based auto-discovery (see
@@ -123,11 +123,11 @@ userService:
     - name: CONTENT_SERVICE_URL
       value: http://content-service:8082
     - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
-      value: http://grafana-lgtm:4318/v1/metrics
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/metrics
     - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318/v1/traces
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/traces
     - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318/v1/logs
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/logs
   secretEnv:
     - name: SPRING_MONGODB_URI
       secretName: mongodb-user-credentials
@@ -185,11 +185,11 @@ contentService:
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
     - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
-      value: http://grafana-lgtm:4318/v1/metrics
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/metrics
     - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318/v1/traces
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/traces
     - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318/v1/logs
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/logs
   secretEnv:
     - name: SPRING_MONGODB_URI
       secretName: mongodb-credentials
@@ -239,7 +239,7 @@ genAi:
     - name: INTERNAL_API_URL
       value: http://api-gateway:8080
     - name: OTEL_EXPORTER_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318
     - name: OTEL_SERVICE_NAME
       value: gen-ai
   secretEnv:

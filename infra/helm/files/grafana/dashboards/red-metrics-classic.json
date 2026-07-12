@@ -514,7 +514,7 @@
   ],
   "refresh": "",
   "schemaVersion": 39,
-  "tags": [],
+  "tags": ["service-health", "red-metrics", "classic-histogram"],
   "templating": {
     "list": [
       {

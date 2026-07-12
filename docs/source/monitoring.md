@@ -76,11 +76,26 @@ kubectl port-forward "$(kubectl get pod -n rolling-restarts-monitoring -l app=gr
 Services push metrics/traces/logs to the collector inside the same container, not to Grafana's
 port:
 
-- OTLP/HTTP: `http://grafana-lgtm:4318` (docker-compose service DNS / Kubernetes Service name)
-- OTLP/gRPC: `grafana-lgtm:4317`
+- docker-compose: `http://grafana-lgtm:4318` (OTLP/HTTP), `grafana-lgtm:4317` (OTLP/gRPC) — bare
+  service DNS, since everything shares one Docker network.
+- Kubernetes: `http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318` /
+  `grafana-lgtm.{{ .Values.monitoring.namespace }}:4317` — **must** be namespace-qualified, since
+  `grafana-lgtm` now lives in its own namespace, separate from the app workloads pushing to it.
+  The bare hostname only resolves within the same namespace; using it cross-namespace fails
+  silently from the app's point of view (no error, no crash — the OTLP exporter just never
+  reaches anything, confirmed live via `kubectl exec ... python3 -c
+  "socket.gethostbyname('grafana-lgtm')"` failing while the namespace-qualified form resolved
+  fine). `infra/helm/values.yaml` embeds this exact template expression as a literal string,
+  rendered via `tpl` in `templates/deployment.yaml` rather than hardcoding the namespace name a
+  second time; the raw `infra/k8s/deployments/*.yml` manifests hardcode the equivalent FQDN since
+  they have no templating step.
 
 You don't normally call these by hand — they're wired into every service's env
 (`MANAGEMENT_OTLP_METRICS_EXPORT_URL` etc. for Spring, `OTEL_EXPORTER_OTLP_ENDPOINT` for gen-ai).
+If you ever add a new service to this stack, remember the namespace-qualified form for Kubernetes
+— this exact mistake (bare `grafana-lgtm`) silently broke OTLP push for all 4 existing services
+for a while after the namespace split, undetected because classic-scrape metrics (a separate,
+unrelated pull-based path) kept working and masked it.
 
 ## What's provisioned
 

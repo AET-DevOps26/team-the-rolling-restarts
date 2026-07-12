@@ -535,11 +535,109 @@ data:
           ],
           "title": "Duration percentiles",
           "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Per-route breakdown: uri for the Spring services (Micrometer's default route-template tag, e.g. /api/users/**), handler for gen-ai (prometheus_fastapi_instrumentator's route tag, e.g. /summarize) — unified into one `uri` label via label_replace so both show up in one legend.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 37
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate({__name__=\"http_server_requests_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job, uri)\nor\nlabel_replace(\n  sum(rate({__name__=\"http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job, handler),\n  \"uri\", \"$1\", \"handler\", \"(.*)\"\n)",
+              "legendFormat": "{{job}} {{uri}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Request Rate by Endpoint",
+          "type": "timeseries"
         }
       ],
       "refresh": "",
       "schemaVersion": 39,
-      "tags": [],
+      "tags": ["service-health", "red-metrics"],
       "templating": {
         "list": [
           {
@@ -1136,7 +1234,7 @@ data:
       ],
       "refresh": "",
       "schemaVersion": 39,
-      "tags": [],
+      "tags": ["service-health", "red-metrics", "classic-histogram"],
       "templating": {
         "list": [
           {
@@ -1239,11 +1337,13 @@ data:
     providers:
       - name: "RED Metrics (classic histogram)"
         type: file
+        folder: "Service Health"
         options:
           path: /otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json
           foldersFromFilesStructure: false
       - name: "JVM Metrics"
         type: file
+        folder: "Service Health"
         options:
           path: /otel-lgtm/grafana-dashboard-jvm-metrics.json
           foldersFromFilesStructure: false

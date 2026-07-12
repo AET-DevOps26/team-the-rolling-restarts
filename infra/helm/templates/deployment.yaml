@@ -55,7 +55,11 @@ spec:
           env:
 {{- range $env := $cfg.env }}
             - name: {{ $env.name }}
-              value: {{ $env.value | quote }}
+              # tpl (not a plain quote): lets values.yaml embed a Values-lookup template
+              # expression for the OTLP endpoints below, instead of hardcoding the monitoring
+              # namespace name a second time — a plain string with no template syntax in it
+              # passes through this unchanged.
+              value: {{ tpl $env.value $ | quote }}
 {{- end }}
 {{- if eq $app.key "apiGateway" }}
             # Lock CORS to the ingress origin; tracks .Values.host (incl. the dev host override).

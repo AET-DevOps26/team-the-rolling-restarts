@@ -284,6 +284,53 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   alert rules there instead of Grafana's root folder — otherwise the "Service Health" folder holds
   only alert rules and looks empty when browsing **Dashboards** (alerts and dashboards share one
   folder namespace, but the Dashboards browser only lists dashboards).
+- **FIXED — "RED Metrics (classic histogram)" and "JVM Metrics" were both filed under Grafana's
+  default/General folder instead of "Service Health"**, confirmed live via the Dashboards nav
+  (only "Service Overview" appeared nested under the folder). Both providers in
+  `default-dashboards-override.yaml` were missing the `folder: "Service Health"` key that
+  `custom-dashboards.yaml`'s Service Overview provider already had — added it to both. One
+  wrinkle discovered live: changing a provider's `folder` alone didn't move "JVM Metrics" (whose
+  underlying dashboard file — the image's own, unmodified — hadn't changed) on a plain
+  `helm upgrade` + pod restart; only "RED Metrics" moved, because its dashboard JSON *also*
+  changed in the same update (new tags, below), which seems to be what triggered Grafana's
+  provisioning sync to re-evaluate its folder. Grafana also refuses to delete a provisioned
+  dashboard via its own API (`"provisioned dashboard cannot be deleted"`), so the fix that
+  actually worked was clearing only Grafana's own persisted state (`rm -rf /data/grafana` inside
+  the pod, *not* the sibling `/data/prometheus`/`/data/loki`/`/data/tempo`/`/data/pyroscope`
+  directories) and letting it re-provision fresh on restart — verified Prometheus's data (the
+  `gen_ai_llm_*` metrics below) survived that untouched, confirming the per-component `/data`
+  split works as intended.
+- **FIXED — every app service's OTLP push (metrics, traces, *and* logs) silently broke when
+  `grafana-lgtm` moved to its own namespace**, and stayed broken through that entire redistribution
+  round without being caught, because the classic-scrape metrics (which *did* keep working,
+  scraped directly by Prometheus, unrelated to OTLP) masked it. `MANAGEMENT_OTLP_METRICS_EXPORT_URL`
+  /`_TRACING_EXPORT_OTLP_ENDPOINT`/`_LOGGING_EXPORT_OTLP_ENDPOINT` (Spring) and
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (gen-ai) all still pointed at the bare hostname `grafana-lgtm`,
+  which only resolves within the same namespace — confirmed live via `kubectl exec ... python3 -c
+  "socket.gethostbyname('grafana-lgtm')"` failing with `Name or service not known` from a pod in
+  the app namespace, while `grafana-lgtm.rolling-restarts-monitoring` resolved fine. Caught by
+  triggering a real gen-ai `/summarize` call and finding zero `gen_ai_llm_*` metrics in Prometheus
+  afterward (gen-ai's custom OTel counters only ever reach Prometheus via this OTLP push path,
+  unlike its classic-scraped `http_request_duration_seconds_*`). Fixed by pointing every OTLP
+  endpoint at `grafana-lgtm.{{ .Values.monitoring.namespace }}:4318` in `values.yaml` — rendered
+  via `tpl` in `templates/deployment.yaml`'s env-value line (changed from a plain `| quote` to
+  `tpl $env.value $ | quote`) rather than hardcoding the namespace name a second time — and the
+  hardcoded FQDN equivalent in the raw `infra/k8s/deployments/*.yml` manifests. Re-verified live:
+  a fresh `/summarize` call after redeploying produced real `gen_ai_llm_requests_total`/
+  `_latency_seconds_*`/`_prompt_tokens_total`/`_completion_tokens_total` series, and a Loki query
+  for `{service_name="gen-ai"}` returned 92 fresh log streams — both metrics and logs confirmed
+  flowing again for all 4 app services, not just gen-ai.
+- Added a **"Request Rate by Endpoint" panel** to Service Overview: `uri` (Micrometer's default
+  route-template tag on the Spring services) and `handler` (prometheus_fastapi_instrumentator's
+  route tag on gen-ai) are different label names for the same concept, unified into one `uri`
+  label via `label_replace` before grouping — same `or`-chain pattern already used for the Error
+  Rate panel's status-label mismatch. Verified against live label values first
+  (`api-gateway`/`user-service`/`content-service`'s real `uri` values like `/api/users/**`,
+  `/auth/login`, `/sources/{id}`; gen-ai's real `handler` values `/health`, `/summarize`, `/qa`)
+  rather than guessed. Also added `tags` to Service Overview (`["service-health",
+  "red-metrics"]`) and RED Metrics classic (`["service-health", "red-metrics",
+  "classic-histogram"]`) — both were previously `[]`, unlike the image's own JVM Metrics
+  dashboard, which already ships tags.
 
 ## Re-verify
 
