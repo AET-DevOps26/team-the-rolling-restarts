@@ -14,7 +14,7 @@ The single `spring-api` has been replaced by:
 | `user-service`    | 8081          | OAuth2 Authorization Server, user profiles/settings |
 | `content-service` | 8082          | RSS feeds, articles, topics                        |
 
-The web client talks to the nginx reverse proxy (`NEXT_PUBLIC_API_BASE_URL`) which
+The web client talks to the nginx reverse proxy (`API_BASE_URL`) which
 forwards to the gateway. Locally the proxy is on port 8080 (`APP_PORT`), on the VM
 it is on port 80. The gateway forwards requests based on path prefix.
 

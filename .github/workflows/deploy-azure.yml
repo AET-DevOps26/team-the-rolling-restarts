@@ -126,8 +126,6 @@ jobs:
           file: ./web-client/Dockerfile
           target: production
           push: true
-          build-args: |
-            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           tags: |
             ${{ steps.meta.outputs.registry_base }}/web-client:${{ steps.meta.outputs.image_tag }}
             ${{ steps.meta.outputs.registry_base }}/web-client:latest
@@ -212,7 +210,6 @@ jobs:
 
       - name: Generate deployment .env
         env:
-          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
@@ -241,7 +238,6 @@ jobs:
           SPRING_PROFILES_ACTIVE=production
           APP_PORT=80
           GEN_AI_PORT=8000
-          NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
           LLM_PROVIDER=${LLM_PROVIDER:-openai}
           LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
           LLM_API_KEY=${LLM_API_KEY}

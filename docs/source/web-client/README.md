@@ -87,7 +87,7 @@ copied into the repo, not imported as a runtime dependency.
 
 The client consumes the OpenAPI spec at `api/openapi.yaml` to generate a typed TypeScript client (in `src/generated/`). Backend services (`services/spring/api-gateway`, `services/spring/user-service`, `services/spring/content-service`, `services/gen-ai`) are reached through the API gateway.
 
-`NEXT_PUBLIC_API_BASE_URL` in `.env.local` controls where the client sends requests; the value is inlined into the browser bundle at build time.
+`API_BASE_URL` in `.env.local` controls where the client sends requests. It's deliberately not `NEXT_PUBLIC_`-prefixed: every API call goes through `src/lib/api/client.ts`, which is `"server-only"` and never runs in the browser, so the value is read at server runtime rather than inlined into the bundle at build time — letting the same built image be deployed anywhere, with each target setting its own correct value.
 
 ## Notes for agents
 

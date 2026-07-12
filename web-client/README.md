@@ -29,9 +29,11 @@ Actions, both talking directly to the gateway.
 
 ### Configuration
 
-- The gateway base URL is read from `NEXT_PUBLIC_API_BASE_URL` (default
-  `http://localhost:8080`). Copy `.env.example` → `.env.local` to set it for
-  local development (`.env.local` is gitignored).
+- The gateway base URL is read from `API_BASE_URL` (default `http://localhost:8080`). Copy
+  `.env.example` → `.env.local` to set it for local development (`.env.local` is gitignored).
+  Deliberately not `NEXT_PUBLIC_`-prefixed: `src/lib/api/client.ts` is `"server-only"`, so this
+  value is read at server runtime, never inlined into the browser bundle at build time — the same
+  built image works correctly across every deployment target this way.
 
 ### Generated API types
 

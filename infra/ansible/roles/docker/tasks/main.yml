@@ -1,8 +1,20 @@
 ---
-- name: Install Docker engine and Compose plugin
-  ansible.builtin.apt:
-    name: "{{ docker_packages }}"
-    state: present
+- name: Check if Docker is already installed
+  ansible.builtin.command: which docker
+  register: docker_check
+  failed_when: false
+  changed_when: false
+  tags: [docker]
+
+# Matches `make azure-vm-docker` (the CI/CD path's one-time VM setup) exactly, rather than
+# apt-installing Ubuntu archive's `docker.io`/`docker-compose-v2` — those pull in Ubuntu's own
+# `containerd` package, which conflicts at the package-manager level with `containerd.io` (from
+# get.docker.com's official repo). Since CI/CD's `azure-vm-docker` may run against this same VM
+# either before or after this role, both paths must install Docker the same way or whichever runs
+# second fails with "containerd.io : Conflicts: containerd".
+- name: Install Docker via get.docker.com
+  ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
+  when: docker_check.rc != 0
   notify: restart docker
   tags: [docker]
 

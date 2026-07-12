@@ -195,18 +195,6 @@ smoke-test-k8s:
 # `make helm-deploy` picks it up immediately.
 PLATFORM ?=
 
-# NEXT_PUBLIC_API_BASE_URL is override-able for the same reason REGISTRY is: web-client's API calls
-# (web-client/src/lib/api/client.ts, marked "server-only") execute inside the Next.js server
-# process in the web-client container, never in the browser, so the value must be reachable from
-# THAT container, not from a user's machine or the public ingress host — and that differs by where
-# you deploy. Default matches Kubernetes' Service DNS name, mirroring how
-# infra/docker-compose.dev.yaml already does it for local dev. infra/docker-compose.yaml's own
-# web-client build (Azure VM / nginx-fronted deploys) independently arrived at the same
-# server-only-fetch conclusion and hardcodes http://reverse-proxy for that topology — override to
-# that value (or empty string for a same-origin reverse-proxy setup) when building for a target
-# other than Kubernetes.
-NEXT_PUBLIC_API_BASE_URL ?= http://api-gateway:8080
-
 push-images:
 	@test -n "$(REGISTRY)" || { echo "REGISTRY is required, e.g. make push-images REGISTRY=ghcr.io/<you>/rolling-restarts"; exit 1; }
 	$(MAKE) generate
@@ -216,7 +204,6 @@ ifdef PLATFORM
 	  echo "Note: skipping web-client for arm64 (SWC/QEMU incompatible — CI builds it natively)."; \
 	else \
 	  docker buildx build --platform $(PLATFORM) --push \
-	    --build-arg NEXT_PUBLIC_API_BASE_URL=$(NEXT_PUBLIC_API_BASE_URL) \
 	    -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
 	    -f web-client/Dockerfile web-client; \
 	fi
@@ -229,8 +216,7 @@ ifdef PLATFORM
 	  -t $(REGISTRY)/gen-ai:$(IMAGE_TAG) \
 	  -f services/gen-ai/Dockerfile services/gen-ai
 else
-	docker build --build-arg NEXT_PUBLIC_API_BASE_URL=$(NEXT_PUBLIC_API_BASE_URL) \
-	  -t $(REGISTRY)/web-client:$(IMAGE_TAG) -f web-client/Dockerfile web-client
+	docker build -t $(REGISTRY)/web-client:$(IMAGE_TAG) -f web-client/Dockerfile web-client
 	docker push $(REGISTRY)/web-client:$(IMAGE_TAG)
 	@for svc in api-gateway user-service content-service; do \
 	  docker build -t $(REGISTRY)/$$svc:$(IMAGE_TAG) -f services/spring/$$svc/Dockerfile services/spring && \
@@ -348,8 +334,7 @@ azure-gh-vars:
 	gh variable set ACR_NAME             --repo "$(GH_REPO)" --body "$$(terraform output -raw acr_name)" && \
 	gh variable set ACR_LOGIN_SERVER     --repo "$(GH_REPO)" --body "$$(terraform output -raw acr_login_server)" && \
 	gh variable set AZURE_RESOURCE_GROUP --repo "$(GH_REPO)" --body "$$(terraform output -raw resource_group_name)" && \
-	gh variable set DEPLOY_DIR           --repo "$(GH_REPO)" --body "$(DEPLOY_DIR)" && \
-	gh variable set NEXT_PUBLIC_API_BASE_URL --repo "$(GH_REPO)" --body "http://$$(terraform output -raw vm_public_ip)"
+	gh variable set DEPLOY_DIR           --repo "$(GH_REPO)" --body "$(DEPLOY_DIR)"
 
 # Print the remaining manual steps: creating the service principal and setting the
 # sensitive secrets. These take values only you have, so they are not automated.

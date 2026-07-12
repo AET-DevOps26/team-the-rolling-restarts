@@ -31,6 +31,31 @@
   notify: restart rolling-restarts
   tags: [app, deploy]
 
+# docker-compose.yaml's grafana-lgtm service bind-mounts ./grafana/prometheus.yaml,
+# ./grafana/dashboards/*.json, and ./grafana/provisioning/**/*.yaml relative to project_root —
+# without this, those host paths never exist, and Docker's default behavior for a missing
+# bind-mount source (auto-creating it as an empty directory) collides with the container's file
+# destination ("not a directory" mount error).
+#
+# Wipe any previous copy first: if a docker compose run ever raced ahead of this task (e.g. an
+# earlier deploy before this task existed at all), Docker's own directory-autocreation leaves
+# files' worth of paths behind as empty directories owned by root — `copy` then nests the real
+# file inside that stale directory instead of replacing it, rather than fail outright.
+- name: Remove any stale grafana config directory
+  ansible.builtin.file:
+    path: "{{ project_root }}/grafana"
+    state: absent
+  tags: [app, deploy]
+
+- name: Copy grafana-lgtm config (prometheus scrape config, dashboards, provisioning)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../grafana/"
+    dest: "{{ project_root }}/grafana/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  notify: restart rolling-restarts
+  tags: [app, deploy]
+
 - name: Render deployment environment file
   ansible.builtin.template:
     src: env.j2

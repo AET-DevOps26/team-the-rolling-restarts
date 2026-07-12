@@ -6,14 +6,15 @@ services:
       context: ../web-client
       dockerfile: Dockerfile
       target: production
-      args:
-        NEXT_PUBLIC_API_BASE_URL: http://reverse-proxy
     image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       # Server-side fetches run inside the container; use the internal proxy, not localhost.
-      NEXT_PUBLIC_API_BASE_URL: http://reverse-proxy
+      # Not NEXT_PUBLIC_-prefixed (see web-client/src/lib/api/client.ts) so this is read at
+      # container runtime, not baked into the image at build time — the same image works
+      # correctly across every deployment target this way.
+      API_BASE_URL: http://reverse-proxy
     networks:
       - frontend
 
@@ -214,9 +215,12 @@ services:
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
       - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
     volumes:
+      - grafana-lgtm-data:/data
       - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
       - ./grafana/dashboards/service-overview.json:/otel-lgtm/grafana-dashboards-custom/service-overview.json:ro
       - ./grafana/dashboards/red-metrics-classic.json:/otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json:ro
+      - ./grafana/dashboards/genai-overview.json:/otel-lgtm/grafana-dashboards-custom/genai-overview.json:ro
+      - ./grafana/dashboards/webclient-overview.json:/otel-lgtm/grafana-dashboards-custom/webclient-overview.json:ro
       - ./grafana/provisioning/dashboards/custom-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml:ro
       - ./grafana/provisioning/dashboards/default-dashboards-override.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
       - ./grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml:ro
@@ -226,6 +230,7 @@ services:
 volumes:
   mongodb-data:
   ollama-models:
+  grafana-lgtm-data:
 
 networks:
   frontend:

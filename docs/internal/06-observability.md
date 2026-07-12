@@ -374,6 +374,39 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   verify-before-guessing convention) — the error-rate panel reads 0 series in practice since no
   requests have actually errored yet, same non-bug pattern as GenAI Overview's sparse-data
   `rate()` panels.
+- **FIXED (docker-compose/Azure VM) — the Ansible `app` role never synced `infra/grafana/` to the
+  VM at all, and `grafana-lgtm` had no `/data` persistence there either**, both discovered live via
+  a real `make deploy-azure` run. `docker-compose.yaml`'s `grafana-lgtm` service bind-mounts
+  `./grafana/prometheus.yaml`, `./grafana/dashboards/*.json`, and `./grafana/provisioning/**/*.yaml`
+  relative to `project_root` — but `infra/ansible/roles/app/tasks/main.yml` only ever copied
+  `docker-compose.yaml`/`docker-compose.prod.yaml`/`nginx/default.conf` to the VM, never
+  `infra/grafana/`. Docker's own fallback for a missing bind-mount source (silently auto-creating
+  it as an empty directory) meant the very first `docker compose up` on a fresh VM poisoned every
+  one of those paths as root-owned empty directories, which then made a subsequent naive
+  `ansible.builtin.copy` of the directory tree fail outright (`copy` nests a source file inside an
+  already-existing destination directory rather than replacing it, producing paths like
+  `grafana/prometheus.yaml/prometheus.yaml`, confirmed live via SSH). Fixed with two new tasks in
+  the `app` role, in order: `file: state=absent` on `{{ project_root }}/grafana` (wipes any stale
+  state, including Docker's own auto-created poisoning, before every deploy) followed by
+  `copy: src=.../grafana/ dest={{ project_root }}/grafana/`. Also added a named `grafana-lgtm-data`
+  volume mounted at `/data` in `infra/docker-compose.yaml` — this deployment target had the exact
+  same "no persistence at all" gap Kubernetes had before its own PVC fix (above): every
+  `docker compose up -d --force-recreate` (what `make deploy-azure` runs on every deploy) was
+  silently resetting Prometheus/Loki/Tempo/Pyroscope/Grafana's own state. `--force-recreate` only
+  recreates containers, not named volumes, so this now persists the same way the Kubernetes PVC
+  does, while the read-only config bind mounts still refresh from `infra/grafana/` on every deploy
+  via the Ansible copy task above, so dashboard/provisioning changes still land normally.
+- **FIXED (docker-compose/Azure VM) — two provisioning-role installers for Docker itself
+  conflicted.** `make azure-vm-docker` (part of `azure-cicd-setup`, the CI/CD path's one-time VM
+  prep) installs Docker via `get.docker.com`'s official script, which provides `containerd.io`;
+  `infra/ansible/roles/docker/tasks/main.yml` (the manual `make deploy-azure` path) instead
+  apt-installed Ubuntu archive's `docker.io`/`docker-compose-v2`, which depend on Ubuntu's own
+  `containerd` package — the two `containerd` packages conflict at the package-manager level, so
+  whichever installer ran second failed outright (`containerd.io : Conflicts: containerd`),
+  reproduced live after running `azure-cicd-setup` before `deploy-azure` on the same VM. Fixed by
+  switching the Ansible role to install Docker the same way (`get.docker.com`, gated on a `which
+  docker` idempotency check mirroring `azure-vm-docker`'s own `command -v docker` guard) so both
+  provisioning paths always agree regardless of which one runs first.
 
 ## Re-verify
 

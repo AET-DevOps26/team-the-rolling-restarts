@@ -19,7 +19,6 @@ jobs:
       project: ${{ steps.meta.outputs.project }}
       sha: ${{ steps.meta.outputs.sha }}
       channel: ${{ steps.meta.outputs.channel }}
-      api_base_url: ${{ steps.meta.outputs.api_base_url }}
 
     steps:
       - name: Checkout
@@ -75,7 +74,6 @@ jobs:
           echo "project=$PROJECT" >> $GITHUB_OUTPUT
           echo "sha=$SHA" >> $GITHUB_OUTPUT
           echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
-          echo "api_base_url=https://api.rolling-restarts.stud.k8s.aet.cit.tum.de" >> $GITHUB_OUTPUT
 
   # ---------- Phase 2a: build & push the backend services in parallel ----------
   # Java/Python build fine under QEMU emulation, so these stay on a single amd64 runner
@@ -201,7 +199,6 @@ jobs:
           push: true
           cache-from: type=gha,scope=web-client-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=web-client-${{ matrix.arch }}
-          build-args: NEXT_PUBLIC_API_BASE_URL=${{ needs.prepare.outputs.api_base_url }}
           tags: |
             ghcr.io/${{ needs.prepare.outputs.owner }}/${{ needs.prepare.outputs.project }}/web-client:${{ needs.prepare.outputs.sha }}-${{ matrix.arch }}
 

@@ -17,7 +17,12 @@ export class ApiError extends Error {
 }
 
 function baseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+  // Deliberately not NEXT_PUBLIC_-prefixed: this module is "server-only" (see import above) and
+  // its value never needs to reach the browser. NEXT_PUBLIC_ vars get inlined into the compiled
+  // bundle at build time, which would bake in whichever deployment target built the image;
+  // reading a plain env var here means the same image can be deployed anywhere, each setting its
+  // own correct value at container runtime.
+  return process.env.API_BASE_URL ?? "http://localhost:8080";
 }
 
 function normalizeHeaders(init?: HeadersInit): Record<string, string> {

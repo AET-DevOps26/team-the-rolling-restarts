@@ -284,6 +284,16 @@ inspecting the image directly (`docker run --entrypoint sh grafana/otel-lgtm@sha
 under this single path. Before this, the stack had **no persistence at all** — every pod restart
 silently lost all dashboards, metrics history, logs, traces, and profiles.
 
+The docker-compose/Azure VM target had the identical gap — `grafana-lgtm`'s only volumes were the
+read-only config bind mounts (`./grafana/...`), no `/data` mount at all, so every `make deploy-azure`
+(`docker compose up -d --force-recreate`) silently reset Prometheus/Loki/Tempo/Pyroscope/Grafana's
+own state, same as an unpersisted Kubernetes pod restart. Fixed the same way: a named
+`grafana-lgtm-data` volume mounted at `/data` in `infra/docker-compose.yaml`. `--force-recreate`
+only recreates containers, not volumes, so this data now survives every redeploy — while the
+config bind mounts (dashboards/provisioning/prometheus.yaml) still get freshly re-synced from
+`infra/grafana/` on every deploy via the Ansible `app` role, so dashboard/provisioning changes
+still take effect without needing to wipe anything.
+
 **Label/annotation-based auto-discovery**: `infra/helm/files/grafana/prometheus.yaml`'s
 `scrape_configs` is a single generic job (previously one hardcoded `job_name` block per service).
 Any pod in the app namespace carrying the `monitoring: "true"` label is scraped automatically,

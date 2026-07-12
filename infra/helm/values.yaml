@@ -36,7 +36,11 @@ webClient:
   env:
     - name: NODE_ENV
       value: production
-    # NEXT_PUBLIC_API_BASE_URL is baked into the image at build time (see web-client/Dockerfile).
+    # Not NEXT_PUBLIC_-prefixed (see web-client/src/lib/api/client.ts) — read at container
+    # runtime, not baked into the image at build time, so api-gateway's bare in-namespace
+    # Service name works here same as it does for every other service's internal calls.
+    - name: API_BASE_URL
+      value: http://api-gateway:8080
     - name: OTEL_EXPORTER_OTLP_ENDPOINT
       value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318
     - name: OTEL_SERVICE_NAME
