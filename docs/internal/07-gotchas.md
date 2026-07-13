@@ -358,3 +358,23 @@ for readability but works either with or without them). If alert emails ever sta
 authentication after previously working, check whether 2FA or the specific App Password was
 revoked/rotated on the Google Account side — nothing in this repo's config would show that as the
 cause, only Grafana's own SMTP error logs would.
+
+## `helm upgrade --reuse-values` combined with an explicit `-f <chart's own values.yaml>` drops the reused values entirely
+
+`deploy_monitoring.yml` runs `helm upgrade --reuse-values -f infra/helm/values-prod.yaml ...`
+— deliberately **not** `-f infra/helm/values.yaml` too, even though Helm always loads the chart's
+own `values.yaml` as its base layer regardless of whether you pass it explicitly. Confirmed live
+(`helm upgrade --dry-run=client`) that ALSO passing `-f infra/helm/values.yaml` alongside
+`--reuse-values` makes Helm drop the previous release's reused values entirely — every `required`
+field the reuse was supposed to supply (e.g. `mongodb.rootUsername`) fails immediately, exactly as
+if `--reuse-values` had never been passed at all. `-f values-prod.yaml` (the override layer, not
+the chart's own base file) does **not** trigger this. This reproduced against the workflow's
+ORIGINAL command, predating this session's changes — `deploy_monitoring.yml`'s `--reuse-values`
+path may never have actually worked before this was found and fixed. If you ever add a new
+`-f <file>` to a `--reuse-values` invocation, test it with `--dry-run=client` first — this
+particular combination is not obvious from Helm's own `--help` text or common usage examples.
+
+```sh
+cd infra/helm && helm upgrade newsgenai . --reuse-values -f values.yaml --dry-run=client   # fails
+cd infra/helm && helm upgrade newsgenai . --reuse-values -f values-prod.yaml --dry-run=client   # works
+```

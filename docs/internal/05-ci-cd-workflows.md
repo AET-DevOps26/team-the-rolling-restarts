@@ -90,7 +90,21 @@ Uses `helm upgrade --reuse-values` (not `--install`, requires the release
 to already exist) so it never needs Mongo/JWT/service-client secrets or
 image tags — only the monitoring-related values change. Shares
 `deploy_kubernetes.yml`'s `deploy-k8s` concurrency group so the two never
-run `helm upgrade` against the same release simultaneously.
+run `helm upgrade` against the same release simultaneously — but that group
+only serializes *execution*, it does not guarantee `deploy_kubernetes.yml`
+runs first. Since this workflow's push trigger fires immediately while
+`deploy_kubernetes.yml` waits on `build-and-package` (several minutes),
+this workflow generates its own small `secrets-values.yaml` containing just
+`monitoring.adminPassword`/`smtpUser`/`smtpPassword`/`alertEmails` (the
+fields `templates/monitoring.yaml` requires) from the same GH secrets
+`deploy_kubernetes.yml` uses — it can't rely on `--reuse-values` alone to
+already have them (confirmed live: a release that's never had those fields
+set fails outright on Helm's `required` guard). **Also**: this workflow's
+Helm invocation deliberately does NOT pass `-f infra/helm/values.yaml` —
+confirmed live that combining `--reuse-values` with an explicit `-f` for the
+chart's own base values file drops the reused release's values entirely,
+failing every `required` field the reuse was supposed to supply. Only
+`values-prod.yaml` (the override layer) is passed explicitly.
 
 ## `deploy-azure.yml` — name: "Deploy to Azure"
 
