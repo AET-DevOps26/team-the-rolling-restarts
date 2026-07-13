@@ -220,6 +220,9 @@ jobs:
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
         run: |
           umask 077
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
@@ -228,6 +231,10 @@ jobs:
           fi
           if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]; then
             echo "::error::GRAFANA_ADMIN_PASSWORD secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+          if [ -z "${GRAFANA_SMTP_USER:-}" ] || [ -z "${GRAFANA_SMTP_PASSWORD:-}" ] || [ -z "${GRAFANA_ALERT_EMAILS:-}" ]; then
+            echo "::error::GRAFANA_SMTP_USER/GRAFANA_SMTP_PASSWORD/GRAFANA_ALERT_EMAILS secrets are not all configured. Set them in repo secrets before deploying to production — without them, alert rules exist but nothing sends notifications anywhere."
             exit 1
           fi
           # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
@@ -254,6 +261,9 @@ jobs:
           JWT_RSA_PRIVATE_KEY=${JWT_RSA_PRIVATE_KEY_ONELINE}
           SERVICE_CLIENT_SECRET=${SERVICE_CLIENT_SECRET}
           GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+          GRAFANA_SMTP_USER=${GRAFANA_SMTP_USER}
+          GRAFANA_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD}
+          GRAFANA_ALERT_EMAILS=${GRAFANA_ALERT_EMAILS}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)

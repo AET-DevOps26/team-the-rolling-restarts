@@ -35,3 +35,10 @@ app_env:
   # Grafana admin login, also reachable via the reverse proxy at /monitoring. Generate with:
   # openssl rand -hex 16
   GRAFANA_ADMIN_PASSWORD: "replace-with-vault-secret"
+  # Alert email delivery. Any SMTP provider works; Gmail shown here as an example — generate an
+  # App Password (requires 2FA) at myaccount.google.com/apppasswords, NOT the regular account
+  # password. GRAFANA_ALERT_EMAILS is a comma-separated recipient list.
+  GF_SMTP_HOST: "smtp.gmail.com:587"
+  GRAFANA_SMTP_USER: "replace-with-sender-address"
+  GRAFANA_SMTP_PASSWORD: "replace-with-vault-secret"
+  GRAFANA_ALERT_EMAILS: "replace-with-recipient-list"

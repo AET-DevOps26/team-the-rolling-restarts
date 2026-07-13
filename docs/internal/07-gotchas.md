@@ -313,3 +313,48 @@ itself to still exist and this identity to still be a member — if the *project
 not just the namespaces inside it, this fix doesn't help and recovery does need Rancher
 (`rancher.ase.cit.tum.de`) directly. Full details in `docs/internal/06-observability.md` and
 `docs/internal/04-infra-and-deploy.md`.
+
+## Grafana provisioning files can read env vars directly — `$__env{VAR_NAME}`, not shell/Compose/K8s substitution
+
+`provisioning/alerting/contactpoints.yaml`'s contact point needs a recipient list that's
+per-deployment and per-redeploy, without hardcoding it into a committed file. Grafana itself
+expands `$__env{VAR_NAME}` inside provisioning YAML **when the file is loaded**, reading whatever
+environment variable is actually set in the running container at that moment — this is a distinct
+mechanism from `${VAR}`-style shell/Compose interpolation (which would try to substitute at
+`docker compose config`/apply time, before the file ever reaches the container, and wouldn't work
+for a raw `kubectl apply`/ConfigMap mount at all). Confirmed live: `addresses:
+$__env{GRAFANA_ALERT_EMAILS}` resolved to the real comma-separated address list via Grafana's own
+`/api/v1/provisioning/contact-points` API, on both docker-compose and the real Kubernetes cluster.
+The same mechanism is documented for datasource `secureJsonData`; it isn't obviously advertised for
+alerting provisioning specifically, so it's worth confirming against the actual API response (not
+just assuming it worked) any time this pattern is reused.
+
+```sh
+grep -n '\$__env{' infra/grafana/provisioning/alerting/contactpoints.yaml
+```
+
+## Grafana 13's contact-point test API moved — the old endpoint is `410 Gone`
+
+`POST /api/alertmanager/grafana/config/api/v1/receivers/test` (the long-documented way to send a
+one-off test notification without waiting for a real alert to fire) returns a `410` with a message
+saying the endpoint was removed, pointing at a new `notifications.alerting.grafana.app/v1beta1`
+namespaced API instead, on the `grafana/otel-lgtm` image's bundled Grafana v13.0.1. That replacement
+API wasn't straightforward to call correctly on the first attempt (a naive request body returned an
+"unknown integration type" error). Rather than reverse-engineer the new API's exact schema, verifying
+real notification delivery used a more realistic technique instead: provision a temporary
+always-firing alert rule (`vector(1) > 0`, `for: 0s`) via the ordinary
+`/api/v1/provisioning/alert-rules` endpoint (unchanged), wait for it to reach `firing` state and
+route through the real notification policy, then delete the temporary rule + its folder
+afterward. This exercises the actual rule → alertmanager → policy → contact point path end to end,
+which is arguably a better test than a synthetic one anyway.
+
+## Gmail SMTP requires an App Password, not the account password — and needs 2FA enabled first
+
+Using a Gmail address as `GF_SMTP_USER`/`GF_SMTP_FROM_ADDRESS` with the account's regular login
+password as `GF_SMTP_PASSWORD` fails outright — Google requires an **App Password** for SMTP
+access from non-Google apps, which only exists as an option once 2-Step Verification is enabled on
+that account (generate one at myaccount.google.com/apppasswords, 16 characters, shown with spaces
+for readability but works either with or without them). If alert emails ever start failing
+authentication after previously working, check whether 2FA or the specific App Password was
+revoked/rotated on the Google Account side — nothing in this repo's config would show that as the
+cause, only Grafana's own SMTP error logs would.

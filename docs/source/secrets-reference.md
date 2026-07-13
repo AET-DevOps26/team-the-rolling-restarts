@@ -22,6 +22,9 @@ These must be changed from defaults in production. The dev defaults below work o
 | `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.dev.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
 | `LLM_API_KEY` | _(empty)_ | Logos API key (`lg-...`, from tutor); TUM network / eduVPN only | gen-ai |
 | `GRAFANA_ADMIN_PASSWORD` | `admin` | Strong random password (`openssl rand -hex 16`) | grafana-lgtm admin login (also reachable at `/monitoring` via the reverse proxy, not just `LGTM_GRAFANA_PORT` directly) |
+| `GRAFANA_SMTP_USER` | _(empty)_ | Sending email address (Gmail: the account itself) | grafana-lgtm SMTP auth — alert email delivery |
+| `GRAFANA_SMTP_PASSWORD` | _(empty)_ | Gmail: an App Password, NOT the account password (requires 2FA; generate at myaccount.google.com/apppasswords) | grafana-lgtm SMTP auth |
+| `GRAFANA_ALERT_EMAILS` | _(empty)_ | Comma-separated recipient list | `email-alerts` contact point (`infra/grafana/provisioning/alerting/contactpoints.yaml`), read via Grafana's `$__env{}` provisioning expansion |
 
 ### Configuration
 
@@ -46,6 +49,7 @@ Safe to leave at defaults for local dev. Override as needed.
 | `LGTM_GRAFANA_PORT` | `3001` | Host port for Grafana |
 | `LGTM_OTLP_GRPC_PORT` | `4317` | Host port for OTLP gRPC |
 | `LGTM_OTLP_HTTP_PORT` | `4318` | Host port for OTLP HTTP |
+| `GF_SMTP_HOST` | `smtp.gmail.com:587` | SMTP relay host:port for alert email delivery — any provider works, Gmail is the default |
 | `WATCHPACK_POLLING` | `false` | Set `true` on some Linux setups for file watching |
 
 ### Example `infra/.env` (dev)
@@ -73,6 +77,10 @@ LGTM_GRAFANA_PORT=3001
 LGTM_OTLP_GRPC_PORT=4317
 LGTM_OTLP_HTTP_PORT=4318
 GRAFANA_ADMIN_PASSWORD=your-strong-password-here
+GF_SMTP_HOST=smtp.gmail.com:587
+GRAFANA_SMTP_USER=you@gmail.com
+GRAFANA_SMTP_PASSWORD=your-app-password-here
+GRAFANA_ALERT_EMAILS=you@gmail.com,teammate@example.com
 WATCHPACK_POLLING=false
 ```
 
@@ -127,6 +135,10 @@ app_env:
   LGTM_OTLP_GRPC_PORT: "4317"
   LGTM_OTLP_HTTP_PORT: "4318"
   GRAFANA_ADMIN_PASSWORD: "CHANGE-ME-strong-random"  # <-- real secret
+  GF_SMTP_HOST: "smtp.gmail.com:587"
+  GRAFANA_SMTP_USER: "you@gmail.com"
+  GRAFANA_SMTP_PASSWORD: "CHANGE-ME-app-password"  # <-- real secret
+  GRAFANA_ALERT_EMAILS: "you@gmail.com,teammate@example.com"
 ```
 
 ---
@@ -154,6 +166,9 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 | `userService.serviceClientSecret` | yes | Strong random value (`openssl rand -hex 32`) | `service-credentials` Secret → user-service's client_credentials token for content-service subscribe/unsubscribe |
 | `genAi.llmApiKey` | no | Logos API key (`lg-...`); TUM network / eduVPN only | `llm-credentials` Secret → gen-ai cloud LLM calls |
 | `monitoring.adminPassword` | yes | Strong random password (`openssl rand -hex 16`) | `grafana-admin-credentials` Secret (in `monitoring.namespace`) → grafana-lgtm admin login, reachable at `/monitoring` via the shared ingress |
+| `monitoring.smtpUser` | yes | Sending email address (Gmail: the account itself) | `grafana-smtp-credentials` Secret → grafana-lgtm SMTP auth for alert email delivery |
+| `monitoring.smtpPassword` | yes | Gmail: an App Password, NOT the account password (requires 2FA; generate at myaccount.google.com/apppasswords) | `grafana-smtp-credentials` Secret |
+| `monitoring.alertEmails` | yes | Comma-separated recipient list | `grafana-smtp-credentials` Secret → `email-alerts` contact point, read via Grafana's `$__env{}` provisioning expansion |
 
 > **Rotating `mongodb.rootPassword`:** MongoDB only applies the root password on first init (empty
 > data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
@@ -193,11 +208,13 @@ These are set directly in `values.yaml` or overridden per-environment.
 | `apiGateway.env` `JWT_ISSUER_URI` | `http://user-service:8081` | Keep (cluster-internal) | JWT issuer for token validation |
 | `ingress.clusterIssuer` | `letsencrypt-staging` | `letsencrypt-prod` (via `values-prod.yaml`) | TLS certificate issuer |
 | `host` | `rolling-restarts.stud...` | Your domain | Ingress hostname (path-based routing) |
+| `monitoring.smtpHost` | `smtp.gmail.com:587` | Your SMTP provider | SMTP relay host:port for alert email delivery |
 
 ### Example `infra/helm/secrets-values.yaml` (prod)
 
-All four keys are mandatory — see `secrets-values.example.yaml` for the full template, or run
-`make helm-secrets` to generate this automatically.
+All fields shown here are mandatory (`genAi.llmApiKey` is the one optional exception) — see
+`secrets-values.example.yaml` for the full template with generation commands for each value, or
+run `make helm-secrets` to generate the mongodb/JWT/service-client portion automatically.
 
 ```yaml
 mongodb:
@@ -214,6 +231,11 @@ userService:
       ...
       -----END PRIVATE KEY-----
   serviceClientSecret: "a-strong-random-value-here"
+monitoring:
+  adminPassword: "a-strong-random-password-here"
+  smtpUser: "you@gmail.com"
+  smtpPassword: "your-app-password-here"
+  alertEmails: "you@gmail.com,teammate@example.com"
 ```
 
 ### Helm values file layering

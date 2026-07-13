@@ -260,6 +260,17 @@ services:
       # future SSO redirect) — it doesn't need to match the real host for basic dashboard use.
       GF_SERVER_ROOT_URL: http://localhost/monitoring/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Email alert delivery. GRAFANA_ALERT_EMAILS is read directly by
+      # provisioning/alerting/contactpoints.yaml via Grafana's own $__env{} expansion, not by this
+      # env block — it's listed here only so `docker compose config` and `.env.example` document
+      # every var this stack actually consumes in one place.
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${GF_SMTP_HOST:-smtp.gmail.com:587}
+      GF_SMTP_USER: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_FROM_NAME: Grafana Alerting
+      GRAFANA_ALERT_EMAILS: ${GRAFANA_ALERT_EMAILS:-}
     volumes:
       - grafana-lgtm-data:/data
       - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
@@ -270,6 +281,7 @@ services:
       - ./grafana/provisioning/dashboards/custom-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml:ro
       - ./grafana/provisioning/dashboards/default-dashboards-override.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
       - ./grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml:ro
+      - ./grafana/provisioning/alerting/contactpoints.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/contactpoints.yaml:ro
     networks:
       - backend
       - frontend

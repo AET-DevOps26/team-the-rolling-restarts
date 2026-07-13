@@ -97,6 +97,37 @@ spec:
               value: "https://k8s.rolling-restarts.stud.k8s.aet.cit.tum.de/monitoring/"
             - name: GF_SERVER_SERVE_FROM_SUB_PATH
               value: "true"
+            # Alert email delivery — the recipient list (GRAFANA_ALERT_EMAILS) is read directly by
+            # provisioning/alerting/contactpoints.yaml via Grafana's own $__env{} expansion, not
+            # consumed here; it's still injected into this container so that expansion has
+            # something to read. Keep GF_SMTP_HOST in sync with infra/helm/values.yaml
+            # (monitoring.smtpHost) if you change the SMTP provider.
+            - name: GF_SMTP_ENABLED
+              value: "true"
+            - name: GF_SMTP_HOST
+              value: "smtp.gmail.com:587"
+            - name: GF_SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtp-user
+            - name: GF_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtp-password
+            - name: GF_SMTP_FROM_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtp-user
+            - name: GF_SMTP_FROM_NAME
+              value: "Grafana Alerting"
+            - name: GRAFANA_ALERT_EMAILS
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: alert-emails
 
           # Keep in sync with infra/helm/values.yaml (monitoring.resources). 850Mi/400m (not
           # 900Mi/450m): the dedicated monitoring-rolling-restarts namespace has its own
@@ -140,6 +171,9 @@ spec:
             - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
               subPath: rules.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/contactpoints.yaml
+              subPath: contactpoints.yaml
       volumes:
         - name: data
           persistentVolumeClaim:

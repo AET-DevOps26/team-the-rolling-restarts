@@ -317,6 +317,10 @@ monitoring:
   # templates. CI creates it idempotently in .github/workflows/deploy_kubernetes.yml.
   namespace: monitoring-rolling-restarts
   image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+  # SMTP relay for alert email delivery (provisioning/alerting/contactpoints.yaml +
+  # rules.yaml). Any provider works; smtpUser/smtpPassword/alertEmails (secrets, not here) must
+  # match whatever host is set. See docs/source/monitoring.md and secrets-values.example.yaml.
+  smtpHost: smtp.gmail.com:587
   # PVC for /data — Grafana, Prometheus, Loki, Tempo, and Pyroscope all persist under this single
   # path in the image (verified directly: run-prometheus.sh's --storage.tsdb.path, run-grafana.sh's
   # GF_PATHS_DATA, run-loki.sh/run-pyroscope.sh's mkdir, tempo-config.yaml's wal/blocks paths all

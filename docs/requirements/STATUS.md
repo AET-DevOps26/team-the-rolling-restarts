@@ -64,10 +64,12 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
   red-metrics-classic,genai-overview,webclient-overview}.json`, all filed under the "Service
   Health" folder
 - ✅ Alert rules — `infra/grafana/provisioning/alerting/rules.yaml` (slow response time, service
-  down). Satisfies the "at least one meaningful alert rule" requirement literally, but
-  ⚠️ **notification delivery is deliberately deferred**: no contact point/notification
-  policy/SMTP exists, so a firing alert is only visible if someone opens Grafana and looks —
-  clarification requested via Artemis on what's actually expected here before wiring it up.
+  down). Satisfies the "at least one meaningful alert rule" requirement literally.
+  ✅ **Notification delivery is wired up** — `infra/grafana/provisioning/alerting/
+  contactpoints.yaml` provisions an email contact point + notification policy; SMTP delivery
+  confirmed live end-to-end (a real email arrives) on both docker-compose and the Kubernetes
+  cluster. Recipient list + SMTP credentials come from env vars/secrets, not hardcoded, so they
+  can be replaced on any redeploy — see `docs/source/monitoring.md`.
 - ✅ Log aggregation — application logs from all 4 services reach Loki via OTLP;
   `infra/scripts/smoke-test.sh` cross-checks its own requests appear there (real per-request log
   lines come from a new `RequestLoggingFilter` on all 3 Spring services, added for exactly this)
@@ -140,10 +142,11 @@ activity rather than this file.
 4. ~~**No client tests**~~ — resolved: web-client has a real Vitest setup (`package.json`'s
    `"test": "vitest run"`) with real test files (e.g. `lib/api/client.test.ts`). GenAI still has
    its own separate, already-passing pytest suite.
-5. **Alerting rules exist but don't notify anyone** — no contact point/notification policy/SMTP
-   is configured, so a firing alert is only visible if someone opens Grafana and looks.
-   **Deliberately deferred pending clarification requested via Artemis** on what's actually
-   expected here — not an oversight.
+5. ~~**Alerting rules exist but don't notify anyone**~~ — resolved: an email contact point +
+   notification policy are now provisioned (`infra/grafana/provisioning/alerting/
+   contactpoints.yaml`), with SMTP delivery confirmed live end-to-end (real email arrival, not
+   just config rendering) on both docker-compose and Kubernetes. Recipient list/SMTP credentials
+   are env-var/secret-driven, replaceable on any redeploy without touching provisioning files.
 6. **The Azure VM deployment's gen-ai LLM calls don't work** — `logos`
    (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only, unreachable from Azure's public cloud,
    and no Ollama instance is provisioned there either. Kubernetes works fully (same network as

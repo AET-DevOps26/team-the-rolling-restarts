@@ -55,7 +55,9 @@ Everything below is provisioned automatically — nothing to import by hand:
 - **Dashboard** — left nav → *Dashboards* → **Service Overview** (request rate / error rate /
   duration percentiles per service; use the `job` dropdown at the top to filter to a service).
 - **Alerts** — left nav → *Alerting* → *Alert rules* → **Service Health** folder (the two rules
-  below).
+  below). **Notification delivery** — *Alerting* → *Contact points* (`email-alerts`) and
+  *Notification policies* (the root policy routing everything to it) — see "Notification delivery
+  (email)" below for how the recipient list/SMTP credentials are wired.
 - **Logs** — left nav → *Explore* → pick the **Loki** datasource → e.g. query
   `{service_name="api-gateway"}` (all four services forward logs here).
 - **Traces** — *Explore* → **Tempo** datasource. **Profiles** — *Explore* → **Pyroscope**.
@@ -128,12 +130,45 @@ unrelated pull-based path) kept working and masked it.
   "Service Health" folder alongside the Service Overview dashboard. The rules themselves are under
   **Alerting → Alert rules → Service Health**. These two already satisfy the course's "at least
   one meaningful alert rule" requirement (the requirement text names these exact two examples).
-  **Not yet wired up: actual notification delivery.** `infra/grafana/provisioning/alerting/`
-  only provisions `rules.yaml` — no contact point, no notification policy, and no SMTP config
-  exist anywhere in this repo. A firing alert changes state (visible under **Alerting → Alert
-  rules** if someone opens Grafana and looks) but nothing pages a person via email/Slack/webhook.
-  Grafana's built-in default contact point exists implicitly, but with no SMTP server configured
-  it has nowhere to deliver to.
+- **Notification delivery (email)**: `infra/grafana/provisioning/alerting/contactpoints.yaml`
+  provisions an `email-alerts` contact point plus a root notification policy that routes every
+  alert (both rules above) to it — under **Alerting → Contact points** /
+  **Alerting → Notification policies** in the UI. A firing alert now actually sends an email, not
+  just a state change visible if someone happens to open Grafana.
+
+  **How it's wired**: SMTP is enabled via `GF_SMTP_*` env vars (any provider works; Gmail is what's
+  currently configured — `smtp.gmail.com:587`, authenticated with a Google Account **App
+  Password**, not the regular account password — generate one at
+  myaccount.google.com/apppasswords, requires 2FA on that account). The recipient list is **not**
+  hardcoded in `contactpoints.yaml` — it's read via `$__env{GRAFANA_ALERT_EMAILS}`, Grafana's own
+  provisioning-time environment-variable expansion (the same mechanism used for datasource
+  `secureJsonData`), resolved when the file loads, not by shell/Compose/Kubernetes substitution.
+  This means the recipient list — and the sender credentials — can be replaced on any redeploy
+  without touching the provisioning YAML at all:
+
+  | Target | Where the values live |
+  | --- | --- |
+  | docker-compose (local) | `GF_SMTP_HOST` / `GRAFANA_SMTP_USER` / `GRAFANA_SMTP_PASSWORD` / `GRAFANA_ALERT_EMAILS` in `infra/.env` |
+  | Kubernetes (Helm) | `monitoring.smtpUser` / `monitoring.smtpPassword` / `monitoring.alertEmails` in `secrets-values.yaml` (`monitoring.smtpHost` in `values.yaml`, not secret) |
+  | Kubernetes (raw manifests) | `grafana-smtp-credentials` Secret's `smtp-user`/`smtp-password`/`alert-emails` keys in `secrets.yml` |
+  | Azure VM (CI) | `GRAFANA_SMTP_USER` / `GRAFANA_SMTP_PASSWORD` / `GRAFANA_ALERT_EMAILS` GitHub repo secrets |
+  | Kubernetes (CI) | Same three GitHub repo secrets, wired into `secrets-values.yaml` generation |
+  | Ansible (manual Azure) | Same four vars under `app_env` in `group_vars/all.yml` |
+
+  **Verified live, end-to-end, on both targets** (not just that the config renders — an actual
+  email arriving): created a temporary always-firing test alert rule (`vector(1) > 0`, `for: 0s`)
+  via the alert-rules provisioning API, confirmed it reached `firing` state and was routed to the
+  `email-alerts` receiver, waited past the 30s `group_wait`, and confirmed real email delivery to
+  both configured recipients — once on local docker-compose, once again against the real
+  Kubernetes cluster after a full `helm upgrade`. Both temporary test rules/folders were deleted
+  afterward.
+
+  **Note on the Grafana version installed here (v13.0.1)**: the older contact-point test
+  endpoint (`POST /api/alertmanager/grafana/config/api/v1/receivers/test`) has been removed
+  (`410 Gone`, points at a new `notifications.alerting.grafana.app` k8s-style API this repo hasn't
+  needed to use) — the temporary-alert-rule technique above is what was actually used to verify
+  delivery, and is also the more realistic test since it exercises the real rule → alertmanager →
+  policy → contact point path rather than a synthetic notification.
 
 ### Planned follow-up (not yet implemented)
 
@@ -151,16 +186,15 @@ unrelated pull-based path) kept working and masked it.
   connection-pool-size metrics per service — worth confirming these are actually emitted by our
   current setup before writing the rule, then alerting on a sustained rate of `FAILED` commands
   or an absent/zero connection pool.
-- **Real notification delivery.** Add a contact point (Slack webhook or email via SMTP) and a
-  notification policy routing the "Service Health" folder's alerts to it, so firing alerts
-  actually reach a person instead of only being visible if someone opens Grafana and checks.
 
-In Kubernetes/Helm, these same provisioning files are not read directly from `infra/grafana/` —
-Helm's `.Files.Get` can't escape the chart root (`infra/helm/`), so `infra/helm/files/grafana/`
-holds a manually-copied duplicate of `infra/grafana/`'s dashboards/provisioning/prometheus config.
-There is no CI check or lint rule keeping the two in sync: if you change anything under
-`infra/grafana/`, remember to re-copy it into `infra/helm/files/grafana/` as well, or the
-Kubernetes deployment will silently drift from docker-compose.
+These provisioning files exist in **three** places that must stay byte-identical, all
+hand-maintained (no generation step, no CI check or lint rule enforcing it):
+`infra/grafana/provisioning/` (docker-compose, read directly), `infra/helm/files/grafana/
+provisioning/` (Helm — `.Files.Get` can't escape the chart root, so this is a manually-copied
+duplicate), and embedded inline inside `infra/k8s/configmaps/grafana-lgtm-config.yml` (raw
+manifests — that file's own header comment lists exactly what must stay in sync). If you change
+anything under `infra/grafana/provisioning/`, copy it into both of the other two as well, or two
+of the three deployment targets will silently drift from docker-compose.
 
 ## How metrics get here
 

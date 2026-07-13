@@ -144,6 +144,9 @@ They are sensitive and are masked in logs.
 | `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) the user-service auth server signs JWTs with. Single-line PEM; pair it with `JWT_RSA_PUBLIC_KEY`. |
 | `SERVICE_CLIENT_SECRET` | Shared secret for the `client_credentials` token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). Generate with `openssl rand -hex 32`. The deploy workflow fails fast if this is unset. |
 | `GRAFANA_ADMIN_PASSWORD` | Admin login for grafana-lgtm, reachable at `/monitoring` behind the reverse proxy. Generate with `openssl rand -hex 16`. The deploy workflow fails fast if this is unset. |
+| `GRAFANA_SMTP_USER` | Sending email address for alert notifications (Gmail: the account itself). The deploy workflow fails fast if this, `GRAFANA_SMTP_PASSWORD`, or `GRAFANA_ALERT_EMAILS` is unset. |
+| `GRAFANA_SMTP_PASSWORD` | SMTP auth password. Gmail: an App Password, NOT the account password — requires 2FA on that account, generate at myaccount.google.com/apppasswords. |
+| `GRAFANA_ALERT_EMAILS` | Comma-separated recipient list for the `email-alerts` contact point. |
 
 The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
 Azure control plane, so no host/user/SSH-key secrets are needed.

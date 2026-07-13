@@ -128,6 +128,9 @@ jobs:
         env:
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
         run: |
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
             echo "::error::SERVICE_CLIENT_SECRET secret is not configured. Set it in repo secrets before deploying to production."
@@ -135,6 +138,10 @@ jobs:
           fi
           if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]; then
             echo "::error::GRAFANA_ADMIN_PASSWORD secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+          if [ -z "${GRAFANA_SMTP_USER:-}" ] || [ -z "${GRAFANA_SMTP_PASSWORD:-}" ] || [ -z "${GRAFANA_ALERT_EMAILS:-}" ]; then
+            echo "::error::GRAFANA_SMTP_USER/GRAFANA_SMTP_PASSWORD/GRAFANA_ALERT_EMAILS secrets are not all configured. Set them in repo secrets before deploying to production — without them, alert rules exist but nothing sends notifications anywhere."
             exit 1
           fi
 
@@ -147,6 +154,9 @@ jobs:
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
         run: |
           umask 077
           python3 -c '
@@ -175,6 +185,9 @@ jobs:
               },
               "monitoring": {
                   "adminPassword": QuotedStr(os.environ["GRAFANA_ADMIN_PASSWORD"]),
+                  "smtpUser": QuotedStr(os.environ["GRAFANA_SMTP_USER"]),
+                  "smtpPassword": QuotedStr(os.environ["GRAFANA_SMTP_PASSWORD"]),
+                  "alertEmails": QuotedStr(os.environ["GRAFANA_ALERT_EMAILS"]),
               },
           }
           data["userService"]["serviceClientSecret"] = QuotedStr(os.environ.get("SERVICE_CLIENT_SECRET", ""))

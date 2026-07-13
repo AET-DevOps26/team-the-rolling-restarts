@@ -49,6 +49,22 @@ data:
 {{ .Files.Get "files/grafana/provisioning/dashboards/default-dashboards-override.yaml" | indent 4 }}
   rules.yaml: |
 {{ .Files.Get "files/grafana/provisioning/alerting/rules.yaml" | indent 4 }}
+  contactpoints.yaml: |
+{{ .Files.Get "files/grafana/provisioning/alerting/contactpoints.yaml" | indent 4 }}
+---
+# grafana-lgtm reads GRAFANA_ALERT_EMAILS itself via contactpoints.yaml's $__env{} expansion; the
+# other three keys feed the Deployment's GF_SMTP_* env vars below. All four are required — without
+# them, alert rules exist but nothing sends notifications anywhere (see docs/source/monitoring.md).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-smtp-credentials
+  namespace: {{ .Values.monitoring.namespace }}
+type: Opaque
+stringData:
+  smtpUser: {{ required "monitoring.smtpUser is required — set it in secrets-values.yaml" .Values.monitoring.smtpUser | quote }}
+  smtpPassword: {{ required "monitoring.smtpPassword is required — set it in secrets-values.yaml" .Values.monitoring.smtpPassword | quote }}
+  alertEmails: {{ required "monitoring.alertEmails is required — set it in secrets-values.yaml" .Values.monitoring.alertEmails | quote }}
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -156,6 +172,36 @@ spec:
               value: "https://{{ $.Values.host }}/monitoring/"
             - name: GF_SERVER_SERVE_FROM_SUB_PATH
               value: "true"
+            # Alert email delivery — the recipient list (GRAFANA_ALERT_EMAILS) is read directly by
+            # provisioning/alerting/contactpoints.yaml via Grafana's own $__env{} expansion, not
+            # consumed here; it's still injected into this container so that expansion has
+            # something to read.
+            - name: GF_SMTP_ENABLED
+              value: "true"
+            - name: GF_SMTP_HOST
+              value: {{ .Values.monitoring.smtpHost | quote }}
+            - name: GF_SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtpUser
+            - name: GF_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtpPassword
+            - name: GF_SMTP_FROM_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtpUser
+            - name: GF_SMTP_FROM_NAME
+              value: "Grafana Alerting"
+            - name: GRAFANA_ALERT_EMAILS
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: alertEmails
           resources:
 {{ toYaml .Values.monitoring.resources | nindent 12 }}
           volumeMounts:
@@ -185,6 +231,9 @@ spec:
             - name: provisioning
               mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
               subPath: rules.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/contactpoints.yaml
+              subPath: contactpoints.yaml
       volumes:
         - name: data
           persistentVolumeClaim:

@@ -2,6 +2,7 @@
 #   - infra/helm/files/grafana/dashboards/service-overview.json
 #   - infra/helm/files/grafana/provisioning/dashboards/custom-dashboards.yaml
 #   - infra/helm/files/grafana/provisioning/alerting/rules.yaml
+#   - infra/helm/files/grafana/provisioning/alerting/contactpoints.yaml
 #   (dashboard + provisioning content must be byte-identical to the copies above,
 #   and to infra/grafana/{dashboards,provisioning}/* used by docker-compose)
 #
@@ -2462,3 +2463,31 @@ data:
                         params: [1]
             noDataState: Alerting
             execErrState: Alerting
+  contactpoints.yaml: |
+    apiVersion: 1
+
+    # Recipient list comes from the GRAFANA_ALERT_EMAILS env var (not hardcoded here) so it can be
+    # replaced on any redeploy without touching this file: infra/.env (docker-compose), the
+    # grafana-smtp-credentials Secret's alertEmails key (raw k8s), or monitoring.alertEmails (Helm
+    # secrets-values.yaml). $__env{...} is Grafana's provisioning-time env var expansion syntax (same
+    # mechanism used for datasource secureJsonData), resolved when this file is loaded — not by
+    # shell/Compose/Kubernetes substitution.
+    contactPoints:
+      - orgId: 1
+        name: email-alerts
+        receivers:
+          - uid: email-alerts-receiver
+            type: email
+            settings:
+              addresses: $__env{GRAFANA_ALERT_EMAILS}
+              singleEmail: true
+
+    # Root policy: routes every alert (both service-health rules) to the one contact point above.
+    # No sub-routes/matchers needed — there's only one destination for all alerts right now.
+    policies:
+      - orgId: 1
+        receiver: email-alerts
+        group_by: ["alertname"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h

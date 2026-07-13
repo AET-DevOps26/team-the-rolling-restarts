@@ -85,6 +85,30 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
 
 ## Known gaps
 
+- **FIXED — alert rules existed but nothing delivered notifications anywhere.** Only
+  `rules.yaml` was provisioned; no contact point, no notification policy, no SMTP config existed
+  in this repo at all — a firing alert only changed state visibly if someone happened to open
+  Grafana. Fixed by adding `provisioning/alerting/contactpoints.yaml` (an `email-alerts` contact
+  point + a root notification policy routing everything to it) on all three deployment paths, plus
+  `GF_SMTP_*` env vars enabling SMTP delivery (Gmail, `smtp.gmail.com:587`, authenticated with a
+  Google Account App Password). The recipient list is deliberately **not** hardcoded in the
+  provisioning YAML — it's injected via `$__env{GRAFANA_ALERT_EMAILS}`, Grafana's own
+  provisioning-time env var expansion (same mechanism as datasource `secureJsonData`), sourced from
+  `infra/.env` (docker-compose), a new `grafana-smtp-credentials` Secret (raw k8s), or
+  `monitoring.smtpUser`/`smtpPassword`/`alertEmails` (Helm `secrets-values.yaml`) — so it (and the
+  sender credentials) can be replaced on any redeploy without touching provisioning files, per an
+  explicit requirement to support this for a full from-scratch redeploy. Verified live,
+  end-to-end, on both docker-compose and the real Kubernetes cluster: created a temporary
+  always-firing test alert rule (`vector(1) > 0`), confirmed it reached `firing` state, routed
+  correctly to the `email-alerts` receiver, and a real email arrived at both configured recipients
+  in each case (not just that the config renders — actual SMTP delivery, confirmed by the human
+  checking their inbox). Both temporary rules/folders were deleted after verification. Grafana
+  v13.0.1's older contact-point test API (`POST
+  /api/alertmanager/grafana/config/api/v1/receivers/test`) returns `410 Gone` now — the
+  temporary-alert-rule technique was used instead, which is also the more realistic test. Full
+  details, including the exact secret names per deployment target, in
+  `docs/source/monitoring.md`'s "Notification delivery (email)" section and
+  `docs/source/secrets-reference.md`.
 - No per-pod resource-usage (CPU/memory) panel in Kubernetes — the cAdvisor/kubelet-scrape
   approach needs cluster-scoped RBAC (`nodes/metrics`, `nodes/proxy`) that this course cluster
   doesn't grant to namespaced tenants (verified: `kubectl auth can-i create clusterrole` → `no`,

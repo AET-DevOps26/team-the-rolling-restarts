@@ -90,6 +90,9 @@ They are sensitive and are masked in logs.
 | `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) for JWT signing. Must match the public key. |
 | `SERVICE_CLIENT_SECRET` | Shared secret for the `client_credentials` token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). Generate with `openssl rand -hex 32`. |
 | `GRAFANA_ADMIN_PASSWORD` | Admin login for grafana-lgtm, reachable at `/monitoring` behind the shared ingress. Generate with `openssl rand -hex 16`. The deploy workflow fails fast if this is unset. |
+| `GRAFANA_SMTP_USER` | Sending email address for alert notifications (Gmail: the account itself). The deploy workflow fails fast if this, `GRAFANA_SMTP_PASSWORD`, or `GRAFANA_ALERT_EMAILS` is unset. |
+| `GRAFANA_SMTP_PASSWORD` | SMTP auth password. Gmail: an App Password, NOT the account password — requires 2FA on that account, generate at myaccount.google.com/apppasswords. |
+| `GRAFANA_ALERT_EMAILS` | Comma-separated recipient list for the `email-alerts` contact point. |
 
 ### Generating the JWT key pair
 

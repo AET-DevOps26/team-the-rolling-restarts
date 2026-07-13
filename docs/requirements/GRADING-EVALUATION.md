@@ -4,11 +4,16 @@
 > [12-grading-structure.md](12-grading-structure.md): lives outside
 > `docs/source/`, never built into the MkDocs site.
 
-**As of commit `41ea71b` (2026-07-12), branch `feat/observability-monitoring`.**
+**As of commit `2ce6a32` (2026-07-13), branch `feat/observability-monitoring`.**
 Unlike the previous pass (commit `6c388d9`, repo-only), this one draws on live
 verification against both deployment targets (the Kubernetes cluster and the
 Azure VM) done this session, plus a course clarification obtained via Artemis
-resolving the microservice-count question. Ratings use the tiers from
+resolving the microservice-count question. Since the prior `41ea71b` revision
+of this document: Grafana's admin access was hardened (real login, wired into
+the shared ingress at `/monitoring`, auto-rotating password), namespace
+recreation with proper Rancher project association was added ahead of the
+final-submission full-wipe, and alert notification delivery (email, SMTP) was
+implemented and verified live end-to-end. Ratings use the tiers from
 [12-grading-structure.md](12-grading-structure.md) (Excellent / Good / Basic /
 Poor). Treat every rating here as a hypothesis to re-check, not a verdict —
 things have moved substantially since the last pass and will keep moving.
@@ -102,7 +107,7 @@ references.
 - **Evidence:** `.github/workflows/{ci.yml,upload_images.yml,deploy_kubernetes.yml,deploy_monitoring.yml,deploy-azure.yml}`; `docs/internal/06-observability.md`'s incident log for the specific live failures found and fixed this session
 - **Re-verify:** `gh run list --workflow=deploy_kubernetes.yml --limit 10`; `gh run list --workflow=deploy-azure.yml --limit 10` — check recent success rate.
 
-### Runtime and Observability — **Good, trending Excellent** (up from "Basic")
+### Runtime and Observability — **Excellent** (up from "Good, trending Excellent")
 
 The previous pass's central gap — "no exported Grafana dashboard `.json`
 anywhere in the repo and no alert rule file" — is fully resolved and then
@@ -110,19 +115,22 @@ some: **4 exported dashboards** (Service Overview, RED Metrics classic, GenAI
 Overview, Web Client Overview), all filed under a "Service Health" folder with
 readable per-service legends (a real, previously-shipped bug where every
 service blended into one unlabeled line was found and fixed along the way);
-**2 alert rules** (slow response, service down); **log aggregation** from all
-4 services to Loki, cross-checked live; **traces** from all 4 services now
-(web-client's OTel instrumentation was the last piece, added this session).
-Metrics genuinely reflect system behaviour — verified against real triggered
-traffic (LLM calls, HTTP requests), not just checked for the presence of a
-metric name. What keeps this from a clean Excellent: **alert rules exist but
-don't notify anyone** — no contact point/notification policy/SMTP is
-configured, so "alerts are meaningful" is only half true (the rule logic is
-meaningful; the delivery isn't there yet). This is a deliberate, acknowledged
-gap pending a clarification requested via Artemis, not an oversight.
+**2 alert rules** (slow response, service down) that now **actually notify
+someone** — an email contact point + notification policy
+(`infra/grafana/provisioning/alerting/contactpoints.yaml`), with SMTP
+delivery confirmed live end-to-end (a real email arriving, not just
+config rendering) on both docker-compose and the Kubernetes cluster; **log
+aggregation** from all 4 services to Loki, cross-checked live; **traces**
+from all 4 services now (web-client's OTel instrumentation was the last
+piece, added this session). Metrics genuinely reflect system behaviour —
+verified against real triggered traffic (LLM calls, HTTP requests), not just
+checked for the presence of a metric name. The recipient list and SMTP
+credentials are env-var/secret-driven rather than hardcoded, so they can be
+replaced on any redeploy — including the full-from-scratch redeploy this
+course's final submission requires.
 
-- **Evidence:** `infra/grafana/dashboards/*.json`; `infra/grafana/provisioning/alerting/rules.yaml`; `docs/source/monitoring.md`; `docs/internal/06-observability.md` (extensive live-verification incident log — namespace split, OTLP cross-namespace DNS fix, per-pod scrape fix, dashboard folder fixes, the two new dashboards)
-- **Re-verify:** `find infra/grafana/dashboards -name "*.json" | wc -l` (expect 4); open Grafana and check the "Service Health" folder; check for a configured contact point under Alerting → Contact points (expect none yet).
+- **Evidence:** `infra/grafana/dashboards/*.json`; `infra/grafana/provisioning/alerting/{rules,contactpoints}.yaml`; `docs/source/monitoring.md`; `docs/internal/06-observability.md` (extensive live-verification incident log — namespace split, OTLP cross-namespace DNS fix, per-pod scrape fix, dashboard folder fixes, the two new dashboards, real SMTP alert delivery)
+- **Re-verify:** `find infra/grafana/dashboards -name "*.json" | wc -l` (expect 4); open Grafana and check the "Service Health" folder; check for the `email-alerts` contact point under Alerting → Contact points.
 - **Bonus angle:** this already qualifies as **Advanced Observability** (tracing + log aggregation + custom metrics, all present and live-verified) — see Bonus categories below.
 
 ### Environment and Reproducibility — **Good**
@@ -233,9 +241,9 @@ surface quick-start, CI/CD summary, or a student-responsibilities section
   root-caused against the real running systems (not guessed) and fixed with
   verification, not just patched and assumed working.
 - **System Excellence**: premature to claim while the baseline gaps above
-  (search bug, Azure VM's LLM gap, alerting notification delivery, root
-  README) are open — but the gap between "premature" and "defensible" has
-  narrowed substantially this pass.
+  (search bug, Azure VM's LLM gap, root README) are open — but the gap
+  between "premature" and "defensible" has narrowed substantially this pass
+  (alerting notification delivery, previously on this list, is now resolved).
 
 ## What this document cannot tell you
 
