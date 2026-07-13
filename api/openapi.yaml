@@ -612,54 +612,6 @@ paths:
       summary: Update current user profile
       tags:
       - Users
-  /api/users/users/me/settings:
-    get:
-      description: 'Returns user preferences: selected topics, enabled sources, and saved article IDs'
-      operationId: getSettings
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserSettingsResponse'
-          description: User settings
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserSettingsResponse'
-          description: Not authenticated
-      security:
-      - bearer-jwt: []
-      summary: Get current user settings
-      tags:
-      - Users
-    put:
-      operationId: updateSettings
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UserSettingsRequest'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserSettingsResponse'
-          description: Updated settings
-        '401':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserSettingsResponse'
-          description: Not authenticated
-      security:
-      - bearer-jwt: []
-      summary: Update current user settings
-      tags:
-      - Users
   /api/users/users/me/saved-articles/{articleId}:
     delete:
       description: Atomically removes the article from the user's saved list.
@@ -713,6 +665,54 @@ paths:
       security:
       - bearer-jwt: []
       summary: Save an article for the current user
+      tags:
+      - Users
+  /api/users/users/me/settings:
+    get:
+      description: 'Returns user preferences: selected topics, enabled sources, and saved article IDs'
+      operationId: getSettings
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: User settings
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Not authenticated
+      security:
+      - bearer-jwt: []
+      summary: Get current user settings
+      tags:
+      - Users
+    put:
+      operationId: updateSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettingsRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Updated settings
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Not authenticated
+      security:
+      - bearer-jwt: []
+      summary: Update current user settings
       tags:
       - Users
   /api/users/users/me/subscriptions/{sourceId}:
