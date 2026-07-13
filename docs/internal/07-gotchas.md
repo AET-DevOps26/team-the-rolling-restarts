@@ -277,15 +277,39 @@ container start, failing with `MongoCommandException ... AuthenticationFailed` u
 `kubectl rollout restart`ed. If you rotate any of these secrets, restart the consuming
 Deployments explicitly — don't assume `helm upgrade` alone propagates it.
 
-## A manually-wiped Kubernetes namespace does not fully self-heal
+## FIXED — a manually-wiped Kubernetes namespace does not fully self-heal, unless recreated with the right Rancher labels
 
-`ResourceQuota` reappears automatically on a fresh namespace (a cluster-level admission policy,
-confirmed live), and `helm upgrade --install --create-namespace` recreates the bare namespace
-object — but **RBAC access does not come back**. This course's cluster is Rancher-managed; access
-is tied to a Keycloak-group/Rancher-project association that breaks the moment a namespace is
-deleted directly via `kubectl` (bypassing Rancher's own lifecycle), and recreating the namespace at
-the raw Kubernetes API level doesn't restore that association. Confirmed live: the very next
-`helm upgrade` after a manual wipe failed with `secrets is forbidden ... in the namespace
-"deployment"` — Helm couldn't even query its own release state. Recovery needs going through
-Rancher (`rancher.ase.cit.tum.de`) directly; nothing in this repo's git/CI/Helm can do it. Full
-details in `docs/internal/06-observability.md` and `docs/internal/04-infra-and-deploy.md`.
+A **bare** recreated namespace (`kubectl create namespace`, or Helm's own `--create-namespace`)
+does not restore RBAC access — confirmed live: the very next `helm upgrade` after a manual wipe
+failed with `secrets is forbidden ... in the namespace "deployment"`, since this course's cluster
+is Rancher-managed and access is tied to a Keycloak-group/Rancher-project association that a raw
+namespace recreation at the Kubernetes API level doesn't restore. `ResourceQuota` reappearing
+automatically was previously the only part of this that looked self-healing — but that's also
+project-association-dependent (see below), so a namespace recreated without it would have gotten
+a **zero-limit** quota, not a working one, making the RBAC gap moot anyway (nothing could schedule
+regardless).
+
+**Fixed** by giving the recreated namespace the exact same Rancher project association a
+Rancher-created namespace gets: the `field.cattle.io/projectId` label (association) plus a
+`field.cattle.io/resourceQuota` annotation (the per-namespace quota override) —
+`infra/k8s/namespaces/deployment-namespace.yml` and `monitoring-namespace.yml`, applied by
+`.github/workflows/deploy_kubernetes.yml`/`deploy_monitoring.yml` whenever `kubectl get namespace`
+comes back missing. Confirmed live against a throwaway test namespace: creating it with this
+label/annotation shape granted working RBAC (`kubectl auth can-i get secrets` → `yes`)
+**immediately**, no Rancher UI/API call needed, and did trigger Rancher's `default-resource-quota`
+admission controller to provision a real (not just present) `ResourceQuota` — it came back
+zero-limit in that specific test only because the Rancher `Project` object (`p-rjflh`) shows
+`spec.resourceQuota.limit: 4 CPU / 6Gi` (the project's total budget across every namespace in it)
+with `usedLimit` already equal to the same 4/6Gi — exactly matching `deployment` +
+`monitoring-rolling-restarts`'s combined quotas (`3500m+500m` CPU, `5244Mi+900Mi=6Gi` memory), so a
+third namespace genuinely had zero headroom left, not a broken mechanism.
+
+**Not independently verified end-to-end** — doing so would mean deleting the live, in-use
+namespaces to test. The RBAC-grant half is confirmed directly; the "recreating both real
+namespaces gets their full original quota back" half follows from the Project math above but
+hasn't been observed on the real namespaces themselves. Re-verify after any real full-wipe
+recovery. Recovery still needs the Rancher project (`p-rjflh` / `devops26-team-the-rolling-restarts`)
+itself to still exist and this identity to still be a member — if the *project* is deleted too,
+not just the namespaces inside it, this fix doesn't help and recovery does need Rancher
+(`rancher.ase.cit.tum.de`) directly. Full details in `docs/internal/06-observability.md` and
+`docs/internal/04-infra-and-deploy.md`.

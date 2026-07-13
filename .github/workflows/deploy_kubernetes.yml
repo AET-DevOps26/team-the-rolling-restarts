@@ -108,14 +108,21 @@ jobs:
           echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      # grafana-lgtm now deploys into its own namespace (monitoring.namespace in
-      # infra/helm/values.yaml), separate from the app release namespace. Helm's
-      # --create-namespace only auto-creates its OWN install-target namespace, not other
-      # namespaces referenced by templates via an explicit metadata.namespace — so this must
-      # exist before `helm upgrade --install` runs, or that step fails outright. Idempotent: a
-      # no-op if it already exists.
-      - name: Ensure monitoring namespace exists
-        run: kubectl create namespace monitoring-rolling-restarts --dry-run=client -o yaml | kubectl apply -f -
+      # Recreates both namespaces this project needs, with the Rancher project-association
+      # label/annotation they must carry to actually work — not just a bare namespace. A bare
+      # `kubectl create namespace` (no labels), or Helm's own --create-namespace, gets a namespace
+      # created but never associated with this team's Rancher project: no RBAC is granted on it,
+      # and it gets a zero-limit ResourceQuota instead of a real one (confirmed live against a
+      # throwaway test namespace — see infra/k8s/namespaces/*.yml for the full explanation and
+      # verification caveats). This matters most for a full-cluster-wipe recovery, where these
+      # namespaces don't exist at all yet — `kubectl get` first and only `create` (not `apply`,
+      # which needs GET permission on the target that a genuinely nonexistent, never-granted
+      # namespace name doesn't have — confirmed live) when actually missing, so this is a no-op
+      # against the normal case where both already exist and are already correctly configured.
+      - name: Ensure namespaces exist with Rancher project association
+        run: |
+          kubectl get namespace deployment >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/deployment-namespace.yml
+          kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
 
       - name: Validate required secrets
         env:
@@ -182,11 +189,11 @@ jobs:
           FILES="$FILES -f infra/helm/image-values.yaml"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
-      # --create-namespace only covers the release's own target namespace (the current
-      # kubeconfig context's namespace, "deployment") — a no-op if it already exists, so this is
-      # safe on every normal deploy. It does NOT cover monitoring-rolling-restarts, which is a
-      # different namespace referenced via an explicit metadata.namespace in the chart's own
-      # templates — that's why the separate step above exists for it.
+      # --create-namespace is kept as a redundant safety net — both namespaces are already
+      # properly provisioned (with Rancher project association) by the step above, so this is
+      # normally a no-op. Without the step above, --create-namespace alone would still create a
+      # bare, non-project-associated "deployment" namespace on a full wipe, breaking RBAC exactly
+      # like a manually-wiped namespace does (docs/internal/07-gotchas.md).
       - name: Deploy with Helm
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \

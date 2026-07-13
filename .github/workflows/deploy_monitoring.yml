@@ -16,6 +16,7 @@ on:
       - "infra/k8s/deployments/grafana-lgtm-deployment.yml"
       - "infra/k8s/rbac/grafana-lgtm-rbac.yml"
       - "infra/k8s/services/grafana-lgtm-service.yml"
+      - "infra/k8s/namespaces/monitoring-namespace.yml"
   workflow_dispatch:
 
 # Same group as deploy_kubernetes.yml: both run `helm upgrade` against the same release, and two
@@ -49,8 +50,14 @@ jobs:
           echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      - name: Ensure monitoring namespace exists
-        run: kubectl create namespace monitoring-rolling-restarts --dry-run=client -o yaml | kubectl apply -f -
+      # See the matching step in deploy_kubernetes.yml for the full explanation: this namespace
+      # needs the Rancher project-association label/annotation to get working RBAC and a real
+      # (non-zero) ResourceQuota, not just a bare namespace. `kubectl get` first and only `create`
+      # (not `apply`) when actually missing — this workflow assumes the Helm release already
+      # exists (--reuse-values below), so in practice deploy_kubernetes.yml's own equivalent step
+      # normally gets there first on a full wipe; this is a no-op in that case.
+      - name: Ensure monitoring namespace exists with Rancher project association
+        run: kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
 
       # --reuse-values: this deploy only ever touches infra/grafana/* content, never secrets or
       # image tags, so it reuses whatever the last full deploy_kubernetes.yml run already set for

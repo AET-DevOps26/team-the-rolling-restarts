@@ -1,0 +1,37 @@
+# Recreates the app namespace with the exact Rancher project association it needs to actually
+# work — not just a bare namespace. A plain `kubectl create namespace deployment` (no labels) DOES
+# get created, but never becomes a real member of this team's Rancher project: no RBAC is granted
+# on it (confirmed live: `kubectl auth can-i get secrets` returns "no" on a bare-created namespace,
+# but "yes" immediately on one created with the label below), and it gets a zero-limit
+# ResourceQuota rather than a real one (Rancher's own `default-resource-quota` admission controller
+# provisions a ResourceQuota automatically for any project-namespace, sized from the
+# `field.cattle.io/resourceQuota` annotation below — confirmed live against a throwaway test
+# namespace). `field.cattle.io/projectId` must be set as BOTH a label and an annotation (Rancher
+# reads the label to associate the namespace with the project; the annotation format
+# `<clusterId>:<projectId>` matches what's already on the live namespace).
+#
+# projectId (p-rjflh) and clusterId (c-f49m7) are this specific course cluster/project's fixed
+# ids — copied verbatim from `kubectl get namespace deployment -o yaml` on the currently-live
+# namespace. cpu/memory values match that same namespace's already-provisioned ResourceQuota
+# (`kubectl get resourcequota -n deployment`) — not a new, different budget.
+#
+# NOT independently verified end-to-end (would require deleting the live, in-use namespace to
+# test) — verified only that namespace creation with this exact label/annotation shape immediately
+# grants working RBAC, and that Rancher's ResourceQuota controller does read the resourceQuota
+# annotation, against a throwaway test namespace. That test's own quota came back zero, but not
+# because the mechanism is wrong: the Rancher Project object itself (`p-rjflh`) shows
+# spec.resourceQuota.limit = 4 CPU / 6Gi memory (the project's TOTAL budget across every
+# namespace in it) with usedLimit ALSO = 4 CPU / 6Gi — fully consumed, exactly matching
+# 3500m+500m CPU and 5244Mi+900Mi=6144Mi=6Gi memory across deployment + monitoring-rolling-restarts
+# combined. A third namespace genuinely had zero headroom left to allocate at test time. Once both
+# real namespaces are actually deleted (freeing their share back to the project's pool) and
+# recreated with these exact annotations, the math confirms the full budget is available again.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: deployment
+  labels:
+    field.cattle.io/projectId: p-rjflh
+  annotations:
+    field.cattle.io/projectId: c-f49m7:p-rjflh
+    field.cattle.io/resourceQuota: '{"limit":{"limitsCpu":"3500m","limitsMemory":"5244Mi"}}'

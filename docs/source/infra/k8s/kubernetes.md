@@ -6,14 +6,20 @@ These raw manifests mirror the Helm chart in [infra/helm/helm.md](../helm/helm.m
 
 Use the `infra/k8s` directory as the working directory. First create your real
 `secrets.yml` from the tracked template (it is gitignored — never commit it),
-create the monitoring namespace (one-time, not managed by these manifests — see "Cluster Notes"
+create both namespaces (one-time, if they don't already exist — see "Cluster Notes"
 below), replace the `<APP_NAMESPACE>` placeholder in `configmaps/grafana-lgtm-config.yml`'s
 embedded `prometheus.yaml` with your actual app namespace, then apply everything recursively:
 
 ```bash
 cd infra/k8s
 cp secrets.yml.example secrets.yml   # then fill in real values (see the comments inside)
-kubectl create namespace monitoring-rolling-restarts   # one-time
+# One-time, only if these don't already exist. Use `create`, not `apply` — on a Rancher-managed
+# cluster like this course's, `apply`'s GET-before-create check needs permission this identity
+# doesn't have for a namespace name it's never been granted access to (confirmed live). These
+# manifests also carry the Rancher project-association label/annotation a bare `kubectl create
+# namespace` lacks — see namespaces/deployment-namespace.yml for why that matters.
+kubectl get namespace deployment >/dev/null 2>&1 || kubectl create -f namespaces/deployment-namespace.yml
+kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f namespaces/monitoring-namespace.yml
 kubectl apply -R -f .
 ```
 
@@ -32,6 +38,7 @@ kubectl delete -R -f .
 - [configmaps/](configmaps) contains `grafana-lgtm-config.yml`, the Prometheus/dashboard/alerting config for the monitoring stack (hand-maintained — see the comment at the top of that file for what it must stay in sync with).
 - [rbac/](rbac) contains `grafana-lgtm-rbac.yml` — a ServiceAccount + namespaced Role/RoleBinding granting `grafana-lgtm`'s Prometheus `get/list/watch` on `pods` only, needed for per-pod metrics scraping (see `docs/internal/06-observability.md`).
 - [secrets.yml.example](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml.example) is the tracked template for the `mongodb-credentials`, `mongodb-user-credentials`, `jwt-keys`, and `service-credentials` Secrets consumed by MongoDB and the Spring services. Copy it to `secrets.yml` (gitignored) and fill in real values — the file's comments explain each field. Use a sealed-secret or external secret store for any non-local deployment.
+- [namespaces/](namespaces) contains `deployment-namespace.yml` and `monitoring-namespace.yml` — one-time bootstrap manifests for a fully-wiped cluster, carrying the Rancher project-association label/annotation a bare `kubectl create namespace` lacks (see the comment at the top of `deployment-namespace.yml` for the full explanation and how it was verified).
 - [ingress.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/ingress.yml) defines the external routing rules.
 
 ## Stack Setup Notes
@@ -71,7 +78,7 @@ Use the Helm chart when you want reusable installs, upgrades, shared configurati
 
 ## Cluster Notes
 
-If you need to adjust your current kubectl context, do that outside the manifests themselves. The repository does not assume a namespace in these files — **except** `grafana-lgtm`, which now runs in its own dedicated namespace: its ServiceAccount, Deployment, Service, PVC, and ConfigMaps hardcode `namespace: monitoring-rolling-restarts` (that name must already exist — `kubectl create namespace monitoring-rolling-restarts` — before applying). This is deliberate: it isolates the monitoring stack's own `ResourceQuota` from the app workloads', and it's a fixed project-level name rather than a per-user choice, unlike the app namespace.
+If you need to adjust your current kubectl context, do that outside the manifests themselves. The repository does not assume a namespace in these files — **except** `grafana-lgtm`, which now runs in its own dedicated namespace: its ServiceAccount, Deployment, Service, PVC, and ConfigMaps hardcode `namespace: monitoring-rolling-restarts` (that name must already exist — `kubectl create -f namespaces/monitoring-namespace.yml`, not a bare `kubectl create namespace` — before applying; see the "Default Workflow" section above). This is deliberate: it isolates the monitoring stack's own `ResourceQuota` from the app workloads', and it's a fixed project-level name rather than a per-user choice, unlike the app namespace.
 
 One consequence: `grafana-lgtm-rbac.yml`'s `Role`/`RoleBinding` have *no* namespace field (they rely on whatever `-n <app-namespace>` you apply the directory with, same as everything else) — a `RoleBinding` must live in the same namespace as the pods it grants access to, which is the app namespace, not `monitoring-rolling-restarts` where the `ServiceAccount` itself lives. The `RoleBinding`'s `subject` names that namespace explicitly instead.
 

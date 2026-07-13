@@ -441,31 +441,40 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   switching the Ansible role to install Docker the same way (`get.docker.com`, gated on a `which
   docker` idempotency check mirroring `azure-vm-docker`'s own `command -v docker` guard) so both
   provisioning paths always agree regardless of which one runs first.
-- **IMPORTANT — a manually-wiped Kubernetes namespace (`deployment` or
-  `monitoring-rolling-restarts`) does NOT fully self-heal via `kubectl`/Helm alone, discovered
-  live after a real manual wipe.** `deploy_kubernetes.yml`'s `helm upgrade --install
-  --create-namespace` (added as a disaster-recovery safeguard) recreates the bare Namespace
-  object fine, and a `ResourceQuota` reappears automatically (confirmed live: creating
-  `monitoring-rolling-restarts` via a plain `kubectl create namespace` got its correct 500m/900Mi
-  quota back within the same session, no manual step needed) — but **RBAC access does not**. This
-  course's Kubernetes cluster is Rancher-managed (`docs/internal/04-infra-and-deploy.md`), and
-  access to these namespaces is granted through Rancher's own project/namespace association tied
-  to a Keycloak OIDC group (`devops26-team-the-rolling-restarts` — confirmed via `kubectl auth
-  whoami`, same identity, `u-imzi563an6`, used both locally and by CI's `KUBECONFIG_BASE64`).
-  Deleting a namespace directly via `kubectl` (bypassing Rancher's own lifecycle) breaks that
-  project association; recreating the namespace at the raw Kubernetes API level (via `kubectl` or
-  Helm's `--create-namespace`) does not restore it. Reproduced live: after a manual wipe, the very
-  next `helm upgrade --install` failed immediately with `secrets is forbidden: User
-  "u-imzi563an6" cannot list resource "secrets" ... in the namespace "deployment"` — Helm
-  couldn't even query for its own release state, confirmed independently via `kubectl auth can-i
-  list secrets -n monitoring-rolling-restarts` / `create secrets` both returning `no` even in the
-  still-`Terminating` (not yet fully deleted) monitoring namespace. **Fix requires going through
-  Rancher (`rancher.ase.cit.tum.de`)** — re-associate the namespace with the team's project (or
-  recreate it through Rancher's own UI/API in the first place, which sets up that association
-  automatically) — nothing in this repo's git/CI/Helm can restore it. Namespace + quota
-  self-healing (the `--create-namespace` fix, `Ensure monitoring namespace exists` step) remain
-  worth keeping since they cover the *other* half of a wipe correctly, but a full recovery still
-  needs a manual Rancher-side step first.
+- **FIXED — a manually-wiped Kubernetes namespace (`deployment` or `monitoring-rolling-restarts`)
+  did not fully self-heal via `kubectl`/Helm alone, discovered live after a real manual wipe; now
+  recreated with the Rancher project association that actually restores both halves.** A bare
+  recreate (`kubectl create namespace`, or Helm's `--create-namespace`) got the Namespace object
+  back but **not RBAC access** — this course's Kubernetes cluster is Rancher-managed
+  (`docs/internal/04-infra-and-deploy.md`), and access is granted through Rancher's own
+  project/namespace association tied to a Keycloak OIDC group
+  (`devops26-team-the-rolling-restarts` — confirmed via `kubectl auth whoami`, identity
+  `u-imzi563an6`, used both locally and by CI's `KUBECONFIG_BASE64`), which a raw namespace
+  recreation doesn't restore. Reproduced live: after a manual wipe, the very next `helm upgrade
+  --install` failed immediately with `secrets is forbidden: User "u-imzi563an6" cannot list
+  resource "secrets" ... in the namespace "deployment"`. Separately, a namespace created with no
+  project association also risks a **zero-limit** `ResourceQuota` rather than a working one (see
+  below) — so even a same-named recreate that appeared to "get its quota back" in one earlier
+  observation isn't a guarantee.
+
+  Fixed by giving the recreated namespace the exact label/annotation shape a Rancher-created
+  namespace carries: `field.cattle.io/projectId` (association) and `field.cattle.io/resourceQuota`
+  (per-namespace quota override) — `infra/k8s/namespaces/{deployment,monitoring}-namespace.yml`,
+  applied by `deploy_kubernetes.yml`/`deploy_monitoring.yml` only when `kubectl get namespace`
+  comes back missing (`kubectl create`, not `apply` — confirmed live that `apply`'s GET-before-create
+  check itself needs permission this identity doesn't have for a namespace name it's never been
+  granted access to, a subtler RBAC wrinkle than the namespace-level one). Confirmed live against a
+  throwaway test namespace: this label/annotation shape grants working RBAC (`kubectl auth can-i
+  get secrets` → `yes`) **immediately** on creation, no Rancher UI/API call needed, and does trigger
+  Rancher's `default-resource-quota` admission controller to provision a real `ResourceQuota` — the
+  test's own result was zero-limit only because the Rancher `Project` object (`p-rjflh`) shows
+  `spec.resourceQuota.limit: 4 CPU / 6Gi` (project-wide total) with `usedLimit` already at the same
+  4/6Gi, exactly matching `deployment` + `monitoring-rolling-restarts`'s combined quotas — zero
+  headroom for a third namespace, not a broken mechanism. **Not independently verified
+  end-to-end** (would require deleting the live, in-use namespaces); re-verify after any real
+  full-wipe recovery. If the Rancher *project* itself is ever deleted too (not just the namespaces
+  in it), this fix doesn't help and recovery still needs Rancher (`rancher.ase.cit.tum.de`)
+  directly. Full details, including the exact test commands, in `docs/internal/07-gotchas.md`.
 - **FIXED — the "GenAI Overview" dashboard never actually populated with data, discovered live on
   a real local docker-compose run.** `app/main.py` imported the routers (which transitively import
   `app/llm/invoke.py`) before calling `setup_observability(app)` — `invoke.py` creates its tracer/

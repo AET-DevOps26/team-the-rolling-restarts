@@ -54,19 +54,23 @@ run to deploy" step:
   gate at all — now it gets real images and the same CI-pass gate
   `workflow_run` already had.
 
-`--create-namespace` lets a manual dispatch recover from the app's own
-namespace (`deployment`) being wiped entirely — it only covers Helm's own
-release-target namespace, never `monitoring-rolling-restarts` (a separate
-namespace referenced via an explicit `metadata.namespace` elsewhere in the
-chart, which is why the `Ensure monitoring namespace exists` step still
-exists separately). **This only recreates the bare namespace + whatever
-`ResourceQuota` a cluster-level admission policy auto-attaches — it does
-NOT restore RBAC access**, which on this Rancher-managed cluster is tied to
-a Keycloak project association that breaks when a namespace is deleted
-directly via `kubectl` and does not come back this way. See
-`docs/internal/06-observability.md`'s disaster-recovery entry and
-`docs/internal/04-infra-and-deploy.md` for the full writeup — recovering
-from that needs going through Rancher directly.
+`--create-namespace` is kept as a redundant safety net for Helm's own
+release-target namespace. The real disaster-recovery mechanism is the
+**"Ensure namespaces exist with Rancher project association"** step, which
+runs before Helm and covers both `deployment` and `monitoring-rolling-restarts`:
+it checks `kubectl get namespace` and, only if genuinely missing, `kubectl
+create -f infra/k8s/namespaces/{deployment,monitoring}-namespace.yml` — each
+manifest carries the `field.cattle.io/projectId` label/annotation and
+`field.cattle.io/resourceQuota` override a Rancher-created namespace has, not
+just a bare namespace. This is what actually restores **both** RBAC access
+and a real (non-zero) `ResourceQuota` after a full wipe — a bare
+`kubectl create namespace` or `--create-namespace` alone recreates the
+namespace object but leaves it with no Rancher project association, which
+breaks RBAC and risks a zero-limit quota. Confirmed live (against a
+throwaway test namespace, not the real ones — see
+`docs/internal/07-gotchas.md` for the full verification and its caveats).
+`deploy_monitoring.yml` has the equivalent step for
+`monitoring-rolling-restarts` alone, for the case where it runs standalone.
 
 Secrets wired into `infra/helm/secrets-values.yaml` at deploy time: Mongo
 root credentials, JWT RSA key pair, `SERVICE_CLIENT_SECRET`, and
