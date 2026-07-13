@@ -159,15 +159,22 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 > data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
 > and the services fail with "Authentication failed". Wipe the volume to re-initialize:
 > `kubectl -n deployment delete deploy mongodb && kubectl -n deployment delete pvc mongodb-data`,
-> then redeploy.
+> then redeploy. **Separately**, even if `secrets-values.yaml` is just being _corrected_ to match a
+> password MongoDB already has (not an actual rotation) — `helm upgrade` updates the
+> `mongodb-credentials`/`mongodb-user-credentials` Secrets, but `user-service`/`content-service`
+> read them once at container start via `secretKeyRef` and won't pick up the change on their own;
+> a Secret-value-only change doesn't alter their Deployment's rendered YAML at all, so Kubernetes
+> has no reason to restart them. Confirmed live: they kept failing with `AuthenticationFailed`
+> until explicitly restarted with `kubectl rollout restart deployment/user-service
+> deployment/content-service -n deployment`.
 >
-> **Rotating `monitoring.adminPassword`:** same class of gotcha — Grafana only applies
-> `GF_SECURITY_ADMIN_PASSWORD` on first boot against an empty `grafana-lgtm-data` PVC. Changing the
-> value and redeploying does **not** change an existing admin password; rotate it in place instead
-> with `kubectl exec -n monitoring-rolling-restarts deploy/grafana-lgtm -- sh -c 'cd
-> /otel-lgtm/grafana && GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data
-> GF_PATHS_PLUGINS=/data/grafana/plugins ./bin/grafana cli admin reset-admin-password
-> <new-password>'` (see `docs/internal/07-gotchas.md`).
+> **Rotating `monitoring.adminPassword`:** unlike the above, this one _is_ fully automatic — an
+> initContainer (Kubernetes) / one-shot service (docker-compose) runs `grafana cli admin
+> reset-admin-password` on every deploy, before Grafana starts, so changing the value and
+> redeploying is enough. See `docs/internal/07-gotchas.md` for how this works and two sharp edges
+> hit building it (a `ResourceQuota` requiring explicit limits on the initContainer, and a
+> `checksum/grafana-admin-password` pod-template annotation needed so a Secret-only value change
+> actually triggers a new pod on the Helm path).
 
 Both services share the same MongoDB instance with data isolation via separate databases:
 

@@ -221,23 +221,61 @@ grafana-lgtm is deployed (docker-compose, Helm, raw k8s manifests).
 grep -rn "GF_AUTH_ANONYMOUS_ENABLED" infra/   # should appear in all three deployment paths, set to "false"
 ```
 
-## Grafana's admin password only applies on first init — same class of gotcha as MongoDB's root password
+## Grafana's admin password is auto-rotated on every deploy — an initContainer/one-shot service, not just an env var
 
-Just like MongoDB only applies `MONGO_INITDB_ROOT_PASSWORD` on first init (see the rotation note in
-`secrets-values.example.yaml`), `GF_SECURITY_ADMIN_PASSWORD` only seeds the `admin` user's password
-the first time Grafana boots against an empty `/data` volume. If the `grafana-lgtm-data`
-volume/PVC already exists from before, changing this env var and restarting the container does
-**not** change the existing admin password — confirmed live: the new password was rejected and the
-old default (`admin`) still worked until the password was rotated explicitly. To rotate it on an
-existing install without wiping dashboards/history:
+`GF_SECURITY_ADMIN_PASSWORD` only seeds the `admin` user's password the first time Grafana boots
+against an empty `/data` volume — exactly the same class of gotcha as MongoDB's
+`MONGO_INITDB_ROOT_PASSWORD` (see the rotation note in `secrets-values.example.yaml`). On a
+`grafana-lgtm-data` volume/PVC that already has a previously-initialized instance, changing that
+env var and restarting the container does **nothing** — confirmed live: the new password was
+rejected and the old one kept working. Worse, `grafana cli admin reset-admin-password` run via
+`kubectl exec`/`docker exec` against an **already-running** server updates the on-disk DB file but
+the live process keeps serving the old password from some in-memory/connection-level state until
+it's actually restarted — confirmed live via `grafana.db`'s mtime changing while login still
+failed, then succeeding only after `kubectl rollout restart`.
 
-```sh
-docker exec <grafana-lgtm-container> sh -c \
-  'cd /otel-lgtm/grafana && GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins ./bin/grafana cli admin reset-admin-password <new-password>'
-```
+Fixed by making this automatic instead of a manual runbook step: `grafana cli admin
+reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD"` is idempotent on both a fresh and an existing
+volume (confirmed live: on an empty dir it runs the same migrations `grafana server` would —
+creating the default admin/org — then sets the password; on an existing one it just resets it), so
+it runs unconditionally, before the main Grafana process ever starts:
 
-(swap `docker exec` for `kubectl exec -n monitoring-rolling-restarts deploy/grafana-lgtm --` on
-Kubernetes).
+- **Kubernetes** (Helm `templates/monitoring.yaml` + raw `infra/k8s/deployments/grafana-lgtm-deployment.yml`):
+  an `initContainer` running that command, sharing the `data` volume, before the main container.
+- **docker-compose**: Compose has no init-container concept, so it's a separate one-shot service
+  (`grafana-lgtm-set-admin-password`) sharing the same named volume, gated via `depends_on:
+  condition: service_completed_successfully`.
+
+Two more traps hit getting this actually right, both confirmed live against the real course cluster:
+
+1. **initContainers need their own `resources.limits` too.** This namespace's `ResourceQuota`
+   requires explicit `limits.cpu`/`limits.memory` on *every* container in a pod, including
+   initContainers — omitting them made every single pod creation fail outright (`failed quota:
+   ... must specify limits.cpu for: grafana-lgtm-set-admin-password`), which is a much louder
+   failure than a silently-stale password. Kept deliberately smaller than the main container's
+   limits (`100m`/`128Mi` vs `400m`/`850Mi`) — Kubernetes computes a pod's *effective* quota usage
+   as `max(sum of app containers, largest single initContainer)` per resource (initContainers never
+   run concurrently with app containers), so staying under the main container's limits adds
+   nothing to the pod's quota footprint.
+2. **A pod-template annotation is required to force rotation on Kubernetes specifically.** The
+   password only reaches the initContainer via `secretKeyRef`, never as a literal value in the pod
+   template — so a `helm upgrade` that *only* changes the Secret's underlying value renders an
+   **identical** Deployment YAML, and Kubernetes has no way to know anything changed. Without a
+   `checksum/grafana-admin-password: {{ .Values.monitoring.adminPassword | sha256sum }}` annotation
+   on the pod template (Helm only — the raw-manifest path has no templating engine for this, so
+   rotating the password there still needs a manual `kubectl rollout restart deployment/grafana-lgtm
+   -n monitoring-rolling-restarts` after updating `secrets.yml`), the pod is never recreated and the
+   initContainer never re-runs.
+
+**This second trap is not unique to Grafana** — it applies to every Secret this chart mounts via
+`secretKeyRef` with no checksum annotation (`mongodb-credentials`, `jwt-keys`,
+`service-credentials`, `llm-credentials`). Confirmed live the hard way: rotating
+`mongodb.rootPassword` in `secrets-values.yaml` and running `helm upgrade` updated the
+`mongodb-credentials`/`mongodb-user-credentials` Secrets correctly, but `user-service` and
+`content-service`'s already-running pods kept using the stale password baked into their env at
+container start, failing with `MongoCommandException ... AuthenticationFailed` until manually
+`kubectl rollout restart`ed. If you rotate any of these secrets, restart the consuming
+Deployments explicitly — don't assume `helm upgrade` alone propagates it.
 
 ## A manually-wiped Kubernetes namespace does not fully self-heal
 

@@ -30,6 +30,49 @@ spec:
         app: grafana-lgtm
     spec:
       serviceAccountName: grafana-lgtm
+      # Makes the deployed password the actual source of truth instead of a first-boot-only
+      # default: GF_SECURITY_ADMIN_PASSWORD (below) is only ever read by `grafana server` the very
+      # first time it starts against an empty /data volume — on a PVC that already has a
+      # previously-initialized instance (e.g. after rotating the secret), it's silently ignored.
+      # `grafana cli admin reset-admin-password` is idempotent either way: on a fresh volume it
+      # runs the same migrations `grafana server` would (creating the default admin/org) then sets
+      # the password; on an existing volume it just resets it. Runs before the main container
+      # starts, so there's no live-server stale-cache race (confirmed live: running the same
+      # command via `kubectl exec` against an already-running server updated the DB file but the
+      # server kept serving the old password until restarted).
+      initContainers:
+        - name: grafana-lgtm-set-admin-password
+          image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+          command:
+            - sh
+            - -c
+            - |
+              cd /otel-lgtm/grafana && \
+              GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins \
+              ./bin/grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD"
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: password
+          # Kept well under the main container's limits below (400m/850Mi) — Kubernetes computes a
+          # pod's effective quota usage as max(sum of app containers, largest single initContainer)
+          # per resource, since initContainers never run concurrently with app containers. As long
+          # as this stays smaller than the main container's limits, it adds nothing to the pod's
+          # quota footprint. Learned live: omitting resources entirely made every pod creation fail
+          # outright ("failed quota: ... must specify limits.cpu/memory for grafana-lgtm-set-admin-password"),
+          # since this namespace's ResourceQuota requires explicit limits on every container.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
       containers:
         - name: grafana-lgtm
           image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
@@ -41,17 +84,12 @@ spec:
           env:
             # The base image's own run-grafana.sh defaults this to "true" with org role "Admin" —
             # without this override, anyone reaching the Service gets full admin access with no
-            # login at all, making the password below moot. Confirmed live against the
-            # docker-compose copy of this same image before this was set.
+            # login at all. The admin password itself is set by the initContainer above, not by
+            # GF_SECURITY_ADMIN_USER/PASSWORD here — those only ever apply at the same first-boot
+            # moment the initContainer already handles idempotently, so they're omitted here to
+            # avoid a second, silently-inert mechanism.
             - name: GF_AUTH_ANONYMOUS_ENABLED
               value: "false"
-            - name: GF_SECURITY_ADMIN_USER
-              value: admin
-            - name: GF_SECURITY_ADMIN_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-admin-credentials
-                  key: password
             # Routed through the shared ingress at /monitoring (infra/k8s/ingress.yml) via an
             # ExternalName Service, since an Ingress can only target Services in its own namespace
             # and grafana-lgtm lives in monitoring-rolling-restarts.

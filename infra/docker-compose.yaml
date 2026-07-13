@@ -209,9 +209,38 @@ services:
     networks:
       - backend
 
+  # One-shot: makes the deployed password the actual source of truth instead of a first-boot-only
+  # default. Compose has no init-container concept, so this is a separate service sharing the same
+  # volume, gated by `condition: service_completed_successfully` below. `grafana cli admin
+  # reset-admin-password` is idempotent either way: on a fresh volume it runs the same migrations
+  # `grafana server` would (creating the default admin/org) then sets the password; on an existing
+  # volume it just resets it. Runs before the main service starts, so there's no live-server
+  # stale-cache race (confirmed live: running the same command via `docker exec` against an
+  # already-running server updated the DB file but the server kept serving the old password until
+  # restarted).
+  grafana-lgtm-set-admin-password:
+    image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+    restart: "no"
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        cd /otel-lgtm/grafana && \
+        GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins \
+        ./bin/grafana cli admin reset-admin-password "$$GF_SECURITY_ADMIN_PASSWORD"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-lgtm-data:/data
+    networks:
+      - backend
+
   grafana-lgtm:
     image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
     restart: unless-stopped
+    depends_on:
+      grafana-lgtm-set-admin-password:
+        condition: service_completed_successfully
     ports:
       - "${LGTM_GRAFANA_PORT:-3001}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
@@ -219,11 +248,11 @@ services:
     environment:
       # The base grafana/otel-lgtm image's own run-grafana.sh defaults GF_AUTH_ANONYMOUS_ENABLED
       # to "true" with org role "Admin" — without this override, anyone hitting /monitoring gets
-      # full admin access with no login at all, making the password below moot. Confirmed live:
-      # curl .../monitoring/api/search returned real dashboard data with zero auth before this was set.
+      # full admin access with no login at all. The admin password itself is set by the
+      # grafana-lgtm-set-admin-password service above, not by GF_SECURITY_ADMIN_USER/PASSWORD here
+      # — those only ever apply at the same first-boot moment that service already handles
+      # idempotently, so they're omitted here to avoid a second, silently-inert mechanism.
       GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       # Grafana is reachable both directly (LGTM_GRAFANA_PORT, unchanged) and via the reverse
       # proxy's /monitoring path (infra/nginx/default.conf). These two make it aware it's also
       # served from that sub-path so its own asset/API links resolve correctly through the proxy.

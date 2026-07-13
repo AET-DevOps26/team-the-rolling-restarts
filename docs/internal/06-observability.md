@@ -260,6 +260,25 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
     manifests. See `docs/internal/07-gotchas.md` for the anonymous-access default and the
     first-boot-only password-application gotchas, and `docs/source/monitoring.md` for how to
     reach it now.
+  - **FIXED — the admin password is now auto-rotated on every deploy, not just a first-boot
+    default.** Following directly from the above: since `GF_SECURITY_ADMIN_PASSWORD` only applies
+    on first init, rotating it in `secrets-values.yaml` and redeploying silently did nothing on an
+    existing `grafana-lgtm-data` volume — confirmed live on the real course cluster, twice
+    (locally and on Kubernetes). Fixed by running `grafana cli admin reset-admin-password`
+    unconditionally, before the main Grafana process starts, on every deploy: an `initContainer`
+    on Kubernetes (Helm + raw manifests), a one-shot `depends_on: condition:
+    service_completed_successfully` service on docker-compose. Getting this right on the live
+    cluster surfaced two more traps, both now documented in `docs/internal/07-gotchas.md`: the
+    initContainer needs its own `resources.limits` (this namespace's `ResourceQuota` rejects any
+    container missing them outright) sized to stay under the main container's limits (so it adds
+    nothing to the pod's effective quota footprint); and a `checksum/grafana-admin-password`
+    pod-template annotation is required on the Helm path specifically, since a Secret-only value
+    change doesn't otherwise alter the rendered Deployment YAML at all. That same investigation
+    also surfaced a **pre-existing, unrelated-to-Grafana** gap: rotating `mongodb.rootPassword` and
+    running `helm upgrade` updated the Secrets correctly but left `user-service`/`content-service`
+    running with the stale password until manually restarted — the same "Secret changed, pod
+    didn't" class of bug, just never hit before because nobody had rotated that password on a live
+    deploy until this session. See the gotchas entry for the full account and the restart command.
   - **New CI/CD workflow**: `.github/workflows/deploy_monitoring.yml`, path-filtered to
     monitoring-related files only, using `helm upgrade --reuse-values` so it never needs the app
     secrets or image-values `deploy_kubernetes.yml` requires. Shares that workflow's `deploy-k8s`
