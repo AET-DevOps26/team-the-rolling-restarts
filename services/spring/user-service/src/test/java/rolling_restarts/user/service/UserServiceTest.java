@@ -3,6 +3,7 @@ package rolling_restarts.user.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -199,9 +201,11 @@ class UserServiceTest {
 				updateCaptor.capture(),
 				any(FindAndModifyOptions.class),
 				eq(User.class));
+		Document updateDoc = updateCaptor.getValue().getUpdateObject();
+		assertTrue(updateDoc.containsKey("$addToSet"));
 		assertEquals(
-				"{ \"$addToSet\" : { \"settings.savedArticleIds\" : \"article-1\"}}",
-				updateCaptor.getValue().getUpdateObject().toString());
+				"article-1",
+				updateDoc.get("$addToSet", Document.class).getString("settings.savedArticleIds"));
 	}
 
 	@Test
@@ -223,9 +227,11 @@ class UserServiceTest {
 				updateCaptor.capture(),
 				any(FindAndModifyOptions.class),
 				eq(User.class));
+		Document updateDoc = updateCaptor.getValue().getUpdateObject();
+		assertTrue(updateDoc.containsKey("$pull"));
 		assertEquals(
-				"{ \"$pull\" : { \"settings.savedArticleIds\" : \"article-1\"}}",
-				updateCaptor.getValue().getUpdateObject().toString());
+				"article-1",
+				updateDoc.get("$pull", Document.class).getString("settings.savedArticleIds"));
 	}
 
 	@Test
