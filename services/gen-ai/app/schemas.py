@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, model_validator
 
+from app.schemas_common import validate_exactly_one_source
+
 
 class SummarizeRequest(BaseModel):
     articleId: str | None = None
@@ -13,10 +15,7 @@ class SummarizeRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_exactly_one_source(self) -> SummarizeRequest:
-        has_article = self.articleId is not None
-        has_text = self.text is not None
-        if has_article == has_text:
-            raise ValueError("Exactly one of articleId or text must be provided")
+        validate_exactly_one_source(article_id=self.articleId, text=self.text)
         return self
 
 
@@ -33,10 +32,7 @@ class ExplainRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_exactly_one_source(self) -> ExplainRequest:
-        has_article = self.articleId is not None
-        has_text = self.text is not None
-        if has_article == has_text:
-            raise ValueError("Exactly one of articleId or text must be provided")
+        validate_exactly_one_source(article_id=self.articleId, text=self.text)
         return self
 
 
@@ -53,10 +49,7 @@ class SentimentRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_exactly_one_source(self) -> SentimentRequest:
-        has_article = self.articleId is not None
-        has_text = self.text is not None
-        if has_article == has_text:
-            raise ValueError("Exactly one of articleId or text must be provided")
+        validate_exactly_one_source(article_id=self.articleId, text=self.text)
         return self
 
 
@@ -76,10 +69,7 @@ class QaRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_sources_and_question(self) -> QaRequest:
-        has_article = self.articleId is not None
-        has_text = self.text is not None
-        if has_article == has_text:
-            raise ValueError("Exactly one of articleId or text must be provided")
+        validate_exactly_one_source(article_id=self.articleId, text=self.text)
         if not self.question.strip():
             raise ValueError("question must be a non-empty string")
         return self

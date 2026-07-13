@@ -26,11 +26,11 @@ rubric's categories rather than the requirement chunks.
 
 Backend services build and expose REST + GenAI routes; the web client loads live
 articles and renders **AI widgets** on the article detail page (`ArticleAiPanel`)
-that call `/api/ai/*` through Next.js server actions. Summarize works end-to-end
-today; explain/sentiment/qa widgets are wired but depend on gen-ai PR2 endpoints.
+that call `/api/ai/*` through Next.js server actions. All four GenAI endpoints
+(`/summarize`, `/explain`, `/sentiment`, `/qa`) work end-to-end.
 
-- **Evidence:** `web-client/src/lib/api/reads.ts`, `web-client/src/lib/api/ai.ts`, `web-client/src/app/(app)/article/[id]/ai-actions.ts`, `web-client/src/components/article/ai/`; `services/gen-ai/app/routers/summarize.py`
-- **Re-verify:** open an article with the stack running; click **Summarize** and confirm a response. Re-check `services/gen-ai/app/main.py` for `/explain`, `/sentiment`, `/qa` when PR2 merges.
+- **Evidence:** `web-client/src/lib/api/reads.ts`, `web-client/src/lib/api/ai.ts`, `web-client/src/app/(app)/article/[id]/ai-actions.ts`, `web-client/src/components/article/ai/`; `services/gen-ai/app/routers/{summarize,explain,sentiment,qa}.py`
+- **Re-verify:** open an article with the stack running; exercise Summary, Explain, Sentiment, and Q&A widgets and confirm responses.
 
 ### Architecture Quality — **Good** (borderline)
 
@@ -48,13 +48,12 @@ exercise the defined interface yet (see Functional System above), so the
 ### User-Facing Value — **Good** (GenAI visible on article page)
 
 The UI is substantially built — dashboard, saved, settings, article detail,
-login/signup — and the **article detail page** now surfaces GenAI: users can
-request summaries (and explain/sentiment/Q&A once backend PR2 lands) from
-`ArticleAiPanel`. Remaining gap: not all four GenAI endpoints exist in gen-ai
-yet, and broader product polish (third microservice, RAG) is still open.
+login/signup — and the **article detail page** surfaces GenAI: users can
+request summaries, explanations, sentiment analysis, and Q&A from
+`ArticleAiPanel`. Remaining gap: broader product polish (third microservice, RAG) is still open.
 
 - **Evidence:** `web-client/src/components/article/ai/article-ai-panel.tsx`; `web-client/src/app/(app)/article/[id]/page.tsx`
-- **Re-verify:** `grep -rn "ArticleAiPanel\|summarizeArticleAction" web-client/src --include="*.tsx"`; exercise widgets against a running stack.
+- **Re-verify:** `grep -rn "ArticleAiPanel\|summarizeArticleAction" web-client/src --include="*.tsx"`; exercise all four widgets against a running stack.
 
 ---
 
@@ -109,14 +108,14 @@ evaluator is likely to look.
 
 Spring services have real, meaningful tests (18 files across the 3 services
 with actual assertions, e.g. `AuthControllerTest.java`,
-`ArticleControllerTest.java`). But `services/gen-ai/tests/` contains only
-`__init__.py` (CI tolerates pytest exit code 5 / "no tests collected" as a
-pass), and `web-client` has no test runner configured at all (no
+`ArticleControllerTest.java`). `services/gen-ai/tests/` now has eight test
+modules (health, all four endpoints, observability, metrics, upstream errors).
+`web-client` has no test runner configured at all (no
 jest/vitest/playwright in `package.json`, no `test` script, no `*.test.tsx`
 files). Since the rubric explicitly expects coverage of server, GenAI, *and*
-client, 2 of 3 required areas have zero coverage.
+client, the client side still has zero coverage.
 
-- **Evidence:** `services/spring/*/src/test/java/**`; `services/gen-ai/tests/__init__.py`; `web-client/package.json` (`scripts` has no `test` key)
+- **Evidence:** `services/spring/*/src/test/java/**`; `services/gen-ai/tests/test_*.py`; `web-client/package.json` (`scripts` has no `test` key)
 - **Re-verify:** `find services/gen-ai/tests -name "test_*.py"`; `grep -n '"test"' web-client/package.json`; `find web-client -iname "*.test.*" -not -path "*/node_modules/*"`.
 
 ### Engineering Artefacts — **Good**

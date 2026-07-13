@@ -61,7 +61,7 @@ export function ArticleQa({ articleId }: { articleId: string }) {
       {error && <AiInlineAlert message={error} />}
       {isPending && <AiLoadingPlaceholder />}
       {result && !isPending && (
-        <div className="flex flex-col gap-2 rounded-lg bg-muted/40 p-4">
+        <div aria-live="polite" className="flex flex-col gap-2 rounded-lg bg-muted/40 p-4">
           <p className="leading-relaxed whitespace-pre-wrap">{result.answer}</p>
           <p className="text-xs text-muted-foreground">
             {result.provider} · {result.model}

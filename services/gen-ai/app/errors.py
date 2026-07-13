@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 
 class AppError(Exception):
@@ -36,6 +39,11 @@ class ArticleNotFoundError(NotFoundError):
 
 
 class UpstreamLLMError(AppError):
+    def __init__(self, message: str, details: list[str] | None = None) -> None:
+        super().__init__(message, 502, details)
+
+
+class UpstreamServiceError(AppError):
     def __init__(self, message: str, details: list[str] | None = None) -> None:
         super().__init__(message, 502, details)
 
@@ -85,5 +93,17 @@ def register_exception_handlers(app: FastAPI) -> None:
                 message="Validation failed",
                 path=request.url.path,
                 details=details,
+            ),
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unhandled_exception(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("Unhandled error on %s", request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content=build_error_body(
+                code=500,
+                message="Internal server error",
+                path=request.url.path,
             ),
         )

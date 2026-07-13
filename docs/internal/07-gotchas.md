@@ -17,12 +17,29 @@ yet, despite the UI looking complete. See
 grep -rln "generated/api\|fetch(\|axios\|NEXT_PUBLIC_API" web-client/src --include="*.tsx" --include="*.ts"
 ```
 
-## GenAI service is a shell — only `/health` exists
+## GenAI service now implements the user-facing endpoints
 
-`services/gen-ai/app/main.py` has no summarization/Q&A/generation endpoint.
-`llm_provider` config field exists but nothing branches on it — no local
-model path, no RAG. Don't assume the README's description of the service
-reflects what's implemented. See [03-gen-ai-service.md](03-gen-ai-service.md).
+Historically a `/health`-only shell; as of the GenAI PRs it exposes
+`/summarize`, `/explain`, `/sentiment`, and `/qa` (routed through the gateway at
+`/api/ai/**`, which is `permitAll`). `llm_provider` branches between Logos
+(OpenAI-compatible cloud) and Ollama (local) in `app/llm/provider.py`. Still no
+RAG. See [03-gen-ai-service.md](03-gen-ai-service.md).
+
+## Articles have no full body; `?q=` search needs Mongo index auto-creation
+
+Two things that cost real debugging during manual testing:
+
+- `RssFetcherService` hard-codes `article.setBody(List.of())` — `Article.body`
+  is **always empty**. The only stored text is `snippet` (the RSS description,
+  HTML-stripped). gen-ai's `get_article_text` therefore falls back to `snippet`
+  when `body` is empty. True full-article text would require page scraping —
+  tracked in issue #88.
+- The article search (`GET /api/content/articles?q=`) uses a Mongo `$text`
+  query against the `@TextIndexed` `headline`/`snippet` fields. Spring Data
+  MongoDB **disables index auto-creation by default**, so without
+  `spring.data.mongodb.auto-index-creation=true` (now set in content-service
+  `application.properties`) the query fails with
+  `IndexNotFound: text index required for $text query` → HTTP 500.
 
 ## `services/spring-api/` is dead local clutter, not a 4th service
 

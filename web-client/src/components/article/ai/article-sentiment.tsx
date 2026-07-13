@@ -52,7 +52,7 @@ export function ArticleSentiment({ articleId }: { articleId: string }) {
       {error && <AiInlineAlert message={error} />}
       {isPending && <AiLoadingPlaceholder />}
       {result && !isPending && (
-        <div className="flex flex-col gap-3 rounded-lg bg-muted/40 p-4">
+        <div aria-live="polite" className="flex flex-col gap-3 rounded-lg bg-muted/40 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={sentimentVariant(result.sentiment)}>{result.sentiment}</Badge>
             <span className="text-sm text-muted-foreground">Score: {result.score.toFixed(2)}</span>

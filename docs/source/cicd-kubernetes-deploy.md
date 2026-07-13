@@ -81,6 +81,7 @@ They are sensitive and are masked in logs.
 | `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) for JWT signing. Shared across all user-service replicas. |
 | `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) for JWT signing. Must match the public key. |
 | `SERVICE_CLIENT_SECRET` | Shared secret for the `client_credentials` token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). Generate with `openssl rand -hex 32`. |
+| `LLM_API_KEY` | _Optional._ Logos API key (`lg-...`) for gen-ai's cloud LLM. The cluster is inside the TUM network so Logos is reachable; without this secret gen-ai deploys keyless and LLM calls fail with 401. |
 
 ### Generating the JWT key pair
 
