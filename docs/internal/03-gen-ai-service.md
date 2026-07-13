@@ -14,13 +14,15 @@ in the working tree — exclude it from any `find`/`grep` over this directory).
 - `app/llm/provider.py` — `get_chat_model()` factory branches on `logos` vs
   `ollama` (no network at import time).
 - `app/services/content.py` — `get_article_text()` fetches articles via httpx
-  from `{INTERNAL_API_URL}/api/content/articles/{id}`; 404 → `ArticleNotFoundError`.
+  from `{INTERNAL_API_URL}/api/content/articles/{id}`; 404 → `ArticleNotFoundError`,
+  other non-2xx or network failures → `UpstreamServiceError` (502).
 - `app/routers/summarize.py` — summarization endpoint with length/style prompts.
 - `app/routers/explain.py` — simplified explanations by knowledge level.
 - `app/routers/sentiment.py` — sentiment + bias via structured output (JSON fallback).
 - `app/routers/qa.py` — single-article grounded Q&A.
 - `tests/` — `test_health.py`, `test_summarize.py`, `test_explain.py`,
-  `test_sentiment.py`, `test_qa.py` (offline, mocked LLM + content).
+  `test_sentiment.py`, `test_qa.py`, `test_content.py`, `test_errors.py`
+  (offline, mocked LLM + content).
 
 ## Generated client
 

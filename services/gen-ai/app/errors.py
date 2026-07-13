@@ -40,6 +40,11 @@ class UpstreamLLMError(AppError):
         super().__init__(message, 502, details)
 
 
+class UpstreamServiceError(AppError):
+    def __init__(self, message: str, details: list[str] | None = None) -> None:
+        super().__init__(message, 502, details)
+
+
 def build_error_body(
     *,
     code: int,
@@ -85,5 +90,16 @@ def register_exception_handlers(app: FastAPI) -> None:
                 message="Validation failed",
                 path=request.url.path,
                 details=details,
+            ),
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, _exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content=build_error_body(
+                code=500,
+                message="Internal server error",
+                path=request.url.path,
             ),
         )

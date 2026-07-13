@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
-from app.errors import ArticleNotFoundError
+from app.errors import ArticleNotFoundError, UpstreamServiceError
 from app.main import app
 from app.services.content import ArticleText
 
@@ -99,5 +99,30 @@ def test_summarize_article_not_found_returns_unified_error(
     assert body["code"] == 404
     assert body["message"] == "Article not found: missing-id"
     assert body["details"] == []
+    assert body["path"] == "/summarize"
+    assert body["timestamp"].endswith("Z")
+
+
+def test_summarize_upstream_content_error_returns_unified_error(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def unavailable_article(_article_id: str) -> ArticleText:
+        raise UpstreamServiceError(
+            "Content service unavailable",
+            details=["upstream status: 503"],
+        )
+
+    monkeypatch.setattr("app.routers.summarize.get_article_text", unavailable_article)
+
+    response = client.post(
+        "/summarize",
+        json={"articleId": "article-503", "length": "short", "style": "plain"},
+    )
+
+    assert response.status_code == 502
+    body = response.json()
+    assert body["code"] == 502
+    assert body["message"] == "Content service unavailable"
+    assert body["details"] == ["upstream status: 503"]
     assert body["path"] == "/summarize"
     assert body["timestamp"].endswith("Z")
