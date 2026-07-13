@@ -22,13 +22,17 @@ stack is deployed.
 
 Login: `admin` / whatever `GRAFANA_ADMIN_PASSWORD` (docker-compose/Ansible) or
 `monitoring.adminPassword` (Helm secrets-values.yaml) / the `GRAFANA_ADMIN_PASSWORD` repo secret
-(CI) is set to. **Rotating it just means changing that value and redeploying** — an
-initContainer (Kubernetes) / one-shot service (docker-compose) runs `grafana cli admin
-reset-admin-password` on every deploy, before Grafana itself starts, so the deployed value is
-always the actual source of truth (it doesn't rely on Grafana's own first-boot-only application of
-`GF_SECURITY_ADMIN_PASSWORD`, which would otherwise silently do nothing on an already-initialized
-volume — see `docs/internal/07-gotchas.md` for the full story, including two sharp edges hit
-getting this right on the real cluster).
+(CI) is set to. **Rotating it just means changing that value and redeploying** on docker-compose
+and **Kubernetes via Helm** — an initContainer (Helm) / one-shot service (docker-compose) runs
+`grafana cli admin reset-admin-password` on every deploy, before Grafana itself starts, so the
+deployed value is always the actual source of truth (it doesn't rely on Grafana's own
+first-boot-only application of `GF_SECURITY_ADMIN_PASSWORD`, which would otherwise silently do
+nothing on an already-initialized volume). **The raw-k8s-manifests path has the same
+initContainer but no equivalent of Helm's checksum-annotation trick** (no templating engine to
+compute one), so rotating the password there additionally needs a manual `kubectl rollout
+restart deployment/grafana-lgtm -n monitoring-rolling-restarts` after updating the Secret — see
+`docs/internal/07-gotchas.md` for the full story, including two more sharp edges hit getting this
+right on the real cluster.
 
 Grafana is also still reachable directly, bypassing the proxy/ingress entirely, which is handy for
 ad-hoc access or scripts (`infra/scripts/smoke-test.sh`'s Loki check uses this path):

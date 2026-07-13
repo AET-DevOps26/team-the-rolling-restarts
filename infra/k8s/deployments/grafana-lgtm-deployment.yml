@@ -116,11 +116,11 @@ spec:
                 secretKeyRef:
                   name: grafana-smtp-credentials
                   key: smtp-password
+            # References GF_SMTP_USER (defined above, same env list) via Kubernetes' dependent-env
+            # syntax instead of a second secretKeyRef against the same key — one less place to
+            # keep in sync if the Secret's key name ever changes.
             - name: GF_SMTP_FROM_ADDRESS
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-smtp-credentials
-                  key: smtp-user
+              value: "$(GF_SMTP_USER)"
             - name: GF_SMTP_FROM_NAME
               value: "Grafana Alerting"
             - name: GRAFANA_ALERT_EMAILS

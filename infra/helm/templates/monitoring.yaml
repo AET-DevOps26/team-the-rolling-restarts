@@ -102,8 +102,11 @@ spec:
         # value (no other change) renders an IDENTICAL Deployment YAML, and Kubernetes has no way
         # to know the underlying Secret changed. Without this, the pod is never recreated, the
         # initContainer never re-runs, and the rotated password silently never takes effect. This
-        # annotation hashes the actual value, forcing a new pod on rotation specifically.
+        # annotation hashes the actual value, forcing a new pod on rotation specifically. Same
+        # reasoning applies to the SMTP credentials/alert recipients below — they're also read via
+        # secretKeyRef only, so without this they'd silently keep serving stale values on rotation.
         checksum/grafana-admin-password: {{ .Values.monitoring.adminPassword | sha256sum }}
+        checksum/grafana-smtp-credentials: {{ printf "%s%s%s" .Values.monitoring.smtpUser .Values.monitoring.smtpPassword .Values.monitoring.alertEmails | sha256sum }}
     spec:
       serviceAccountName: {{ .Values.monitoring.name }}
       # Makes the deployed password the actual source of truth instead of a first-boot-only
@@ -190,11 +193,11 @@ spec:
                 secretKeyRef:
                   name: grafana-smtp-credentials
                   key: smtpPassword
+            # References GF_SMTP_USER (defined above, same env list) via Kubernetes' dependent-env
+            # syntax instead of a second secretKeyRef against the same key — one less place to
+            # keep in sync if the Secret's key name ever changes.
             - name: GF_SMTP_FROM_ADDRESS
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-smtp-credentials
-                  key: smtpUser
+              value: "$(GF_SMTP_USER)"
             - name: GF_SMTP_FROM_NAME
               value: "Grafana Alerting"
             - name: GRAFANA_ALERT_EMAILS
