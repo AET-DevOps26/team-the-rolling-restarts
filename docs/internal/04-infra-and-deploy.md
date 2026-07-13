@@ -4,8 +4,11 @@
 
 Base file `infra/docker-compose.yaml` (project name `rolling-restarts`)
 defines: `web-client`, `reverse-proxy` (nginx), `api-gateway`,
-`user-service`, `content-service`, `gen-ai`, `mongodb`, `grafana-lgtm`
-(+ `mongodb-data` volume, and `frontend`/`backend` networks).
+`user-service`, `content-service`, `gen-ai`, `mongodb`, `ollama` (optional,
+`local-llm` profile), `grafana-lgtm-set-admin-password` (one-shot, resets
+Grafana's admin password on every `up` — see `docs/internal/07-gotchas.md`),
+`grafana-lgtm` (+ `mongodb-data`/`ollama-models`/`grafana-lgtm-data` volumes,
+and `frontend`/`backend` networks).
 
 Overlay files, combined via `-f base -f overlay`:
 
@@ -23,35 +26,59 @@ Local quick start (documented in `docs/source/index.md`, **not yet in root
 
 Real chart: `Chart.yaml` + `templates/` (`deployment.yaml`, `service.yaml`,
 `ingress.yaml`, `secrets.yaml`, `pdb.yaml` [PodDisruptionBudget — availability,
-not autoscaling], `serviceaccount.yaml`, `databases.yaml`, `_helpers.tpl`,
-`NOTES.txt`). Values split: `values.yaml` (defaults) + `values-dev.yaml` /
-`values-prod.yaml` overrides, plus `image-values.yaml` /
-`secrets-values.yaml` (with `.example` counterparts — the real ones are
-presumably gitignored/local or filled via CI secrets).
+not autoscaling], `serviceaccount.yaml`, `databases.yaml`, `monitoring.yaml`
+[grafana-lgtm's Deployment/Service/PVC/Secrets/ConfigMaps, in its own
+namespace], `monitoring-rbac.yaml` [ServiceAccount + Role/RoleBinding letting
+Prometheus scrape pods], `_helpers.tpl`, `NOTES.txt`). Values split:
+`values.yaml` (defaults) + `values-dev.yaml` / `values-prod.yaml` overrides,
+plus `image-values.yaml` / `secrets-values.yaml` (with `.example`
+counterparts — the real ones are gitignored/local or filled via CI secrets).
 
 Ingress host configured: `rolling-restarts.stud.k8s.aet.cit.tum.de`
-(`infra/helm/values.yaml:225`) — this is the course's Rancher-managed
-cluster hostname. **Reachability not verified from this sandbox (no network
-egress)** — check manually.
+(`infra/helm/values.yaml`'s `host` key — re-check the exact line number
+before citing it elsewhere, it moves as the file grows) — this is the
+course's Rancher-managed cluster hostname. **Reachability confirmed live**
+this branch, including the `/monitoring` path added for grafana-lgtm (see
+`docs/source/monitoring.md`).
 
-**RBAC is Rancher-managed, not git-managed.** Access to the `deployment` and
-`monitoring-rolling-restarts` namespaces comes from Rancher's own
-project/namespace association, tied to a Keycloak OIDC group
-(`devops26-team-the-rolling-restarts`) — not a plain Kubernetes
-Role/RoleBinding this repo defines anywhere. If a namespace is ever deleted
-directly via `kubectl` (rather than through Rancher), that project
-association breaks and does not come back just from recreating the
-namespace at the raw Kubernetes API level (`kubectl create namespace` or
-Helm's `--create-namespace`) — confirmed live, see
-`docs/internal/06-observability.md`'s disaster-recovery entry. Recovering
-from that requires going through Rancher (`rancher.ase.cit.tum.de`)
-directly; nothing in this repo's CI/CD can do it.
+**RBAC is Rancher-managed, not git-managed** — for the `deployment` and
+`monitoring-rolling-restarts` namespaces as they normally exist. Access
+comes from Rancher's own project/namespace association, tied to a Keycloak
+OIDC group (`devops26-team-the-rolling-restarts`) and a specific Rancher
+project (`p-rjflh` on cluster `c-f49m7`) — not a plain Kubernetes
+Role/RoleBinding this repo defines anywhere for those two namespaces
+themselves (the Role/RoleBinding in `monitoring-rbac.yaml` only grants
+grafana-lgtm's own ServiceAccount pod-scrape access, a separate concern).
+If a namespace is ever deleted directly via `kubectl` (rather than through
+Rancher) and recreated bare (`kubectl create namespace` or Helm's
+`--create-namespace` alone), that project association does **not** come
+back automatically — confirmed live.
+
+**Recovery is now automated for the common case**: `infra/k8s/namespaces/
+{deployment,monitoring}-namespace.yml` carry the same `field.cattle.io/
+projectId` label/annotation a Rancher-created namespace gets, and
+`.github/workflows/deploy_kubernetes.yml`/`deploy_monitoring.yml` apply them
+via `kubectl create` whenever `kubectl get namespace` reports the namespace
+missing entirely — restoring both RBAC and a real (non-zero) ResourceQuota
+without any manual Rancher step, verified live against a throwaway test
+namespace (see `docs/internal/07-gotchas.md`'s "manually-wiped namespace"
+entry for the full mechanism and its one known gap: this check only
+detects a **fully absent** namespace, not one that exists but is already
+bare/mislabeled — that case still needs manual Rancher intervention via
+`rancher.ase.cit.tum.de`, or a `kubectl label`/`kubectl annotate` patch
+applying the same values by hand).
 
 ## Kubernetes — raw manifests (`infra/k8s/`)
 
 Dual approach alongside Helm: `deployments/*.yml` and `services/*.yml` for
-all 6 workloads (api-gateway, content-service, genai, mongodb, user-service,
-web-client), plus `ingress.yml` and `secrets.yml.example`.
+all workloads (api-gateway, content-service, gen-ai, mongodb, user-service,
+web-client, grafana-lgtm), plus `ingress.yml`, `secrets.yml.example`,
+`configmaps/` (grafana-lgtm's Prometheus/dashboards/alerting config, hand-
+maintained — must stay byte-identical to the Helm/docker-compose copies,
+see that file's own header comment), `rbac/` (grafana-lgtm's
+ServiceAccount + Role/RoleBinding for pod scraping), and `namespaces/`
+(the same disaster-recovery bootstrap manifests described above, for this
+deployment path).
 
 ## Cloud provisioning
 
