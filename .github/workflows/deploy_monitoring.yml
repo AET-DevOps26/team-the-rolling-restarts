@@ -6,7 +6,7 @@ name: Deploy Monitoring
 # (grafana/otel-lgtm), nothing here gets built or pushed by this repo's own pipeline.
 on:
   push:
-    branches: [main,feat/observability-monitoring]
+    branches: [main]
     paths:
       - "infra/grafana/**"
       - "infra/helm/files/grafana/**"
