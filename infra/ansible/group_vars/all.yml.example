@@ -32,3 +32,6 @@ app_env:
   LGTM_GRAFANA_PORT: "3001"
   LGTM_OTLP_GRPC_PORT: "4317"
   LGTM_OTLP_HTTP_PORT: "4318"
+  # Grafana admin login, also reachable via the reverse proxy at /monitoring. Generate with:
+  # openssl rand -hex 16
+  GRAFANA_ADMIN_PASSWORD: "replace-with-vault-secret"

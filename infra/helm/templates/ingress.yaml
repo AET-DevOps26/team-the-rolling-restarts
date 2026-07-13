@@ -1,6 +1,22 @@
+{{/* An Ingress can only target Services in its own namespace, but grafana-lgtm's real Service
+lives in monitoring.namespace — so route /monitoring through this ExternalName alias instead,
+which just resolves (via cluster DNS) to the real Service in the other namespace. No NetworkPolicy
+exists in this cluster's manifests to block that cross-namespace path. */}}
+{{- if and .Values.ingress.enabled .Values.appWorkloads.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-lgtm-external
+spec:
+  type: ExternalName
+  externalName: {{ .Values.monitoring.name }}.{{ .Values.monitoring.namespace }}.svc.cluster.local
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: 3000
+---
 {{/* Render the external ingress only when explicitly enabled, and only alongside the app
 workloads it routes to (routing to nothing during `make helm-destroy` is meaningless). */}}
-{{- if and .Values.ingress.enabled .Values.appWorkloads.enabled }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -46,6 +62,16 @@ spec:
                 name: {{ .Values.apiGateway.name }}
                 port:
                   number: {{ .Values.apiGateway.port }}
+          # No trailing slash and pathType Prefix (matches /monitoring and /monitoring/*) —
+          # grafana-lgtm runs with GF_SERVER_SERVE_FROM_SUB_PATH=true (templates/monitoring.yaml)
+          # and expects to see the /monitoring prefix itself, not have it stripped.
+          - path: /monitoring
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana-lgtm-external
+                port:
+                  number: 3000
           - path: /
             pathType: Prefix
             backend:

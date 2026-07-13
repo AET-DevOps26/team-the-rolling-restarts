@@ -62,8 +62,11 @@ check_log_reaches_loki() {
   local now start body count
   now=$(date +%s)
   start=$((now - 300))
-  # grafana-lgtm's bundled Grafana default admin credential, not a real secret.
-  local grafana_auth="-u admin:admin" # gitleaks:allow
+  # GRAFANA_ADMIN_PASSWORD is only ever the real secret if the caller's shell actually exports it
+  # (same caveat as LGTM_GRAFANA_PORT above — this Makefile doesn't export infra/.env's vars into
+  # recipes' shells). Falls back to the image's own first-boot default; wrong password just makes
+  # this best-effort check report "not found" below rather than "found", not a hard failure.
+  local grafana_auth="-u admin:${GRAFANA_ADMIN_PASSWORD:-admin}"
   body=$(curl $curl_extra -s $grafana_auth --connect-timeout 5 --max-time 10 \
     "$grafana_url/api/datasources/proxy/uid/loki/loki/api/v1/query_range" \
     --data-urlencode "query={service_name=\"$service\"} |~ \"$pattern\"" \

@@ -21,6 +21,7 @@ These must be changed from defaults in production. The dev defaults below work o
 | `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.dev.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
 | `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.dev.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
 | `LLM_API_KEY` | _(empty)_ | Logos API key (`lg-...`, from tutor); TUM network / eduVPN only | gen-ai |
+| `GRAFANA_ADMIN_PASSWORD` | `admin` | Strong random password (`openssl rand -hex 16`) | grafana-lgtm admin login (also reachable at `/monitoring` via the reverse proxy, not just `LGTM_GRAFANA_PORT` directly) |
 
 ### Configuration
 
@@ -71,6 +72,7 @@ MONGO_ROOT_PASSWORD=secret
 LGTM_GRAFANA_PORT=3001
 LGTM_OTLP_GRPC_PORT=4317
 LGTM_OTLP_HTTP_PORT=4318
+GRAFANA_ADMIN_PASSWORD=your-strong-password-here
 WATCHPACK_POLLING=false
 ```
 
@@ -124,6 +126,7 @@ app_env:
   LGTM_GRAFANA_PORT: "3001"
   LGTM_OTLP_GRPC_PORT: "4317"
   LGTM_OTLP_HTTP_PORT: "4318"
+  GRAFANA_ADMIN_PASSWORD: "CHANGE-ME-strong-random"  # <-- real secret
 ```
 
 ---
@@ -150,12 +153,21 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 | `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | yes | Fresh RSA pair | `jwt-keys` Secret → user-service JWT signing |
 | `userService.serviceClientSecret` | yes | Strong random value (`openssl rand -hex 32`) | `service-credentials` Secret → user-service's client_credentials token for content-service subscribe/unsubscribe |
 | `genAi.llmApiKey` | no | Logos API key (`lg-...`); TUM network / eduVPN only | `llm-credentials` Secret → gen-ai cloud LLM calls |
+| `monitoring.adminPassword` | yes | Strong random password (`openssl rand -hex 16`) | `grafana-admin-credentials` Secret (in `monitoring.namespace`) → grafana-lgtm admin login, reachable at `/monitoring` via the shared ingress |
 
 > **Rotating `mongodb.rootPassword`:** MongoDB only applies the root password on first init (empty
 > data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
 > and the services fail with "Authentication failed". Wipe the volume to re-initialize:
 > `kubectl -n deployment delete deploy mongodb && kubectl -n deployment delete pvc mongodb-data`,
 > then redeploy.
+>
+> **Rotating `monitoring.adminPassword`:** same class of gotcha — Grafana only applies
+> `GF_SECURITY_ADMIN_PASSWORD` on first boot against an empty `grafana-lgtm-data` PVC. Changing the
+> value and redeploying does **not** change an existing admin password; rotate it in place instead
+> with `kubectl exec -n monitoring-rolling-restarts deploy/grafana-lgtm -- sh -c 'cd
+> /otel-lgtm/grafana && GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data
+> GF_PATHS_PLUGINS=/data/grafana/plugins ./bin/grafana cli admin reset-admin-password
+> <new-password>'` (see `docs/internal/07-gotchas.md`).
 
 Both services share the same MongoDB instance with data isolation via separate databases:
 

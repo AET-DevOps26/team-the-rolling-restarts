@@ -38,6 +38,28 @@ spec:
             - containerPort: 4317
             - containerPort: 4318
 
+          env:
+            # The base image's own run-grafana.sh defaults this to "true" with org role "Admin" —
+            # without this override, anyone reaching the Service gets full admin access with no
+            # login at all, making the password below moot. Confirmed live against the
+            # docker-compose copy of this same image before this was set.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: password
+            # Routed through the shared ingress at /monitoring (infra/k8s/ingress.yml) via an
+            # ExternalName Service, since an Ingress can only target Services in its own namespace
+            # and grafana-lgtm lives in monitoring-rolling-restarts.
+            - name: GF_SERVER_ROOT_URL
+              value: "https://k8s.rolling-restarts.stud.k8s.aet.cit.tum.de/monitoring/"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
+
           # Keep in sync with infra/helm/values.yaml (monitoring.resources). 850Mi/400m (not
           # 900Mi/450m): the dedicated monitoring-rolling-restarts namespace has its own
           # ResourceQuota (500m CPU / 900Mi memory hard limit, confirmed live via

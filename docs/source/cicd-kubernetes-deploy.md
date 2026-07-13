@@ -89,6 +89,7 @@ They are sensitive and are masked in logs.
 | `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) for JWT signing. Shared across all user-service replicas. |
 | `JWT_RSA_PRIVATE_KEY` | RSA private key (PEM) for JWT signing. Must match the public key. |
 | `SERVICE_CLIENT_SECRET` | Shared secret for the `client_credentials` token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). Generate with `openssl rand -hex 32`. |
+| `GRAFANA_ADMIN_PASSWORD` | Admin login for grafana-lgtm, reachable at `/monitoring` behind the shared ingress. Generate with `openssl rand -hex 16`. The deploy workflow fails fast if this is unset. |
 
 ### Generating the JWT key pair
 

@@ -241,10 +241,25 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   - **Explicitly not adopted** (see `docs/source/monitoring.md`'s rationale): ServiceMonitor/
     PodMonitor CRDs and `PrometheusRule` (both require the Prometheus Operator, which this stack's
     bundled-image architecture doesn't use — adopting them means replacing the whole monitoring
-    stack, out of scope here); Grafana/Prometheus auth or TLS (already addressed at the network
-    layer — no ingress route for grafana-lgtm, reachable only via `kubectl port-forward`); a
-    `kube_pod_container_status_restarts_total`-based alert (needs deploying `kube-state-metrics`,
-    a new workload with its own cost — flagged as a follow-up, not folded in silently).
+    stack, out of scope here); full SSO for Grafana (a single shared admin login is enough for this
+    project's team size); a `kube_pod_container_status_restarts_total`-based alert (needs deploying
+    `kube-state-metrics`, a new workload with its own cost — flagged as a follow-up, not folded in
+    silently).
+  - **FIXED — Grafana was reachable with zero auth via anonymous Admin access, and had no ingress
+    route.** The base `grafana/otel-lgtm` image's `run-grafana.sh` defaults
+    `GF_AUTH_ANONYMOUS_ENABLED=true` with org role `Admin` — confirmed live (`curl
+    .../api/search` returned real dashboard data with no credentials at all) before this was
+    caught. This was previously an accepted tradeoff on the reasoning that Grafana had no ingress
+    route and was only reachable via `kubectl port-forward` (itself already encrypted); revisited
+    and fixed properly instead of continuing to rely on that network-isolation argument. Now wired
+    into the shared ingress at `/monitoring` (an ExternalName Service alias, since an Ingress can't
+    target a Service in a different namespace and `grafana-lgtm` lives in
+    `monitoring.namespace`), with `GF_AUTH_ANONYMOUS_ENABLED=false` and a real
+    `GF_SECURITY_ADMIN_PASSWORD` (from a Secret, `monitoring.adminPassword` in
+    `secrets-values.yaml`) set on every deployment target — docker-compose, Helm, and raw k8s
+    manifests. See `docs/internal/07-gotchas.md` for the anonymous-access default and the
+    first-boot-only password-application gotchas, and `docs/source/monitoring.md` for how to
+    reach it now.
   - **New CI/CD workflow**: `.github/workflows/deploy_monitoring.yml`, path-filtered to
     monitoring-related files only, using `helm upgrade --reuse-values` so it never needs the app
     secrets or image-values `deploy_kubernetes.yml` requires. Shares that workflow's `deploy-k8s`

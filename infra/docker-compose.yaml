@@ -19,7 +19,6 @@ services:
       OTEL_SERVICE_NAME: web-client
     networks:
       - frontend
-      - backend
 
   reverse-proxy:
     image: nginx:alpine
@@ -217,6 +216,21 @@ services:
       - "${LGTM_GRAFANA_PORT:-3001}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
       - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
+    environment:
+      # The base grafana/otel-lgtm image's own run-grafana.sh defaults GF_AUTH_ANONYMOUS_ENABLED
+      # to "true" with org role "Admin" — without this override, anyone hitting /monitoring gets
+      # full admin access with no login at all, making the password below moot. Confirmed live:
+      # curl .../monitoring/api/search returned real dashboard data with zero auth before this was set.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Grafana is reachable both directly (LGTM_GRAFANA_PORT, unchanged) and via the reverse
+      # proxy's /monitoring path (infra/nginx/default.conf). These two make it aware it's also
+      # served from that sub-path so its own asset/API links resolve correctly through the proxy.
+      # The domain in ROOT_URL only affects absolute links Grafana itself generates (e.g. any
+      # future SSO redirect) — it doesn't need to match the real host for basic dashboard use.
+      GF_SERVER_ROOT_URL: http://localhost/monitoring/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - grafana-lgtm-data:/data
       - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
@@ -229,6 +243,7 @@ services:
       - ./grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml:ro
     networks:
       - backend
+      - frontend
 
 volumes:
   mongodb-data:

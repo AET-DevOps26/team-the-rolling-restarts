@@ -192,15 +192,52 @@ never reach `grafana-lgtm:4318` locally: `getaddrinfo ENOTFOUND grafana-lgtm` fr
 container, confirmed via a raw Node.js `http.request` test. Everything else about the setup was
 already correct (env vars, `instrumentation.ts`'s `register()` executing and reaching
 `registerOTel()`, `@vercel/otel`'s default OTLP protocol) — it looked like an OTel/Next.js
-configuration problem for a long time before the actual network topology was checked. Fixed by
-adding `web-client` to the `backend` network too, matching `api-gateway`'s pattern. **Kubernetes was
+configuration problem for a long time before the actual network topology was checked. First fixed
+by adding `web-client` to the `backend` network too — but that gave the one container most exposed
+to untrusted input a direct path to `mongodb` and every other internal service, unnecessarily
+widening its blast radius. Moved the fix to the other side instead: `grafana-lgtm` now sits on
+*both* `frontend` and `backend` (the actual telemetry sink, not the container receiving untrusted
+input), which restores segmentation while still letting every service reach it. **Kubernetes was
 never affected** — there's no equivalent network partitioning between pods/Services there, which is
 why "it worked on k9s before" was a real, confusing signal pointing away from docker-compose-specific
 causes.
 
 ```sh
-grep -A2 "networks:" infra/docker-compose.yaml   # web-client should list both frontend and backend
+grep -A2 "networks:" infra/docker-compose.yaml   # grafana-lgtm should list both frontend and backend
 ```
+
+## The `grafana/otel-lgtm` base image defaults to anonymous Admin access — no login required
+
+`run-grafana.sh` inside the image sets `GF_AUTH_ANONYMOUS_ENABLED="${GF_AUTH_ANONYMOUS_ENABLED:-true}"`
+and, when anonymous auth is enabled, `GF_AUTH_ANONYMOUS_ORG_ROLE="${GF_AUTH_ANONYMOUS_ORG_ROLE:-Admin}"`.
+Without an explicit override, **anyone who can reach the Grafana port gets full admin access with
+no login at all** — confirmed live: `curl .../monitoring/api/search` returned real dashboard data
+with zero auth before this was set. Setting `GF_SECURITY_ADMIN_PASSWORD` alone does nothing to
+close this — the password is irrelevant if anonymous requests are already treated as an
+authenticated admin. Fixed by explicitly setting `GF_AUTH_ANONYMOUS_ENABLED: "false"` everywhere
+grafana-lgtm is deployed (docker-compose, Helm, raw k8s manifests).
+
+```sh
+grep -rn "GF_AUTH_ANONYMOUS_ENABLED" infra/   # should appear in all three deployment paths, set to "false"
+```
+
+## Grafana's admin password only applies on first init — same class of gotcha as MongoDB's root password
+
+Just like MongoDB only applies `MONGO_INITDB_ROOT_PASSWORD` on first init (see the rotation note in
+`secrets-values.example.yaml`), `GF_SECURITY_ADMIN_PASSWORD` only seeds the `admin` user's password
+the first time Grafana boots against an empty `/data` volume. If the `grafana-lgtm-data`
+volume/PVC already exists from before, changing this env var and restarting the container does
+**not** change the existing admin password — confirmed live: the new password was rejected and the
+old default (`admin`) still worked until the password was rotated explicitly. To rotate it on an
+existing install without wiping dashboards/history:
+
+```sh
+docker exec <grafana-lgtm-container> sh -c \
+  'cd /otel-lgtm/grafana && GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins ./bin/grafana cli admin reset-admin-password <new-password>'
+```
+
+(swap `docker exec` for `kubectl exec -n monitoring-rolling-restarts deploy/grafana-lgtm --` on
+Kubernetes).
 
 ## A manually-wiped Kubernetes namespace does not fully self-heal
 

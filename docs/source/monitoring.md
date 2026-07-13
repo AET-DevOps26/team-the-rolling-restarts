@@ -6,38 +6,41 @@ configuration files, in both docker-compose and Kubernetes/Helm.
 
 ## Reaching the monitoring stack
 
-The stack is **deliberately not exposed publicly** in any target — no ingress route, no published
-admin UI on the internet (the AET fair-use policy forbids open admin UIs, and Grafana here runs
-with anonymous Admin access). You reach it over a local port instead.
+Grafana is now routed through the same reverse proxy / ingress as the rest of the app, under
+`/monitoring`, on every deployment target — no port-forward or direct-port access needed anymore
+(though the direct port still works too; see below). It requires a real login: the base
+`grafana/otel-lgtm` image defaults to anonymous **Admin** access with no login at all
+(`GF_AUTH_ANONYMOUS_ENABLED=true`, org role `Admin`), which is explicitly disabled everywhere this
+stack is deployed.
 
-### docker-compose (local)
+- **docker-compose (local)**: `http://localhost:${APP_PORT:-8080}/monitoring/`
+- **Kubernetes**: `https://<ingress host>/monitoring/` (e.g.
+  `https://rolling-restarts.stud.k8s.aet.cit.tum.de/monitoring/` on the Helm target, or the raw
+  `k8s.rolling-restarts.stud.k8s.aet.cit.tum.de` host on the raw-manifests target)
+- **Azure VM**: `http://<vm-ip>/monitoring/` (no TLS on that target yet — see the cookie-`Secure`
+  gotcha in `docs/internal/07-gotchas.md` for the related, still-open TLS gap)
 
-Grafana is published straight to your host:
+Login: `admin` / whatever `GRAFANA_ADMIN_PASSWORD` (docker-compose/Ansible) or
+`monitoring.adminPassword` (Helm secrets-values.yaml) / the `GRAFANA_ADMIN_PASSWORD` repo secret
+(CI) is set to. **Only applies on first boot** against an empty data volume/PVC — same class of
+gotcha as MongoDB's root password (see `docs/internal/07-gotchas.md`). To rotate the password on
+an existing install without wiping dashboards/history, use `grafana cli admin
+reset-admin-password` (exact command in that same gotchas entry) rather than just changing the env
+var and restarting.
+
+Grafana is also still reachable directly, bypassing the proxy/ingress entirely, which is handy for
+ad-hoc access or scripts (`infra/scripts/smoke-test.sh`'s Loki check uses this path):
 
 ```sh
-# from the repo root, with the stack up (make compose-up)
-open http://localhost:3001          # or whatever LGTM_GRAFANA_PORT is set to in infra/.env
-```
+# docker-compose — published straight to the host, overridable via LGTM_GRAFANA_PORT in infra/.env
+open http://localhost:3001
 
-- Port: host `3001` → container `3000`, overridable via `LGTM_GRAFANA_PORT` in `infra/.env`
-  (`infra/.env.example` ships it as `3001`).
-- Auth: none needed — the `grafana/otel-lgtm` image enables anonymous **Admin** access by
-  default. `admin` / `admin` also works if a login is ever prompted (this is what
-  `infra/scripts/smoke-test.sh` uses for its Loki datasource-proxy query).
-
-### Kubernetes (Helm or raw manifests)
-
-There is **no ingress** for `grafana-lgtm` — reach it with a port-forward to the ClusterIP
-Service. It runs in its own namespace (`monitoring.namespace` in `infra/helm/values.yaml`,
-currently `monitoring-rolling-restarts`), separate from the app workloads:
-
-```sh
+# Kubernetes — port-forward to the ClusterIP Service in its own namespace
 kubectl port-forward svc/grafana-lgtm 3001:3000 -n monitoring-rolling-restarts
-# then open:
 open http://localhost:3001
 ```
 
-If you're not sure it's running:
+If you're not sure it's running (Kubernetes):
 
 ```sh
 kubectl get pods,svc -n monitoring-rolling-restarts -l app=grafana-lgtm
@@ -318,13 +321,14 @@ list**, and why:
   replacing the entire monitoring architecture with a full `kube-prometheus-stack`-style
   installation — a much larger undertaking than this project's scope, and not something to do
   silently as a side effect of a namespace split.
-- **Auth (SSO/basic auth) and TLS for Grafana/Prometheus** — already addressed at the network
-  layer instead: neither is exposed via any ingress (confirmed: only one ingress resource in this
-  repo, routing `/api/`, `/actuator/health`, and `/` — nothing for `grafana-lgtm`), reachable only
-  via `kubectl port-forward`, which is itself already encrypted (the Kubernetes API server
-  connection). Grafana's anonymous-Admin default is a deliberate, previously-documented tradeoff
-  under that network-isolation model, not an oversight — revisit if that model ever changes (e.g.
-  if `grafana-lgtm` gets its own ingress route).
+- **SSO** — Grafana is now routed through the shared ingress at `/monitoring` (an ExternalName
+  Service alias, since an Ingress can only target Services in its own namespace and `grafana-lgtm`
+  lives in a separate one), with `GF_AUTH_ANONYMOUS_ENABLED=false` and a real admin password
+  (`GF_SECURITY_ADMIN_PASSWORD` from a Secret) explicitly set on every deployment target — the
+  previous "no ingress, anonymous-Admin is fine since only `kubectl port-forward` reaches it"
+  tradeoff no longer holds now that it's reachable over the public ingress, so this was revisited
+  rather than left as an oversight. Full SSO (OAuth/SAML) is still out of scope — a single shared
+  admin login is enough for this project's team size.
 - **A `PrometheusRule`-based "pod restart count > 5" alert** — the underlying metric
   (`kube_pod_container_status_restarts_total`) comes from `kube-state-metrics`, a separate
   exporter not currently deployed. Adding it is plausible (it can run with namespace-scoped RBAC

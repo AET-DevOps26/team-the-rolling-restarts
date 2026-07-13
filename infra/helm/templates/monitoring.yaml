@@ -1,3 +1,15 @@
+# Lives in monitoring.namespace (not gated by appWorkloads.enabled, unlike templates/secrets.yaml —
+# monitoring.yaml as a whole is unconditional) since the Deployment below that consumes it via
+# secretKeyRef runs in that same namespace; a Secret in a different namespace isn't visible to it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin-credentials
+  namespace: {{ .Values.monitoring.namespace }}
+type: Opaque
+stringData:
+  password: {{ required "monitoring.adminPassword is required — set it in secrets-values.yaml" .Values.monitoring.adminPassword | quote }}
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -77,6 +89,27 @@ spec:
             - containerPort: 3000
             - containerPort: 4317
             - containerPort: 4318
+          env:
+            # The base image's own run-grafana.sh defaults this to "true" with org role "Admin" —
+            # without this override, anyone reaching the Service gets full admin access with no
+            # login at all, making the password below moot. Confirmed live against the
+            # docker-compose copy of this same image before this was set.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: password
+            # Routed through the shared ingress at /monitoring (templates/ingress.yaml) via an
+            # ExternalName Service, since an Ingress can only target Services in its own namespace
+            # and grafana-lgtm lives in monitoring.namespace.
+            - name: GF_SERVER_ROOT_URL
+              value: "https://{{ $.Values.host }}/monitoring/"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
           resources:
 {{ toYaml .Values.monitoring.resources | nindent 12 }}
           volumeMounts:
