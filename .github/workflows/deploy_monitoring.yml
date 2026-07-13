@@ -59,16 +59,57 @@ jobs:
       - name: Ensure monitoring namespace exists with Rancher project association
         run: kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
 
-      # --reuse-values: this deploy only ever touches infra/grafana/* content, never secrets or
-      # image tags, so it reuses whatever the last full deploy_kubernetes.yml run already set for
-      # those instead of re-supplying them — no mongo/JWT/service-client secrets or image-values
-      # needed here at all. Requires the release to already exist (first-ever install must go
-      # through deploy_kubernetes.yml once).
+      # monitoring.adminPassword/smtpUser/smtpPassword/alertEmails are `required` by
+      # templates/monitoring.yaml — --reuse-values alone can't be trusted to already have them:
+      # this workflow's push trigger fires immediately, while deploy_kubernetes.yml (the one that
+      # normally supplies them) waits on build-and-package first (several minutes) and could still
+      # be mid-run, or a release from before these fields existed could be the one being reused.
+      # Confirmed live as a real race: this workflow can win the shared `deploy-k8s` concurrency
+      # group and run to completion before deploy_kubernetes.yml ever sets these, failing outright
+      # on Helm's `required` guard. Generating just these four fields here (not the full mongo/
+      # JWT/service-client secret set deploy_kubernetes.yml also handles) keeps this workflow's
+      # original intent — it still doesn't need the app secrets — while closing the gap for the
+      # fields it now genuinely requires.
+      - name: Generate monitoring secrets values
+        env:
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
+        run: |
+          umask 077
+          for var in GRAFANA_ADMIN_PASSWORD GRAFANA_SMTP_USER GRAFANA_SMTP_PASSWORD GRAFANA_ALERT_EMAILS; do
+            if [ -z "${!var:-}" ]; then
+              echo "::error::$var secret is not configured. Set it in repo secrets before deploying to production."
+              exit 1
+            fi
+          done
+          cat > infra/helm/secrets-values.yaml <<EOF
+          monitoring:
+            adminPassword: "$GRAFANA_ADMIN_PASSWORD"
+            smtpUser: "$GRAFANA_SMTP_USER"
+            smtpPassword: "$GRAFANA_SMTP_PASSWORD"
+            alertEmails: "$GRAFANA_ALERT_EMAILS"
+          EOF
+
+      # --reuse-values: this deploy only ever touches infra/grafana/* content, never the app's own
+      # secrets or image tags, so it reuses whatever the last full deploy_kubernetes.yml run
+      # already set for those instead of re-supplying them — no mongo/JWT/service-client secrets
+      # or image-values needed here. The monitoring.* fields ARE supplied explicitly above, since
+      # --reuse-values can't be trusted to have them (see the comment on that step). Requires the
+      # release to already exist (first-ever install must go through deploy_kubernetes.yml once).
+      #
+      # Deliberately NOT passing `-f infra/helm/values.yaml` here (unlike deploy_kubernetes.yml) —
+      # confirmed live that combining --reuse-values with an explicit `-f values.yaml` (the chart's
+      # own default values file, already loaded automatically by Helm regardless) causes Helm to
+      # drop the reused release's values entirely, failing on every `required` field the reused
+      # values were supposed to supply (e.g. mongodb.rootUsername). `-f values-prod.yaml` alone
+      # does not trigger this — only the chart's own base values.yaml does.
       - name: Deploy with Helm
         run: |
           helm upgrade ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             --reuse-values \
-            -f infra/helm/values.yaml -f infra/helm/values-prod.yaml \
+            -f infra/helm/values-prod.yaml -f infra/helm/secrets-values.yaml \
             --wait --timeout 5m
 
       - name: Diagnose on failure
