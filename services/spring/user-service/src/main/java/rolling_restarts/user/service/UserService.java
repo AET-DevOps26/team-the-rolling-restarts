@@ -4,6 +4,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +20,7 @@ import rolling_restarts.user.repository.UserRepository;
 public class UserService {
 
 	private final UserRepository userRepository;
+	private final MongoTemplate mongoTemplate;
 	private final PasswordEncoder passwordEncoder;
 
 	// Pre-computed hash of a throwaway password. When a username does not exist we still run a
@@ -23,8 +29,10 @@ public class UserService {
 	private final String dummyPasswordHash;
 
 	public UserService(UserRepository userRepository,
+			MongoTemplate mongoTemplate,
 			PasswordEncoder passwordEncoder) {
 		this.userRepository = userRepository;
+		this.mongoTemplate = mongoTemplate;
 		this.passwordEncoder = passwordEncoder;
 		this.dummyPasswordHash = passwordEncoder.encode("dummy-password-for-constant-time-auth");
 	}
@@ -128,6 +136,41 @@ public class UserService {
 		user.setSettings(settings);
 		userRepository.save(user);
 		return settings;
+	}
+
+	/**
+	 * Atomically adds {@code articleId} to the user's saved articles.
+	 *
+	 * <p>Uses Mongo {@code $addToSet} so concurrent saves on different articles cannot clobber
+	 * each other.
+	 */
+	public UserSettings addSavedArticle(String userId, String articleId) {
+		User updated = mongoTemplate.findAndModify(
+				Query.query(Criteria.where("_id").is(userId)),
+				new Update().addToSet("settings.savedArticleIds", articleId),
+				FindAndModifyOptions.options().returnNew(true),
+				User.class);
+		if (updated == null) {
+			throw new IllegalArgumentException("User not found");
+		}
+		return updated.getSettings();
+	}
+
+	/**
+	 * Atomically removes {@code articleId} from the user's saved articles.
+	 *
+	 * <p>Uses Mongo {@code $pull} so concurrent unsaves cannot clobber other additions.
+	 */
+	public UserSettings removeSavedArticle(String userId, String articleId) {
+		User updated = mongoTemplate.findAndModify(
+				Query.query(Criteria.where("_id").is(userId)),
+				new Update().pull("settings.savedArticleIds", articleId),
+				FindAndModifyOptions.options().returnNew(true),
+				User.class);
+		if (updated == null) {
+			throw new IllegalArgumentException("User not found");
+		}
+		return updated.getSettings();
 	}
 
 	public boolean hasSubscription(String userId, String sourceId) {
