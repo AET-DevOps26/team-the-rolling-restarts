@@ -25,7 +25,7 @@ const MAX_POLLS = 20;
 type FetchState =
   | { phase: "fetching"; name: string }
   | { phase: "success"; name: string }
-  | { phase: "failed"; name: string; error: string }
+  | { phase: "failed"; name: string; error: string; cleanupFailed?: boolean; subscribeFailed?: boolean }
   | { phase: "timeout"; name: string }
   | null;
 
@@ -62,13 +62,22 @@ export function SourcesSection({
         return;
       }
       if (res.status === "FAILED") {
-        await unsubscribe(sourceId);
+        const cleanup = await unsubscribe(sourceId);
+        const cleanupFailed = !cleanup.ok;
+        const fetchError = res.error ?? "The feed could not be read.";
         setFetchState({
           phase: "failed",
           name: sourceName,
-          error: res.error ?? "The feed could not be read.",
+          error: fetchError,
+          ...(cleanupFailed ? { cleanupFailed: true } : {}),
         });
-        toast.error(`Couldn't fetch ${sourceName} — it wasn't added to your feed`);
+        if (cleanupFailed) {
+          toast.error(
+            `Couldn't fetch ${sourceName} — and we weren't able to remove it. Please remove it manually from Settings.`
+          );
+        } else {
+          toast.error(`Couldn't fetch ${sourceName} — it wasn't added to your feed`);
+        }
         router.refresh();
         return;
       }
@@ -93,10 +102,15 @@ export function SourcesSection({
         void pollStatus(res.sourceId, addedName);
       } else if (res.sourceId) {
         const detailText = res.details?.join("; ");
-        toast.warning(detailText ? `${res.error}: ${detailText}` : res.error);
-        setFetchState({ phase: "fetching", name: addedName });
+        const errorMessage = detailText ? `${res.error}: ${detailText}` : res.error;
+        toast.error(errorMessage);
+        setFetchState({
+          phase: "failed",
+          name: addedName,
+          error: errorMessage,
+          subscribeFailed: true,
+        });
         router.refresh();
-        void pollStatus(res.sourceId, addedName);
       } else {
         const detailText = res.details?.join("; ");
         toast.error(detailText ? `${res.error}: ${detailText}` : res.error);
@@ -212,7 +226,23 @@ function FetchStatusBanner({
       <span className="flex items-start gap-2">
         <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span>
-          Couldn&apos;t fetch {state.name}. {state.error} It wasn&apos;t kept in your feed.
+          {state.subscribeFailed ? (
+            <>
+              Couldn&apos;t add {state.name} to your feed. {state.error} Enable it from the list below
+              to try again.
+            </>
+          ) : state.cleanupFailed ? (
+            <>
+              Couldn&apos;t fetch {state.name}. {state.error} We weren&apos;t able to remove it
+              automatically — please remove it manually from Settings.
+            </>
+          ) : (
+            <>
+              Couldn&apos;t fetch {state.name}. {state.error}{" "}
+              {state.error.endsWith(".") ? "" : " "}
+              It wasn&apos;t kept in your feed.
+            </>
+          )}
         </span>
       </span>
       <DismissButton onDismiss={onDismiss} />
