@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.errors import UpstreamLLMError
+from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import SentimentRequest, SentimentResponse
 from app.services.content import get_article_text
@@ -75,13 +76,23 @@ def _parse_sentiment_json(content: str) -> dict[str, Any]:
 def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
     try:
         structured = model.with_structured_output(SentimentResult)
-        result = structured.invoke(_build_messages(source_text))
+        result = invoke_chat_model(
+            structured,
+            _build_messages(source_text),
+            endpoint="/sentiment",
+            provider=settings.llm_provider,
+        )
         return _coerce_sentiment_result(result)
     except Exception:
         pass
 
     try:
-        result = model.invoke(_build_messages(source_text, json_only=True))
+        result = invoke_chat_model(
+            model,
+            _build_messages(source_text, json_only=True),
+            endpoint="/sentiment",
+            provider=settings.llm_provider,
+        )
         content = result.content if isinstance(result.content, str) else str(result.content)
         parsed = _parse_sentiment_json(content)
         return SentimentResult.model_validate(parsed)

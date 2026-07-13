@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.config import settings
 from app.errors import UpstreamLLMError
+from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import QaRequest, QaResponse
 from app.services.content import get_article_text
@@ -38,7 +39,12 @@ async def qa(request: QaRequest) -> QaResponse:
 
     model = get_chat_model()
     try:
-        result = model.invoke(messages)
+        result = invoke_chat_model(
+            model,
+            messages,
+            endpoint="/qa",
+            provider=settings.llm_provider,
+        )
     except Exception as exc:  # noqa: BLE001 - map provider failures to unified API errors
         raise UpstreamLLMError("Failed to generate answer") from exc
 

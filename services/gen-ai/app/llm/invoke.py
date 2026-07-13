@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from opentelemetry import metrics, trace
 
@@ -51,13 +50,15 @@ def _record_token_usage(result: Any, attributes: dict[str, str]) -> None:
 
 
 def invoke_chat_model(
-    model: BaseChatModel,
+    model: Any,
     messages: list[BaseMessage],
     *,
     endpoint: str,
     provider: str,
 ) -> Any:
-    """Invoke the chat model with shared observability for all LLM-backed endpoints."""
+    """Invoke a chat model (or a structured-output-wrapped runnable) with shared
+    observability for all LLM-backed endpoints. `model` only needs to support
+    `.invoke(messages)`."""
     attributes = {"endpoint": endpoint, "provider": provider}
     start = time.perf_counter()
 
