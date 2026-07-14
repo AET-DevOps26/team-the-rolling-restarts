@@ -85,4 +85,12 @@ class UrlSafetyValidatorTest {
 		assertThatCode(() -> UrlSafetyValidator.validatePublicUrl("https://8.8.8.8/feed"))
 				.doesNotThrowAnyException();
 	}
+
+	@Test
+	void validatePublicUrl_returnsValidatedAddresses() throws Exception {
+		// The caller (RssFetcherService) pins the connection to exactly what was validated here —
+		// confirm the validated address is actually returned, not just that validation passed.
+		InetAddress[] addresses = UrlSafetyValidator.validatePublicUrl("https://8.8.8.8/feed");
+		assertThat(addresses).containsExactly(InetAddress.getByName("8.8.8.8"));
+	}
 }

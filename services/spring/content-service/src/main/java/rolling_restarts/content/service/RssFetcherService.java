@@ -1,6 +1,7 @@
 package rolling_restarts.content.service;
 
 import java.io.InputStream;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -8,6 +9,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -31,6 +33,7 @@ import rolling_restarts.content.model.FetchStatus;
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.ArticleRepository;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.util.PinnedDnsResolverProvider;
 import rolling_restarts.content.util.RssHtmlUtils;
 import rolling_restarts.content.util.RssUrlNormalizer;
 import rolling_restarts.content.util.UrlSafetyValidator;
@@ -146,49 +149,58 @@ public class RssFetcherService {
 	 * {@code Location} on 3xx so http→https upgrades on the original host still work safely.
 	 */
 	private HttpResponse<InputStream> fetchWithSameHostRedirect(String url) throws Exception {
-		UrlSafetyValidator.validatePublicUrl(url);
+		InetAddress[] addresses = UrlSafetyValidator.validatePublicUrl(url);
 		URI originalUri = URI.create(url);
 		String originalHost = originalUri.getHost();
 
-		String currentUrl = url;
-		for (int hop = 0; hop < 2; hop++) {
-			HttpRequest request = HttpRequest.newBuilder()
-					.uri(URI.create(currentUrl))
-					.timeout(REQUEST_TIMEOUT)
-					.GET()
-					.build();
-			HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
-			int status = response.statusCode();
+		// Pin the connect-time resolution to exactly the addresses just validated, closing the
+		// TOCTOU gap where a DNS-rebinding attacker could serve a different (internal) address to
+		// HttpClient's own, independent re-resolution moments later. See PinnedDnsResolverProvider.
+		PinnedDnsResolverProvider.pin(originalHost, List.of(addresses));
+		try {
+			String currentUrl = url;
+			for (int hop = 0; hop < 2; hop++) {
+				HttpRequest request = HttpRequest.newBuilder()
+						.uri(URI.create(currentUrl))
+						.timeout(REQUEST_TIMEOUT)
+						.GET()
+						.build();
+				HttpResponse<InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+				int status = response.statusCode();
 
-			if (status >= 200 && status < 300) {
-				return response;
-			}
+				if (status >= 200 && status < 300) {
+					return response;
+				}
 
-			if (status >= 300 && status < 400 && hop == 0) {
-				String location = response.headers().firstValue("Location").orElse(null);
+				if (status >= 300 && status < 400 && hop == 0) {
+					String location = response.headers().firstValue("Location").orElse(null);
+					response.body().close();
+					if (location == null || location.isBlank()) {
+						throw new IllegalStateException("Redirect without Location fetching " + currentUrl);
+					}
+					String redirectUrl = URI.create(currentUrl).resolve(location).toString();
+					URI redirectUri = URI.create(redirectUrl);
+					if (redirectUri.getHost() == null
+							|| !redirectUri.getHost().equalsIgnoreCase(originalHost)) {
+						throw new IllegalStateException("Cross-host redirect not allowed for " + currentUrl);
+					}
+					InetAddress[] redirectAddresses = UrlSafetyValidator.validatePublicUrl(redirectUrl);
+					PinnedDnsResolverProvider.pin(originalHost, List.of(redirectAddresses));
+					currentUrl = redirectUrl;
+					continue;
+				}
+
 				response.body().close();
-				if (location == null || location.isBlank()) {
-					throw new IllegalStateException("Redirect without Location fetching " + currentUrl);
-				}
-				String redirectUrl = URI.create(currentUrl).resolve(location).toString();
-				URI redirectUri = URI.create(redirectUrl);
-				if (redirectUri.getHost() == null
-						|| !redirectUri.getHost().equalsIgnoreCase(originalHost)) {
-					throw new IllegalStateException("Cross-host redirect not allowed for " + currentUrl);
-				}
-				UrlSafetyValidator.validatePublicUrl(redirectUrl);
-				currentUrl = redirectUrl;
-				continue;
+				throw new IllegalStateException(
+						"Unexpected HTTP status " + status + " fetching " + currentUrl);
 			}
-
-			response.body().close();
-			throw new IllegalStateException(
-					"Unexpected HTTP status " + status + " fetching " + currentUrl);
+			throw new IllegalStateException("Too many redirects fetching " + url);
+		} finally {
+			PinnedDnsResolverProvider.unpin(originalHost);
 		}
-		throw new IllegalStateException("Too many redirects fetching " + url);
 	}
 
-	private void persistFeedEntries(Source source, SyndFeed feed) {
+	void persistFeedEntries(Source source, SyndFeed feed) {
 		List<String> entryUrls = feed.getEntries().stream()
 				.map(SyndEntry::getLink)
 				.filter(url -> url != null)
@@ -201,10 +213,23 @@ public class RssFetcherService {
 
 		// A shared source is deleted when its last subscriber leaves; re-adding the same feed
 		// mints a new source id. Existing articles (deduped globally by URL) would otherwise stay
-		// pinned to the dead id and never appear for the re-created source, so re-point them here.
+		// pinned to the dead id and never appear for the re-created source, so re-point them here
+		// — but only when the article's original source is actually gone. Two distinct, both-live
+		// sources can legitimately carry the same external_url (syndicated/wire content); an id
+		// mismatch alone doesn't mean the original source is dead.
+		Set<String> otherSourceIds = existingArticles.stream()
+				.map(Article::getSourceId)
+				.filter(id -> !source.getId().equals(id))
+				.collect(Collectors.toSet());
+		Set<String> liveOtherSourceIds = new HashSet<>();
+		if (!otherSourceIds.isEmpty()) {
+			sourceRepository.findAllById(otherSourceIds).forEach(s -> liveOtherSourceIds.add(s.getId()));
+		}
+
 		List<Article> reassigned = new ArrayList<>();
 		for (Article existing : existingArticles) {
-			if (!source.getId().equals(existing.getSourceId())) {
+			if (!source.getId().equals(existing.getSourceId())
+					&& !liveOtherSourceIds.contains(existing.getSourceId())) {
 				existing.setSourceId(source.getId());
 				reassigned.add(existing);
 			}
