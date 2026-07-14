@@ -38,17 +38,18 @@ anywhere, all four GenAI endpoints (`/summarize`, `/explain`, `/sentiment`,
 actions. **Verified live end-to-end on the Kubernetes deployment**: signup,
 login, dashboards, article AI widgets, and the full monitoring stack all
 confirmed working against the real cluster this session. Two things keep this
-short of a clean Excellent: (1) the Azure VM deployment target works for
-everything *except* gen-ai's LLM calls (`logos` is TUM-network-only,
-unreachable from Azure; no Ollama instance is provisioned there) — a real,
-scoped functional gap on one of the two deployment targets; (2) the article
+short of a clean Excellent: (1) the Azure VM deployment target's gen-ai LLM
+calls have a code-level fix merged (self-hosted Ollama in
+`infra/docker-compose.azure.yaml`, since `logos` is TUM-network-only and
+unreachable from Azure) but it hasn't been live-verified against a real Azure
+deploy yet — re-verify before treating this as closed; (2) the article
 search feature (`?q=` on the dashboard) is fully implemented but fails live
 with a MongoDB `IndexNotFound` error (`auto-index-creation` defaults to
 `false`, no text index is ever actually created) — confirmed via a live 500
 from `content-service`.
 
-- **Evidence:** `web-client/src/lib/api/{reads,ai}.ts`, `web-client/src/app/(app)/article/[id]/ai-actions.ts`, `web-client/src/components/article/ai/`; `services/gen-ai/app/routers/{summarize,explain,sentiment,qa}.py`; `services/spring/content-service/src/main/java/rolling_restarts/content/service/ArticleService.java` (search, broken); `docs/internal/06-observability.md` and `docs/internal/07-gotchas.md` for the live-verification incident log
-- **Re-verify:** exercise the AI widgets and search bar against the live Kubernetes deployment; `kubectl logs -n deployment deploy/content-service | grep "IndexNotFound"` (search bug); `kubectl logs -n deployment deploy/gen-ai | grep "OpenAIError"` (Azure-only gap, won't reproduce on Kubernetes)
+- **Evidence:** `web-client/src/lib/api/{reads,ai}.ts`, `web-client/src/app/(app)/article/[id]/ai-actions.ts`, `web-client/src/components/article/ai/`; `services/gen-ai/app/routers/{summarize,explain,sentiment,qa}.py`; `services/spring/content-service/src/main/java/rolling_restarts/content/service/ArticleService.java` (search, broken); `infra/docker-compose.azure.yaml` (Ollama); `docs/internal/06-observability.md` and `docs/internal/07-gotchas.md` for the live-verification incident log
+- **Re-verify:** exercise the AI widgets and search bar against the live Kubernetes deployment; `kubectl logs -n deployment deploy/content-service | grep "IndexNotFound"` (search bug); a fresh Azure VM deploy, exercising gen-ai's endpoints against the new Ollama container
 
 ### Architecture Quality — **Excellent** (up from "Good, borderline")
 
@@ -151,9 +152,10 @@ quick start. Still held back from Excellent because that quick start lives in
 
 All three required areas now have real coverage, correcting the previous
 pass's claims for two of them: **Spring** has 18 test files with real
-assertions across the 3 services (unchanged). **GenAI** has 6 real test files
+assertions across the 3 services (unchanged). **GenAI** has 9 real test files
 (`test_health.py`, `test_summarize.py`, `test_explain.py`, `test_sentiment.py`,
-`test_qa.py`, `test_observability.py`) — the previous pass's claim that
+`test_qa.py`, `test_observability.py`, `test_metrics.py`,
+`test_upstream_errors.py`, `test_content.py`) — the previous pass's claim that
 `services/gen-ai/tests/` "contains only `__init__.py`" was already wrong when
 written, or went stale very quickly. **web-client** now has a real Vitest
 runner (`"test": "vitest run"`) with 5 test files covering the server-only

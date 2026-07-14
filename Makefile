@@ -377,8 +377,10 @@ azure-cicd-help:
 	  '   printf %s "<llm-api-key>" | gh secret set LLM_API_KEY --repo $(GH_REPO) --env production' \
 	  '' \
 	  '3. Config variables not derived from Terraform (set once if defaults dont fit):' \
-	  '   gh variable set LLM_PROVIDER  --repo $(GH_REPO) --body openai' \
-	  '   gh variable set LLM_MODEL     --repo $(GH_REPO) --body gpt-4o-mini' \
+	  '   # deploy-azure.yml already defaults LLM_PROVIDER/LLM_MODEL to ollama/llama3.2:1b —' \
+	  '   # logos is unreachable from Azure off the TUM network. Only override if you want a' \
+	  '   # different provider (previously suggesting LLM_PROVIDER=openai here broke every LLM' \
+	  '   # endpoint for weeks; openai/logos are unusable from Azure, see docs/internal/07-gotchas.md).' \
 	  '   gh variable set MONGO_DATABASE --repo $(GH_REPO) --body mydatabase' \
 	  '' \
 	  'Then trigger: gh workflow run deploy-azure.yml --repo $(GH_REPO)'

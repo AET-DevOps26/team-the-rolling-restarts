@@ -121,12 +121,13 @@ fresh VM, and Docker's fallback (auto-creating the missing source as an
 empty directory) broke the container outright. Same class of fix as the
 Ansible `app` role's equivalent (`docs/internal/06-observability.md`).
 
-**Known limitation, not a workflow bug**: this deployment target's gen-ai
-LLM calls don't currently work. gen-ai's `logos` provider
+**Fix merged, not yet live-verified**: gen-ai's `logos` provider
 (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only and unreachable
-from Azure's public cloud, and no Ollama instance is provisioned on this
-target either (the `ollama` compose service exists but is gated behind a
-profile nothing in this path activates). Everything else on this target
+from Azure's public cloud, so this deployment target's LLM calls used to
+fail outright. `infra/docker-compose.azure.yaml` now runs a self-hosted
+Ollama container (`llama3.2:1b`) and `deploy-azure.yml` defaults
+`LLM_PROVIDER=ollama` for this target instead — implemented, but not yet
+exercised against a real Azure deploy. Everything else on this target
 (signup/login, dashboards, mongodb, grafana-lgtm) works.
 
 ## `destroy-azure.yml` — name: "Destroy Azure resources"

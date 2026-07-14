@@ -16,7 +16,7 @@ Overlay files, combined via `-f base -f overlay`:
 | --- | --- |
 | `docker-compose.dev.yaml` | Local hot-reload dev overrides (build context, dev Dockerfile target) |
 | `docker-compose.prod.yaml` | Azure VM production overlay — clamps every host-published port **except the reverse-proxy** (`APP_PORT`, default 80) to `127.0.0.1`, so only the proxy is reachable on the VM's public IP |
-| `docker-compose.azure.yaml` | Used by `deploy-azure` workflow: runs from **pre-built images pulled from ACR** instead of building from source |
+| `docker-compose.azure.yaml` | Used by `deploy-azure` workflow: runs from **pre-built images pulled from ACR** instead of building from source; also clears the base `ollama` service's `local-llm` profile gate so a self-hosted Ollama (`llama3.2:1b`) runs unconditionally — `logos` is unreachable from Azure's public cloud, so this is `LLM_PROVIDER`'s default there instead. Not used by the manual Ansible path — see `docs/source/azure-vm-deployment.md`. |
 | `docker-compose.test.yaml` | CI/test overlay — resets some services' ports/profiles (e.g. `web-client` profile reset to `manual`, ports reset to `[]`) |
 
 Local quick start (documented in `docs/source/index.md`, **not yet in root

@@ -112,9 +112,12 @@ end-to-end this branch — this is no longer an unverified-from-a-sandbox assump
 status: **Kubernetes works fully**, including gen-ai's LLM calls (after fixing a missing
 `LLM_API_KEY` wire-through) and the full monitoring stack, **including alerting notification
 delivery** — the SMTP contact point is wired and confirmed live (a real alert reached both
-configured recipients' inboxes), see `docs/source/monitoring.md`. **The Azure VM works for
-everything except gen-ai's LLM-backed endpoints** — see the `logos`/`ollama` gotcha above. Don't
-assume either target's *current* state without re-checking; both have moved multiple times in one
+configured recipients' inboxes), see `docs/source/monitoring.md`. **The Azure VM**: everything but
+gen-ai's LLM-backed endpoints was confirmed working live; those endpoints had the same `logos`-
+unreachable-from-Azure problem described in the gotcha above, and a fix (self-hosted Ollama in
+`infra/docker-compose.azure.yaml`) has since merged in but **hasn't been live-verified against a
+real Azure deploy yet** — re-check before assuming it's resolved. Don't assume either target's
+*current* state without re-checking; both have moved multiple times in one
 session — most recently, `main`-triggered deploys prune the entire monitoring stack from the
 shared Kubernetes release because `main` doesn't have this branch's Helm chart yet (see the
 "Kubernetes deploy prunes monitoring" gotcha below).
