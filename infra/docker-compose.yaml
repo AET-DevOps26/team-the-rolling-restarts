@@ -256,9 +256,11 @@ services:
       # Grafana is reachable both directly (LGTM_GRAFANA_PORT, unchanged) and via the reverse
       # proxy's /monitoring path (infra/nginx/default.conf). These two make it aware it's also
       # served from that sub-path so its own asset/API links resolve correctly through the proxy.
-      # The domain in ROOT_URL only affects absolute links Grafana itself generates (e.g. any
-      # future SSO redirect) — it doesn't need to match the real host for basic dashboard use.
-      GF_SERVER_ROOT_URL: http://localhost/monitoring/
+      # ROOT_URL also feeds absolute links Grafana generates itself — notably the "View alert
+      # rule" link in alert emails — so on a real deployment this must be the externally
+      # reachable URL, not localhost, or recipients get a dead link. GRAFANA_ROOT_URL lets each
+      # deployment target (e.g. the Azure VM) override the default local-dev value.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost/monitoring/}
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       # Email alert delivery. GRAFANA_ALERT_EMAILS is read directly by
       # provisioning/alerting/contactpoints.yaml via Grafana's own $__env{} expansion, not by this

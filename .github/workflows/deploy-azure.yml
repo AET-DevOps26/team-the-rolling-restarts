@@ -223,6 +223,10 @@ jobs:
           GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
           GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
           GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
+          # Public URL of the VM, e.g. http://<vm-public-ip>/monitoring/. Optional — the compose
+          # file falls back to http://localhost/monitoring/ if unset, which still works locally
+          # but produces dead links in alert emails sent from this deployment target.
+          GRAFANA_ROOT_URL: ${{ vars.GRAFANA_ROOT_URL }}
         run: |
           umask 077
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
@@ -264,6 +268,7 @@ jobs:
           GRAFANA_SMTP_USER=${GRAFANA_SMTP_USER}
           GRAFANA_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD}
           GRAFANA_ALERT_EMAILS=${GRAFANA_ALERT_EMAILS}
+          GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)

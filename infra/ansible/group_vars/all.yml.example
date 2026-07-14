@@ -42,3 +42,7 @@ app_env:
   GRAFANA_SMTP_USER: "replace-with-sender-address"
   GRAFANA_SMTP_PASSWORD: "replace-with-vault-secret"
   GRAFANA_ALERT_EMAILS: "replace-with-recipient-list"
+  # Externally reachable URL Grafana uses for absolute links it generates itself (e.g. the "View
+  # alert rule" link in alert emails). Must match this VM's real public domain/IP, or those links
+  # are dead for recipients. Include the /monitoring/ sub-path.
+  GRAFANA_ROOT_URL: "https://your-domain.example.com/monitoring/"

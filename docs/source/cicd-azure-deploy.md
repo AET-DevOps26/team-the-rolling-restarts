@@ -165,6 +165,7 @@ They are non-sensitive configuration.
 | `LLM_PROVIDER` | `openai` | GenAI provider. |
 | `LLM_MODEL` | `gpt-4o-mini` | GenAI model. |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB database name. |
+| `GRAFANA_ROOT_URL` | `http://<vm-public-ip>/monitoring/` | _Optional._ Externally reachable URL Grafana uses for absolute links it generates itself (e.g. the "View alert rule" link in alert emails). Falls back to `http://localhost/monitoring/` if unset — still functional locally, but alert email links are dead for recipients. |
 
 ## Security notes
 

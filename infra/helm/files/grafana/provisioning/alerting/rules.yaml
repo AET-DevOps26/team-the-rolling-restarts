@@ -55,7 +55,17 @@ groups:
             model:
               refId: A
               instant: true
-              expr: 'up{job=~"api-gateway|user-service|content-service|gen-ai"}'
+              # max by (job) so one down replica out of several doesn't mark the whole service
+              # down; the label_replace(vector(0), ...) fallbacks guarantee each expected job has
+              # a series (defaulting to 0 = down) even if it's vanished entirely from discovery,
+              # since a plain `up{job=~...}` with zero matching series would otherwise dodge the
+              # lt-1 threshold below and rely solely on noDataState to catch it.
+              expr: |
+                max by (job) (up{job=~"api-gateway|user-service|content-service|gen-ai"})
+                or label_replace(vector(0), "job", "api-gateway", "", "")
+                or label_replace(vector(0), "job", "user-service", "", "")
+                or label_replace(vector(0), "job", "content-service", "", "")
+                or label_replace(vector(0), "job", "gen-ai", "", "")
           - refId: C
             datasourceUid: __expr__
             model:
