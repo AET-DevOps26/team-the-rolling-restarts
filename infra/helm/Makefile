@@ -10,6 +10,7 @@ MONGO_USER ?= root
 # install-target namespace, not other namespaces referenced by templates via an explicit
 # metadata.namespace) — so it must exist before install/upgrade runs, or those fail outright.
 MONITORING_NAMESPACE ?= monitoring-rolling-restarts
+MONITORING_NAMESPACE_SET = --set monitoring.namespace=$(MONITORING_NAMESPACE)
 
 # Auto-detect secrets-values.yaml if present, unless overridden
 ifneq ($(wildcard secrets-values.yaml),)
@@ -70,15 +71,15 @@ ensure-monitoring-namespace:
 
 ## Install the chart into a namespace.
 helm-install: ensure-monitoring-namespace
-	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
+	$(HELM) install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET) $(MONITORING_NAMESPACE_SET)
 
 ## Upgrade an existing release.
 helm-upgrade: ensure-monitoring-namespace
-	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
+	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET) $(MONITORING_NAMESPACE_SET)
 
 ## Install or upgrade in one command.
 helm-deploy: ensure-monitoring-namespace
-	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET)
+	$(HELM) upgrade --install $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET) $(MONITORING_NAMESPACE_SET)
 
 ## Tear down only the app workloads (web-client, api-gateway, user-service, content-service,
 ## gen-ai, mongodb, ingress) — including mongodb's data, same as a full uninstall always has —
@@ -87,7 +88,7 @@ helm-deploy: ensure-monitoring-namespace
 ## removed rather than deleting the release itself — grafana-lgtm keeps rendering unconditionally
 ## since templates/monitoring.yaml has no appWorkloads.enabled guard.
 helm-destroy:
-	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET) --set appWorkloads.enabled=false
+	$(HELM) upgrade $(RELEASE) $(CHART) $(VALUES_FILES) $(HOST_SET) $(MONITORING_NAMESPACE_SET) --set appWorkloads.enabled=false
 
 ## Full teardown: also removes grafana-lgtm and uninstalls the release entirely. Rarely what you
 ## want — prefer `make helm-destroy` unless you're intentionally decommissioning monitoring too.

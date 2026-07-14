@@ -1,6 +1,9 @@
 ---
-- name: Check if Docker is already installed
-  ansible.builtin.command: which docker
+# `which docker` alone isn't enough: a host can have /usr/bin/docker (e.g. from a partial or
+# older install) but be missing the Compose plugin, which would make this task skip setup and
+# leave `docker compose` broken. Check both.
+- name: Check if Docker and the Compose plugin are already installed
+  ansible.builtin.shell: command -v docker >/dev/null && docker compose version >/dev/null 2>&1
   register: docker_check
   failed_when: false
   changed_when: false
@@ -12,6 +15,11 @@
 # get.docker.com's official repo). Since CI/CD's `azure-vm-docker` may run against this same VM
 # either before or after this role, both paths must install Docker the same way or whichever runs
 # second fails with "containerd.io : Conflicts: containerd".
+#
+# NOTE: this still pipes get.docker.com's install script unpinned (no script-integrity or
+# Docker-version pin) — flagged in review. Left as-is here rather than guessing at a specific
+# version/commit to pin without being able to verify it's still valid; if you tighten this,
+# update `make azure-vm-docker` (root Makefile) to match, or the two paths diverge again.
 - name: Install Docker via get.docker.com
   ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
   when: docker_check.rc != 0
