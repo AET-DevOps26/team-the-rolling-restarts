@@ -127,7 +127,7 @@ spec:
             - -c
             - |
               cd /otel-lgtm/grafana && \
-              GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins \
+              GF_PATHS_HOME=/otel-lgtm/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins \
               ./bin/grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD"
           env:
             - name: GF_SECURITY_ADMIN_PASSWORD
@@ -135,6 +135,18 @@ spec:
                 secretKeyRef:
                   name: grafana-admin-credentials
                   key: password
+          # allowPrivilegeEscalation/dropped capabilities/seccompProfile are safe defaults that
+          # only restrict privilege escalation and syscalls, not the UID the image already runs
+          # as. Deliberately NOT setting runAsNonRoot: true — this bundled image (Prometheus/
+          # Grafana/Tempo/Loki/Pyroscope) hasn't been verified to actually run as non-root, and
+          # getting that wrong (e.g. it needs root to write /data on first boot) would break the
+          # deployment outright rather than just being less hardened.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           # Kept well under the main container's limits below (400m/850Mi) — Kubernetes computes a
           # pod's effective quota usage as max(sum of app containers, largest single initContainer)
           # per resource, since initContainers never run concurrently with app containers. As long
@@ -155,6 +167,13 @@ spec:
       containers:
         - name: {{ .Values.monitoring.name }}
           image: {{ .Values.monitoring.image }}
+          # See the initContainer's securityContext above for why runAsNonRoot isn't set here.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: 3000
             - containerPort: 4317
@@ -205,6 +224,28 @@ spec:
                 secretKeyRef:
                   name: grafana-smtp-credentials
                   key: alertEmails
+          # Hit directly on the container port, bypassing GF_SERVER_SERVE_FROM_SUB_PATH's
+          # /monitoring prefix (that only affects how Grafana builds browser-facing URLs, not its
+          # own routing) — confirmed by infra/scripts/smoke-test.sh's Grafana health check using
+          # the same bare /api/health path. Generous initialDelay/failureThreshold on readiness:
+          # this image bundles Prometheus/Grafana/Tempo/Loki/Pyroscope and can take a while to
+          # come up, especially against a fresh PVC needing first-boot migrations, and Kubernetes
+          # would otherwise route /monitoring traffic here (or restart a merely-slow-starting pod)
+          # before it's actually ready.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 6
           resources:
 {{ toYaml .Values.monitoring.resources | nindent 12 }}
           volumeMounts:
