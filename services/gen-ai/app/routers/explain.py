@@ -9,6 +9,7 @@ from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import ExplainRequest, ExplainResponse
 from app.services.content import get_article_text
+from app.services.source_text import build_source_text, require_processable_source
 
 router = APIRouter()
 
@@ -32,18 +33,15 @@ KNOWLEDGE_LEVEL_INSTRUCTIONS = {
 }
 
 
-def _build_source_text(*, headline: str, text: str) -> str:
-    parts = [part.strip() for part in (headline, text) if part and part.strip()]
-    return "\n\n".join(parts)
-
-
 @router.post("/explain", response_model=ExplainResponse)
 async def explain(request: ExplainRequest) -> ExplainResponse:
     if request.articleId is not None:
         article = await get_article_text(request.articleId)
-        source_text = _build_source_text(headline=article.headline, text=article.text)
+        source_text = build_source_text(headline=article.headline, text=article.text)
     else:
         source_text = request.text or ""
+
+    require_processable_source(source_text)
 
     system_prompt = (
         "You are a news explanation assistant. "

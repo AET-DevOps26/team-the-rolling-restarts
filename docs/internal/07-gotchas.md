@@ -20,8 +20,9 @@ grep -rln "generated/api\|apiFetch\b" web-client/src --include="*.tsx" --include
 
 **No longer true.** `services/gen-ai/app/routers/` has `summarize.py`, `explain.py`,
 `sentiment.py`, and `qa.py`, each invoking a real LLM via `app/llm/provider.py` (`ollama` or
-`logos`, see below for the gotcha in *that*). Full OTel instrumentation (traces + custom
-`gen_ai_llm_*` metrics) too. See [03-gen-ai-service.md](03-gen-ai-service.md).
+`logos`, see below for the gotcha in *that*), routed through the gateway at `/api/ai/**` (which is
+`permitAll`). Full OTel instrumentation (traces + custom `gen_ai_llm_*` metrics) too. Still no RAG.
+See [03-gen-ai-service.md](03-gen-ai-service.md).
 
 ## gen-ai's LLM provider is only ever `ollama` or `logos` — anything else crashes, not falls back
 
@@ -39,6 +40,22 @@ and `docs/internal/05-ci-cd-workflows.md` for the current (still-unresolved on A
 ```sh
 grep -n "if settings.llm_provider" services/gen-ai/app/llm/provider.py   # only ollama/logos branch
 ```
+
+## Articles have no full body; `?q=` search needs Mongo index auto-creation
+
+Two things that cost real debugging during manual testing:
+
+- `RssFetcherService` hard-codes `article.setBody(List.of())` — `Article.body`
+  is **always empty**. The only stored text is `snippet` (the RSS description,
+  HTML-stripped). gen-ai's `get_article_text` therefore falls back to `snippet`
+  when `body` is empty. True full-article text would require page scraping —
+  tracked in issue #88.
+- The article search (`GET /api/content/articles?q=`) uses a Mongo `$text`
+  query against the `@TextIndexed` `headline`/`snippet` fields. Spring Data
+  MongoDB **disables index auto-creation by default**, so without
+  `spring.data.mongodb.auto-index-creation=true` (now set in content-service
+  `application.properties`) the query fails with
+  `IndexNotFound: text index required for $text query` → HTTP 500.
 
 ## `services/spring-api/` is dead local clutter, not a 4th service
 

@@ -137,7 +137,7 @@ They are sensitive and are masked in logs.
 | Secret | Description |
 | --- | --- |
 | `AZURE_CREDENTIALS` | Service-principal JSON (`clientId`/`clientSecret`/`subscriptionId`/`tenantId`) used by `azure/login`. |
-| `LLM_API_KEY` | API key for the GenAI provider. |
+| `LLM_API_KEY` | _Optional._ API key for a cloud LLM provider. **Not needed for the default Azure setup** — the VM is off the TUM network so Logos is unreachable, and GenAI runs against a self-hosted Ollama on the VM instead (see below). Only set this if you point `LLM_PROVIDER` at a cloud endpoint the VM can actually reach. |
 | `MONGO_ROOT_USERNAME` | MongoDB root username. |
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
 | `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) the user-service auth server publishes via JWKS. Stored as a single-line PEM (newlines stripped). If unset, user-service generates an ephemeral key that is lost on every restart, invalidating all issued tokens. |
@@ -162,10 +162,29 @@ They are non-sensitive configuration.
 | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). Stable across destroy/recreate. |
 | `DEPLOY_DIR` | `/opt/rolling-restarts` | Directory on the VM the stack is deployed to. |
 | `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group of the VM (deploy looks up the VM here; also used by the teardown workflow). |
-| `LLM_PROVIDER` | `openai` | GenAI provider. |
-| `LLM_MODEL` | `gpt-4o-mini` | GenAI model. |
+| `LLM_PROVIDER` | `ollama` | GenAI provider. Defaults to `ollama` on the VM (Logos is unreachable off the TUM network). |
+| `LLM_MODEL` | `llama3.2:1b` | GenAI model. For `ollama` this is the Ollama model tag pulled on the VM; keep it small to fit the VM. |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB database name. |
 | `GRAFANA_ROOT_URL` | `http://<vm-public-ip>/monitoring/` | _Optional._ Externally reachable URL Grafana uses for absolute links it generates itself (e.g. the "View alert rule" link in alert emails). Falls back to `http://localhost/monitoring/` if unset — still functional locally, but alert email links are dead for recipients. |
+
+## GenAI on the Azure VM (self-hosted Ollama)
+
+The Azure VM sits outside the TUM network, so the Logos cloud LLM is unreachable
+from it. The Azure override (`infra/docker-compose.azure.yaml`) therefore runs a
+local **Ollama** container as part of the stack:
+
+- It starts unconditionally (the base compose gates `ollama` behind the
+  `local-llm` profile; the Azure override clears that), pulls `OLLAMA_MODEL`
+  (default `llama3.2:1b`) on first boot into a persistent volume, and only
+  reports healthy once the model is present.
+- `gen-ai` waits for Ollama to be healthy and is configured with
+  `LLM_PROVIDER=ollama` / `LLM_MODEL=<the same tag>`.
+
+**Resource caveat:** an LLM is memory- and CPU-hungry. On a small VM
+(e.g. `Standard_B2ps_v2`) stick to a small model like `llama3.2:1b`; larger
+models may OOM or make the whole stack sluggish. To use a cloud provider instead
+(only if the VM can reach it), set the `LLM_PROVIDER`/`LLM_MODEL` variables and
+`LLM_API_KEY` secret accordingly.
 
 ## Security notes
 

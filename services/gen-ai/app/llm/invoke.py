@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from typing import Any
 
 from langchain_core.messages import BaseMessage
@@ -55,11 +56,18 @@ def invoke_chat_model(
     *,
     endpoint: str,
     provider: str,
+    invoke_fn: Callable[[], Any] | None = None,
     count_errors: bool = True,
 ) -> Any:
     """Invoke a chat model (or a structured-output-wrapped runnable) with shared
     observability for all LLM-backed endpoints. `model` only needs to support
     `.invoke(messages)`.
+
+    `invoke_fn`, if given, is called instead of `model.invoke(messages)` — for callers whose
+    actual invocation isn't a plain `model.invoke(messages)` call (e.g. sentiment's structured-
+    output attempt, which calls `structured.invoke(messages)` on a wrapped runnable). `model`/
+    `messages` are still required in that case, since they're unused for the call itself but
+    nothing else about this function's observability behavior changes.
 
     `count_errors=False` skips the `gen_ai.llm.errors` increment on failure — for callers
     where this specific invocation is an anticipated first attempt with its own fallback (e.g.
@@ -69,13 +77,14 @@ def invoke_chat_model(
     """
     attributes = {"endpoint": endpoint, "provider": provider}
     start = time.perf_counter()
+    result: Any
 
     with _tracer.start_as_current_span(
         "llm.invoke",
         attributes={"gen_ai.endpoint": endpoint, "gen_ai.provider": provider},
     ):
         try:
-            result = model.invoke(messages)
+            result = invoke_fn() if invoke_fn is not None else model.invoke(messages)
         except Exception:
             if count_errors:
                 _llm_errors.add(1, attributes)

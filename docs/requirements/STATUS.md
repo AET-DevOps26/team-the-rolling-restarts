@@ -21,7 +21,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ✅ Real user-facing use case — `POST /summarize`, `/explain`, `/sentiment`, `/qa` implemented (gateway: `/api/ai/*`); fetches article text from content-service when `articleId` is supplied; **web client article page** exposes Summary / Explain / Sentiment / Q&A widgets calling `/api/ai/*` via server actions (end-to-end user flow)
-- ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`
+- ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`. **Follow-up:** no rate limit or request-size cap on these routes yet — they front a paid Logos LLM; add gateway throttling and/or auth before production abuse.
 - ⚠️ Cloud + local model support — code supports both (`get_chat_model()` branches on `LLM_PROVIDER=logos|ollama`), but **only `logos` is actually working, and only on Kubernetes**: `logos` (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only, unreachable from the Azure VM deployment, and no Ollama instance is actually provisioned/running in *any* current deployment target (the `ollama` compose service exists but is gated behind the `local-llm` profile, which nothing in either deploy path activates). Confirmed live: gen-ai's LLM endpoints (`/summarize`, `/explain`, `/sentiment`, `/qa`) work end-to-end on Kubernetes; all 4 fail on the Azure VM. See `docs/internal/07-gotchas.md` and `docs/internal/06-observability.md`.
 - ❌ RAG / vector DB (optional bonus) — not started
 
@@ -97,7 +97,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 08 — Testing
 
 - ✅ Spring unit tests, real assertions, run in CI — api-gateway (5 files, e.g. `SubscriberScopeTest.java`), user-service (6 files, e.g. `AuthControllerTest.java`), content-service (7 files, e.g. `ArticleControllerTest.java`)
-- ✅ GenAI unit tests — `services/gen-ai/tests/test_health.py`, `test_summarize.py`, `test_explain.py`, `test_sentiment.py`, `test_qa.py` (offline mocked pytest)
+- ✅ GenAI unit tests — `services/gen-ai/tests/test_health.py`, `test_summarize.py`, `test_explain.py`, `test_sentiment.py`, `test_qa.py`, `test_observability.py`, `test_metrics.py`, `test_upstream_errors.py`, `test_content.py` (offline mocked pytest)
 - ⚠️ Client-side tests — a real Vitest runner is configured (`package.json`'s `"test": "vitest run"`), with 5 `*.test.ts` files (`lib/api/client.test.ts`, `lib/format/{time,html,color,rss-url}.test.ts`) covering utility/data-layer logic. No component/page-level (`*.test.tsx`) or E2E coverage yet — still a real gap, just not a "zero test runner" one anymore.
 
 ## 09 — Engineering Artefacts
@@ -147,12 +147,13 @@ activity rather than this file.
    contactpoints.yaml`), with SMTP delivery confirmed live end-to-end (real email arrival, not
    just config rendering) on both docker-compose and Kubernetes. Recipient list/SMTP credentials
    are env-var/secret-driven, replaceable on any redeploy without touching provisioning files.
-6. **The Azure VM deployment's gen-ai LLM calls don't work** — `logos`
-   (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only, unreachable from Azure's public cloud,
-   and no Ollama instance is provisioned there either. Kubernetes works fully (same network as
-   Logos). Two real fixes not yet decided between: provision Ollama on the VM for real, or point
-   the existing `logos`-shaped code path at a real OpenAI-compatible endpoint + key. See
-   `docs/internal/07-gotchas.md`.
+6. ~~**The Azure VM deployment's gen-ai LLM calls don't work**~~ — code-level fix merged in:
+   `logos` (`https://logos.aet.cit.tum.de/v1`) is still TUM-network-only and unreachable from
+   Azure's public cloud, but the Azure compose override now runs a self-hosted Ollama container
+   (`llama3.2:1b`, sized for the VM) and defaults `LLM_PROVIDER=ollama` there instead. **Not yet
+   live-verified against the real Azure VM this round** — re-verify gen-ai's endpoints against a
+   fresh Azure deploy before relying on this. Kubernetes continues to work fully (same network as
+   Logos). See `docs/internal/07-gotchas.md`.
 7. **No TLS on the Azure VM** — the auth cookie's `Secure` flag broke login persistence there
    until fixed with an explicit `COOKIE_SECURE` env var (see `docs/internal/06-observability.md`);
    real TLS (tracked as issue #90) would let that resolve more cleanly and match Kubernetes, which

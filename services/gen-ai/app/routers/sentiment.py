@@ -15,6 +15,7 @@ from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import SentimentRequest, SentimentResponse
 from app.services.content import get_article_text
+from app.services.source_text import build_source_text, require_processable_source
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,6 @@ class SentimentResult(BaseModel):
     score: float = Field(ge=-1.0, le=1.0)
     bias: Literal["left", "center", "right", "unclear"] | None = None
     rationale: str
-
-
-def _build_source_text(*, headline: str, text: str) -> str:
-    parts = [part.strip() for part in (headline, text) if part and part.strip()]
-    return "\n\n".join(parts)
 
 
 def _build_messages(source_text: str, *, json_only: bool = False) -> list[SystemMessage | HumanMessage]:
@@ -77,13 +73,15 @@ def _parse_sentiment_json(content: str) -> dict[str, Any]:
 
 
 def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
+    messages = _build_messages(source_text)
     try:
         structured = model.with_structured_output(SentimentResult)
         result = invoke_chat_model(
-            structured,
-            _build_messages(source_text),
+            model,
+            messages,
             endpoint="/sentiment",
             provider=settings.llm_provider,
+            invoke_fn=lambda: structured.invoke(messages),
             # Not every provider supports structured output, so failing here is an
             # anticipated first attempt with its own fallback below, not a genuine LLM
             # error — don't let a routine fallback inflate gen_ai.llm.errors.
@@ -93,12 +91,14 @@ def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
     except Exception as structured_exc:
         logger.info("Structured sentiment output failed, falling back to JSON parsing: %s", structured_exc)
 
+    fallback_messages = _build_messages(source_text, json_only=True)
     try:
         result = invoke_chat_model(
             model,
-            _build_messages(source_text, json_only=True),
+            fallback_messages,
             endpoint="/sentiment",
             provider=settings.llm_provider,
+            invoke_fn=lambda: model.invoke(fallback_messages),
         )
         content = result.content if isinstance(result.content, str) else str(result.content)
         parsed = _parse_sentiment_json(content)
@@ -111,9 +111,11 @@ def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
 async def sentiment(request: SentimentRequest) -> SentimentResponse:
     if request.articleId is not None:
         article = await get_article_text(request.articleId)
-        source_text = _build_source_text(headline=article.headline, text=article.text)
+        source_text = build_source_text(headline=article.headline, text=article.text)
     else:
         source_text = request.text or ""
+
+    require_processable_source(source_text)
 
     model = get_chat_model()
     try:

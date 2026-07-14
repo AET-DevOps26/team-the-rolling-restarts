@@ -45,6 +45,8 @@ public class SecurityConfig {
 								"/api/content/topics",
 								"/api/content/articles", "/api/content/articles/**")
 						.permitAll()
+						// Public GenAI routes: fronts paid Logos LLM with no rate limit yet.
+						// Follow-up: add rate-limiting, request size caps, and/or auth before production abuse.
 						.requestMatchers("/api/ai/**")
 						.permitAll()
 						.requestMatchers(HttpMethod.POST,

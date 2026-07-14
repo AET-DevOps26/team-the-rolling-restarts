@@ -11,7 +11,10 @@ import rolling_restarts.content.repository.TopicRepository;
 
 @SpringBootTest
 @TestPropertySource(properties = {
-	"spring.mongodb.uri=mongodb://localhost:27017/test"
+	"spring.mongodb.uri=mongodb://localhost:27017/test",
+	// Repositories are mocked and no MongoDB runs here; keep index auto-creation off so the
+	// context doesn't eagerly connect to Mongo (which would time out) just to build indexes.
+	"spring.data.mongodb.auto-index-creation=false"
 })
 class ContentServiceApplicationTests {
 

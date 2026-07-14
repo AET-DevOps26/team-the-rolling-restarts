@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import quote
 
 import httpx
 
 from app.config import settings
-from app.errors import ArticleNotFoundError
+from app.errors import ArticleNotFoundError, UpstreamServiceError
 
 
 @dataclass(frozen=True)
@@ -15,20 +16,34 @@ class ArticleText:
 
 
 async def get_article_text(article_id: str) -> ArticleText:
-    url = f"{settings.internal_api_url.rstrip('/')}/api/content/articles/{article_id}"
+    encoded_id = quote(article_id, safe="")
+    url = f"{settings.internal_api_url.rstrip('/')}/api/content/articles/{encoded_id}"
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+    except httpx.RequestError as exc:
+        raise UpstreamServiceError("Failed to reach content service") from exc
 
     if response.status_code == 404:
         raise ArticleNotFoundError(f"Article not found: {article_id}")
 
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise UpstreamServiceError("Content service returned an error") from exc
+
     data = response.json()
 
     body = data.get("body") or []
     paragraphs = [paragraph.strip() for paragraph in body if paragraph and paragraph.strip()]
     text = "\n\n".join(paragraphs)
+
+    # RSS feeds usually only provide a short description (stored as `snippet`), so `body` is
+    # frequently empty. Fall back to the snippet so the LLM has the article text we do have
+    # instead of reasoning from the headline alone.
+    if not text:
+        text = (data.get("snippet") or "").strip()
 
     return ArticleText(
         headline=data.get("headline") or "",
