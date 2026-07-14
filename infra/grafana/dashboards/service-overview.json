@@ -232,7 +232,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\", status=~\"5..|5xx\"}[5m])) by (job) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)\n\n",
+          "expr": "(sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\", status=~\"5..|5xx\"}[5m])) by (job) or sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job) * 0) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)\n\n",
           "legendFormat": "{{job}}",
           "range": true,
           "refId": "A"
@@ -314,10 +314,10 @@
           },
           "editorMode": "code",
           "exemplar": true,
-          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le)",
+          "expr": "sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le, job)",
           "format": "time_series",
           "instant": false,
-          "legendFormat": "{{le}}",
+          "legendFormat": "{{job}} {{le}}",
           "range": true,
           "refId": "A"
         }

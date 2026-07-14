@@ -231,7 +231,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (span_name)\n/\nsum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (span_name)",
+          "expr": "(sum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (span_name) or sum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (span_name) * 0)\n/\nsum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (span_name)",
           "legendFormat": "{{span_name}}",
           "range": true,
           "refId": "A"
