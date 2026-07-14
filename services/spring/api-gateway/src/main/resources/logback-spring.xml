@@ -5,7 +5,13 @@
 
     <appender name="OTEL" class="io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender">
         <captureCodeAttributes>true</captureCodeAttributes>
-        <captureMdcAttributes>*</captureMdcAttributes>
+        <!-- Trace/span correlation is already automatic via this appender's own OTel context
+             propagation, not MDC — no MDC.put() exists anywhere in this codebase today, so this
+             allowlist changes nothing currently exported. It exists so a future MDC.put() (e.g.
+             a userId or request attribute) doesn't silently start flowing into Loki/OTLP just
+             because captureMdcAttributes was left as `*`. Add specific correlation keys here as
+             they're introduced, not a wildcard. -->
+        <captureMdcAttributes>traceId,spanId</captureMdcAttributes>
     </appender>
 
     <root level="INFO">
