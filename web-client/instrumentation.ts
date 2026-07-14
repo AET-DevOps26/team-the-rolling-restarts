@@ -6,7 +6,14 @@ import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 // endpoint is actually configured, and Node-only (the OTel SDK components below don't run in the
 // Edge runtime, which also calls this same register() function).
 export function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs" || !process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+  // OTLPMetricExporter() also honors the signal-specific OTEL_EXPORTER_OTLP_METRICS_ENDPOINT, so
+  // checking only the general endpoint var would incorrectly skip all instrumentation (traces
+  // included) for a deployment that only sets the metrics-specific one. Every current deployment
+  // target sets the general var, so this is currently a no-op change — it's here so a future
+  // signal-specific OTLP setup doesn't silently lose instrumentation.
+  const hasOtlpEndpoint =
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT;
+  if (process.env.NEXT_RUNTIME !== "nodejs" || !hasOtlpEndpoint) {
     return;
   }
 
