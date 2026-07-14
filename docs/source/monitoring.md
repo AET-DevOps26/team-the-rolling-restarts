@@ -90,7 +90,9 @@ port:
 - docker-compose: `http://grafana-lgtm:4318` (OTLP/HTTP), `grafana-lgtm:4317` (OTLP/gRPC) — bare
   service DNS, since everything shares one Docker network.
 - Kubernetes: `http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318` /
-  `grafana-lgtm.{{ .Values.monitoring.namespace }}:4317` — **must** be namespace-qualified, since
+  `grafana-lgtm.{{ .Values.monitoring.namespace }}:4317` — with the default namespace
+  (`monitoring-rolling-restarts`), that's `http://grafana-lgtm.monitoring-rolling-restarts:4318` /
+  `:4317`. **Must** be namespace-qualified, since
   `grafana-lgtm` now lives in its own namespace, separate from the app workloads pushing to it.
   The bare hostname only resolves within the same namespace; using it cross-namespace fails
   silently from the app's point of view (no error, no crash — the OTLP exporter just never
@@ -215,7 +217,7 @@ Two independent paths feed the same Prometheus:
 
 ## Traces
 
-All 4 app services (api-gateway, user-service, content-service, gen-ai, **and now web-client**)
+All 5 app services (api-gateway, user-service, content-service, gen-ai, **and now web-client**)
 push OTel traces via OTLP to `grafana-lgtm`. web-client (Next.js) uses `@vercel/otel` in
 `web-client/instrumentation.ts` — a no-op unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, gated to
 the Node runtime only (`NEXT_RUNTIME === "nodejs"`, since Next.js calls `register()` in both the
@@ -443,7 +445,7 @@ the numbers as a snapshot, not a one-time decision:
   to be meaningful bases for CPU-utilization-based autoscaling later (a razor-thin request makes
   an HPA's target-utilization percentage nearly meaningless).
 
-Treat the 2.8% memory margin as something to check continuously, not fire-and-forget: run
+Treat the 3.3% app-namespace memory margin (5.6% for monitoring) as something to check continuously, not fire-and-forget: run
 `kubectl top pod -n <namespace>` regularly and adjust the table above if usage is running close to
 the edge, especially before actually turning on 3 replicas or an HPA. user-service's still-rising
 trend is the one line item most likely to need another look.

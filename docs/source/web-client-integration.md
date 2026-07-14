@@ -60,15 +60,13 @@ Article detail page (`web-client/src/app/(app)/article/[id]/page.tsx`) renders
 `ArticleAiPanel` (tabs for summary / explain / sentiment / Q&A). Errors are shown
 inline in each widget; the page still renders if GenAI is unavailable.
 
-## What should be updated in web-client
+## Current state
 
-- **`web-client/README.md`** — the "Backend integration" section still references
-  placeholder service names (`spring-order`, `py-recommender`). Update it to
-  document the real gateway URL and the API paths listed above.
-- **Mock data** — `src/lib/mock/` can be replaced with real API calls once the
-  services are running.
-- **Auth flow** — wire up login/signup forms to `/api/users/auth/login` and
-  `/api/users/auth/register`, and store the JWT for subsequent requests.
+Backend integration is complete — `web-client/README.md`'s "Backend integration" section
+documents the real gateway URL and API paths, `src/lib/mock/` no longer exists (see
+[02-web-client.md](../internal/02-web-client.md)), and the auth flow is wired to
+`/api/users/auth/login`/`/register` with the JWT stored via `src/lib/api/client.ts`.
+
 - **Generated types** — the API is code-first: `api/openapi.yaml` is generated
   from the Spring controllers, and `web-client/src/generated/api.ts` is generated
   from that contract (`make generate`, or `npx openapi-typescript api/openapi.yaml

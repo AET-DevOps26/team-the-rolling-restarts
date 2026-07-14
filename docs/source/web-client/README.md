@@ -39,20 +39,22 @@ web-client/
 └── eslint.config.mjs
 ```
 
-## Initial routes (structure only)
+## Routes
 
-Placeholder pages and `next/link` navigation—no real auth or API calls yet.
+Backend-integrated — real auth and API calls, not placeholders (see
+[Backend integration](#backend-integration) below and
+[docs/internal/02-web-client.md](../../internal/02-web-client.md)).
 
-| Path          | Purpose                                      |
-| ------------- | -------------------------------------------- |
-| `/`           | Marketing landing page (hero, features, CTA) |
-| `/login`      | Placeholder sign-in form                     |
-| `/signup`     | Placeholder registration form                |
-| `/forgot-password` | Password reset request placeholder      |
-| `/dashboard`  | Main feed/dashboard placeholder (app shell) |
-| `/saved`      | Saved articles placeholder (app shell)      |
-| `/settings`   | Preferences placeholder (app shell)         |
-| `/article/[id]` | Placeholder article detail view            |
+| Path               | Purpose                                                                                 |
+|--------------------|-----------------------------------------------------------------------------------------|
+| `/`                | Marketing landing page (hero, features, CTA)                                            |
+| `/login`           | Sign-in form, calls `/api/users/auth/login`                                             |
+| `/signup`          | Registration form, calls `/api/users/auth/register`                                     |
+| `/forgot-password` | Password reset request                                                                  |
+| `/dashboard`       | Main feed, live content from `/api/content/*`                                           |
+| `/saved`           | Saved articles, backed by the atomic saved-article endpoints                            |
+| `/settings`        | Preferences + source subscribe/unsubscribe                                              |
+| `/article/[id]`    | Article detail view with live content + the GenAI panel (summary/explain/sentiment/Q&A) |
 
 Shared app chrome for dashboard/saved/settings lives in `(app)/layout.tsx` via `AppSidebar` and `AppTopbar`; route metadata is centralized in `src/lib/routes.ts` for easier refactors.
 

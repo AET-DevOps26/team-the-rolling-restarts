@@ -93,11 +93,14 @@ The Kubernetes deployment (`rolling-restarts.stud.k8s.aet.cit.tum.de`, the cours
 cluster) and the Azure VM deployment (via `deploy-azure.yml`) have both been exercised live and
 end-to-end this branch — this is no longer an unverified-from-a-sandbox assumption. Current
 status: **Kubernetes works fully**, including gen-ai's LLM calls (after fixing a missing
-`LLM_API_KEY` wire-through) and the full monitoring stack — only alerting notification delivery is
-still deliberately unwired (deferred pending an Artemis clarification, see
-`docs/source/monitoring.md`). **The Azure VM works for everything except gen-ai's LLM-backed
-endpoints** — see the `logos`/`ollama` gotcha above. Don't assume either target's *current* state
-without re-checking; both have moved multiple times in one session.
+`LLM_API_KEY` wire-through) and the full monitoring stack, **including alerting notification
+delivery** — the SMTP contact point is wired and confirmed live (a real alert reached both
+configured recipients' inboxes), see `docs/source/monitoring.md`. **The Azure VM works for
+everything except gen-ai's LLM-backed endpoints** — see the `logos`/`ollama` gotcha above. Don't
+assume either target's *current* state without re-checking; both have moved multiple times in one
+session — most recently, `main`-triggered deploys prune the entire monitoring stack from the
+shared Kubernetes release because `main` doesn't have this branch's Helm chart yet (see the
+"Kubernetes deploy prunes monitoring" gotcha below).
 
 ## `NEXT_PUBLIC_`-prefixed env vars get inlined into the image at build time — even in server-only code
 
@@ -378,3 +381,30 @@ particular combination is not obvious from Helm's own `--help` text or common us
 cd infra/helm && helm upgrade newsgenai . --reuse-values -f values.yaml --dry-run=client   # fails
 cd infra/helm && helm upgrade newsgenai . --reuse-values -f values-prod.yaml --dry-run=client   # works
 ```
+
+## A `main`-triggered Kubernetes deploy silently prunes the entire monitoring stack while this branch is unmerged
+
+`deploy_kubernetes.yml` and `deploy_monitoring.yml` both run `helm upgrade` against the *same*
+release (`newsgenai`) in the *same* cluster — they aren't separate deployment targets, just a
+full-values path and a `--reuse-values` fast path over one shared release. `main` does not have
+`infra/helm/templates/monitoring.yaml` (or the `appWorkloads.enabled` gating, or the per-service
+`metricsPath` values) yet — that's all only on this branch. So any ordinary `main`-triggered
+`deploy_kubernetes.yml` run — even one with nothing to do with monitoring — renders `main`'s older
+chart, which has zero grafana-lgtm resources, and Helm prunes everything the *previous* revision
+had that's absent from the new one: the grafana-lgtm Deployment, its PVC (so all Prometheus/
+Loki/Tempo history and Grafana's own saved state), Secrets, ConfigMaps, and RBAC. The
+`monitoring-rolling-restarts` namespace itself survives (Helm never deletes namespaces), and the
+app workloads are untouched — only grafana-lgtm is in the blast radius, because it's the only part
+of the release that exists solely on this unmerged branch.
+
+Confirmed live: a `feat/observability-monitoring`-triggered deploy at 21:49 UTC brought
+grafana-lgtm up; an unrelated `main`-triggered deploy at 23:39 UTC (same day) wiped it — `kubectl
+get pods -n monitoring-rolling-restarts` returned nothing, `helm get manifest` for the live
+revision listed only the 22 app-layer resources, and `helm status` showed no `monitoring:` values
+at all in the reused set. **This will keep happening on every `main` deploy until this branch
+merges.** Recovering it in the meantime means re-running `helm upgrade` from *this* branch's chart
+against the live release — and because the live release's reused values were last computed by
+`main`'s older chart, several newer keys (`appWorkloads.enabled`, the `metricsPath` fields, all of
+`monitoring.*`) are missing from `--reuse-values` and must be supplied explicitly (not via
+`-f values.yaml`, see the gotcha above — that resets every service's image tag to `global.tag:
+latest`, discarding the live SHA-pinned images).

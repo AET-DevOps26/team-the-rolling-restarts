@@ -10,7 +10,12 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
 
 - All 3 Spring services push metrics + traces via OTLP to `grafana-lgtm:4318`
   (`management.otlp.metrics.export.url`, `management.opentelemetry.tracing.export.otlp.endpoint`)
-  — the bundled OTel Collector forwards these straight into the bundled Prometheus.
+  — the bundled OTel Collector forwards these straight into the bundled Prometheus. That bare
+  `grafana-lgtm:4318` hostname only resolves in docker-compose's shared network. In Kubernetes,
+  grafana-lgtm lives in its own `monitoring.namespace` (see below), so the endpoint must be the
+  namespace-qualified `grafana-lgtm.monitoring-rolling-restarts:4318` — already how
+  `infra/helm/values.yaml`/the raw k8s deployment manifests set it; this is just the compose-only
+  shorthand.
 - All 3 Spring services also expose `/actuator/prometheus` (classic scrape), and gen-ai exposes
   `/metrics` — scraped directly by the bundled Prometheus, giving both a real `up{job=...}` signal
   (OTLP-pushed metrics don't populate it) and the actual data behind the RED dashboard/p95 alert
@@ -28,7 +33,8 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   `namespaces.own_namespace: true`) relabeled on each Deployment's `app` pod label, giving every
   replica its own `instance` label. This needs a namespaced `Role`/`RoleBinding` granting
   `get/list/watch` on `pods` (verified feasible against the real cluster:
-  `kubectl auth can-i list pods --namespace=kubernetes-test` → yes) — a much smaller,
+  `kubectl auth can-i list pods --namespace=deployment` → yes; `kubernetes-test` was an earlier
+  throwaway namespace used to test this and no longer exists) — a much smaller,
   namespace-scoped ask than the cluster-wide RBAC the cAdvisor idea needed (see Known gaps below),
   so it isn't subject to the same infeasibility.
 - **Verified empirically: the OTLP metrics push does not double-count against the classic scrape.**

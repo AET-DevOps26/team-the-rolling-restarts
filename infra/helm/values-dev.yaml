@@ -10,6 +10,6 @@ host: dev.rolling-restarts.stud.k8s.aet.cit.tum.de
 # Single replica for manual/dev deploys — keeps the namespace footprint small (per the AET
 # cluster fair-use policy: scale replicas down when not actively demoing). This matches the
 # chart default (global.replicas in values.yaml) but is pinned explicitly here so the dev
-# path is unambiguous. Production (values-prod.yaml) overrides this to 2.
+# path is unambiguous. Production (values-prod.yaml) overrides this to 3.
 global:
-  replicas: 3
+  replicas: 1

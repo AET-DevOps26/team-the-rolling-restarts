@@ -20,7 +20,14 @@ cp secrets.yml.example secrets.yml   # then fill in real values (see the comment
 # namespace` lacks — see namespaces/deployment-namespace.yml for why that matters.
 kubectl get namespace deployment >/dev/null 2>&1 || kubectl create -f namespaces/deployment-namespace.yml
 kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f namespaces/monitoring-namespace.yml
-kubectl apply -R -f .
+# -n deployment: resources without an explicit metadata.namespace (the app ones) land in the app
+# namespace regardless of your current kubectl context; grafana-lgtm's manifests set their own
+# metadata.namespace: monitoring-rolling-restarts, which wins over -n regardless. Explicit file
+# list (not -R -f .) deliberately excludes namespaces/ — those were just bootstrapped above with
+# `create`, and re-applying them here would hit the same apply-permission issue that motivated
+# using `create` in the first place.
+kubectl apply -n deployment -R \
+  -f secrets.yml -f deployments -f services -f configmaps -f rbac -f ingress.yml
 ```
 
 This is the default path for the raw manifests in this repository because it keeps the deployment, service, and ingress files together and lets kubectl recurse through the directory layout.

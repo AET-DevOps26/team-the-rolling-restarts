@@ -64,8 +64,11 @@ check_log_reaches_loki() {
   start=$((now - 300))
   # GRAFANA_ADMIN_PASSWORD is only ever the real secret if the caller's shell actually exports it
   # (same caveat as LGTM_GRAFANA_PORT above — this Makefile doesn't export infra/.env's vars into
-  # recipes' shells). Falls back to the image's own first-boot default; wrong password just makes
-  # this best-effort check report "not found" below rather than "found", not a hard failure.
+  # recipes' shells). Falls back to the image's own first-boot default; a wrong password makes the
+  # Loki query 401 (empty body, count=0), which `check` below reports as "not found" — that IS a
+  # hard failure (increments `fail`), not best-effort, since it's indistinguishable here from the
+  # log entry genuinely being absent. Export GRAFANA_ADMIN_PASSWORD before running this script if
+  # it's not the image's first-boot default.
   local grafana_auth="-u admin:${GRAFANA_ADMIN_PASSWORD:-admin}"
   body=$(curl $curl_extra -s $grafana_auth --connect-timeout 5 --max-time 10 \
     "$grafana_url/api/datasources/proxy/uid/loki/loki/api/v1/query_range" \
