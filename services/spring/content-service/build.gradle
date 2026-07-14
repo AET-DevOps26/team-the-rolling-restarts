@@ -28,11 +28,16 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2'
 	implementation 'com.rometools:rome:2.1.0'
+	implementation 'org.jsoup:jsoup:1.22.2'
 
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
+	// Not imported directly by any test, but SmokeTest's full @SpringBootTest context needs
+	// RestTemplateBuilder resolvable on the classpath for Spring Boot's autoconfiguration
+	// condition evaluation — nothing else in this module's graph supplies it transitively
+	// (unlike api-gateway/user-service, which get it via spring-cloud-gateway/oauth2-client).
 	testImplementation 'org.springframework.boot:spring-boot-restclient'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
