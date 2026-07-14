@@ -12,6 +12,8 @@ on:
       - "infra/helm/files/grafana/**"
       - "infra/helm/templates/monitoring.yaml"
       - "infra/helm/templates/monitoring-rbac.yaml"
+      - "infra/helm/values.yaml"
+      - "infra/helm/values-prod.yaml"
       - "infra/k8s/configmaps/grafana-lgtm-config.yml"
       - "infra/k8s/deployments/grafana-lgtm-deployment.yml"
       - "infra/k8s/rbac/grafana-lgtm-rbac.yml"
@@ -84,13 +86,25 @@ jobs:
               exit 1
             fi
           done
-          cat > infra/helm/secrets-values.yaml <<EOF
-          monitoring:
-            adminPassword: "$GRAFANA_ADMIN_PASSWORD"
-            smtpUser: "$GRAFANA_SMTP_USER"
-            smtpPassword: "$GRAFANA_SMTP_PASSWORD"
-            alertEmails: "$GRAFANA_ALERT_EMAILS"
-          EOF
+          # YAML-serialized (not a heredoc) so a secret value containing a quote, colon, or
+          # newline can't break the file or get reinterpreted — same approach as
+          # deploy_kubernetes.yml's "Generate secrets values" step.
+          python3 -c '
+          import os, yaml, sys
+
+          class QuotedStr(str): pass
+          yaml.add_representer(QuotedStr, lambda d, v: d.represent_scalar("tag:yaml.org,2002:str", v, style="\""))
+
+          data = {
+              "monitoring": {
+                  "adminPassword": QuotedStr(os.environ["GRAFANA_ADMIN_PASSWORD"]),
+                  "smtpUser": QuotedStr(os.environ["GRAFANA_SMTP_USER"]),
+                  "smtpPassword": QuotedStr(os.environ["GRAFANA_SMTP_PASSWORD"]),
+                  "alertEmails": QuotedStr(os.environ["GRAFANA_ALERT_EMAILS"]),
+              },
+          }
+          yaml.dump(data, sys.stdout, default_flow_style=False)
+          ' > infra/helm/secrets-values.yaml
 
       # --reuse-values: this deploy only ever touches infra/grafana/* content, never the app's own
       # secrets or image tags, so it reuses whatever the last full deploy_kubernetes.yml run
