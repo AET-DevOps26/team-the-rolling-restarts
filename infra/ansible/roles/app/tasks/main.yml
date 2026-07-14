@@ -37,22 +37,33 @@
 # bind-mount source (auto-creating it as an empty directory) collides with the container's file
 # destination ("not a directory" mount error).
 #
-# Wipe any previous copy first: if a docker compose run ever raced ahead of this task (e.g. an
-# earlier deploy before this task existed at all), Docker's own directory-autocreation leaves
-# files' worth of paths behind as empty directories owned by root — `copy` then nests the real
-# file inside that stale directory instead of replacing it, rather than fail outright.
-- name: Remove any stale grafana config directory
-  ansible.builtin.file:
-    path: "{{ project_root }}/grafana"
-    state: absent
-  tags: [app, deploy]
-
-- name: Copy grafana-lgtm config (prometheus scrape config, dashboards, provisioning)
+# Staged, not copied straight into the live path: copying directly into project_root/grafana
+# used to mean any failure partway through the transfer (network blip, disk full) left the live
+# deployment with a missing or half-written config directory for however long until the next
+# successful run — and since docker-compose bind-mounts that path, the very next `docker compose
+# up` (including "Force-recreate containers" below, in this same play) would hit Docker's
+# directory-autocreation gotcha again. Copying into a staging directory first means a failed copy
+# never touches the live directory at all; only the swap below (two fast local renames, not a
+# network transfer) can fail partway, and even then grafana.old is left as a manual recovery path
+# instead of silently losing the previous config.
+- name: Copy grafana-lgtm config to a staging directory
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../../grafana/"
-    dest: "{{ project_root }}/grafana/"
+    dest: "{{ project_root }}/grafana.new/"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
+  tags: [app, deploy]
+
+- name: Atomically swap the staged grafana config into place
+  ansible.builtin.shell: |
+    set -e
+    rm -rf "{{ project_root }}/grafana.old"
+    if [ -d "{{ project_root }}/grafana" ]; then
+      mv "{{ project_root }}/grafana" "{{ project_root }}/grafana.old"
+    fi
+    mv "{{ project_root }}/grafana.new" "{{ project_root }}/grafana"
+    rm -rf "{{ project_root }}/grafana.old"
+  changed_when: true
   notify: restart rolling-restarts
   tags: [app, deploy]
 
