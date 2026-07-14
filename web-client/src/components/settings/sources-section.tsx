@@ -47,7 +47,15 @@ export function SourcesSection({
   const pollTokenRef = useRef(0);
   useEffect(() => () => void (pollTokenRef.current += 1), []);
 
-  async function pollStatus(sourceId: string, sourceName: string) {
+  // `silent` polls track a source whose subscription failed: the source still exists and its RSS
+  // fetch runs server-side, so we keep refreshing to update its badge in SourceToggleList, but we
+  // leave the banner (and toasts) alone since the subscribe-failure message is already shown.
+  async function pollStatus(
+    sourceId: string,
+    sourceName: string,
+    options?: { silent?: boolean },
+  ) {
+    const silent = options?.silent ?? false;
     const token = (pollTokenRef.current += 1);
     for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -56,12 +64,18 @@ export function SourcesSection({
       if (pollTokenRef.current !== token) return;
       if (!res.ok) continue; // transient error — keep polling
       if (res.status === "SUCCESS") {
-        setFetchState({ phase: "success", name: sourceName });
-        toast.success(`Articles from ${sourceName} are ready`);
+        if (!silent) {
+          setFetchState({ phase: "success", name: sourceName });
+          toast.success(`Articles from ${sourceName} are ready`);
+        }
         router.refresh();
         return;
       }
       if (res.status === "FAILED") {
+        if (silent) {
+          router.refresh();
+          return;
+        }
         const cleanup = await unsubscribe(sourceId);
         const cleanupFailed = !cleanup.ok;
         const fetchError = res.error ?? "The feed could not be read.";
@@ -83,7 +97,7 @@ export function SourcesSection({
       }
       // PENDING → keep polling
     }
-    setFetchState({ phase: "timeout", name: sourceName });
+    if (!silent) setFetchState({ phase: "timeout", name: sourceName });
   }
 
   async function handleAddSource(e: React.FormEvent) {
@@ -111,6 +125,8 @@ export function SourcesSection({
           subscribeFailed: true,
         });
         router.refresh();
+        // The source was created and is still fetching server-side; keep its badge in sync.
+        void pollStatus(res.sourceId, addedName, { silent: true });
       } else {
         const detailText = res.details?.join("; ");
         toast.error(detailText ? `${res.error}: ${detailText}` : res.error);
@@ -238,8 +254,8 @@ function FetchStatusBanner({
             </>
           ) : (
             <>
-              Couldn&apos;t fetch {state.name}. {state.error}{" "}
-              {state.error.endsWith(".") ? "" : " "}
+              Couldn&apos;t fetch {state.name}. {state.error}
+              {state.error.endsWith(".") ? " " : ". "}
               It wasn&apos;t kept in your feed.
             </>
           )}
