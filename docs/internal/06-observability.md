@@ -517,10 +517,15 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   matter how long the wait or how many calls were made. Fixed by moving the router import to
   after `setup_observability(app)`; re-verified live — a fresh LLM call now produces a real
   `gen_ai_llm_requests_total` series with correct `endpoint`/`provider` labels. **Not fully
-  resolved**: the custom `llm.invoke` *span* still doesn't appear in traces even after this fix
-  (metrics work, traces still don't, from the identical import-order pattern) — a separate,
-  not-yet-understood gap, tracked in `07-gotchas.md`, that doesn't block the dashboard since it
-  reads metrics rather than traces.
+  resolved, but narrowed**: the custom `llm.invoke` *span* still doesn't appear in traces even
+  after this fix (metrics work, traces still don't, from the identical import-order pattern). A
+  regression test added since (`tests/test_observability.py::
+  test_invoke_chat_model_emits_llm_invoke_span`) reproduces the span in-process with an in-memory
+  exporter and confirms it's correctly created and parented — ruling out the same
+  tracer-binding/import-order cause that explained the metrics gap. The remaining gap is therefore
+  downstream of application code (OTLP wire export, collector processing, or Tempo ingestion),
+  tracked in `07-gotchas.md`, and doesn't block the dashboard since it reads metrics rather than
+  traces.
 
 ## Re-verify
 

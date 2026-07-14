@@ -48,9 +48,16 @@ Instrumentator().instrument(app).expose(app)
 # live, this is exactly why gen_ai_llm_requests_total (and the other custom counters/histogram)
 # never reached Prometheus no matter how long you waited or how many LLM calls were made; the
 # GenAI Overview dashboard read empty as a result. Moving the import here fixes the metrics.
-# NOTE: the custom "llm.invoke" *span* from the same module still doesn't appear in traces even
-# after this fix (FastAPI's own auto-instrumented spans for the same request do) — a separate,
-# not-yet-understood gap, tracked but not blocking since the dashboard reads metrics, not traces.
+# The custom "llm.invoke" *span* was also suspected of the same import-order gap (confirmed
+# missing from a live Tempo even after this fix — see docs/internal/06-observability.md /
+# 07-gotchas.md). Narrowed, not resolved: tests/test_observability.py::
+# test_invoke_chat_model_emits_llm_invoke_span reproduces span creation in-process and shows the
+# tracer binding itself is NOT the problem — the span is created, correctly parented under the
+# request span, and handed to the same TracerProvider/BatchSpanProcessor pipeline that
+# successfully exports FastAPI's own auto-instrumented spans. That test can't reach a real
+# collector, though, so it doesn't prove delivery — if Tempo still doesn't show it, the remaining
+# gap is downstream of this code (OTLP wire export, collector processing, or Tempo ingestion),
+# not application-level tracer binding.
 from app.routers import explain, qa, sentiment, summarize  # noqa: E402
 
 app.include_router(summarize.router)

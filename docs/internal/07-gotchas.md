@@ -157,10 +157,16 @@ never reached Prometheus no matter how long you waited or how many LLM calls wer
 the "GenAI Overview" Grafana dashboard permanently empty — while FastAPI's own auto-instrumented
 spans worked fine the whole time (that instrumentation lives *inside* `setup_observability()`
 itself, so it was never affected). Fixed by moving the router import to after
-`setup_observability(app)` runs. **Still unresolved**: the custom `llm.invoke` trace span from the
-same module doesn't appear even after this fix, unlike the metrics — confirmed via direct trace
-inspection (Tempo). Doesn't block the dashboard (reads metrics, not traces), but worth
-understanding if anyone relies on trace-level LLM visibility.
+`setup_observability(app)` runs. **Still unresolved, but narrowed**: the custom `llm.invoke` trace
+span from the same module doesn't appear even after this fix, unlike the metrics — confirmed via
+direct trace inspection (Tempo). A regression test
+(`tests/test_observability.py::test_invoke_chat_model_emits_llm_invoke_span`) reproduces the span
+creation in-process with an in-memory exporter and shows it's correctly created, named, and
+parented under the request span — ruling out the tracer-binding/import-order explanation that
+fixed the metrics. Since that test can't reach a real collector, it doesn't prove delivery; the
+remaining gap is somewhere downstream of application code (OTLP wire export, collector processing,
+or Tempo ingestion specifically). Doesn't block the dashboard (reads metrics, not traces), but
+worth understanding if anyone relies on trace-level LLM visibility.
 
 ```sh
 grep -n "from app.routers import" services/gen-ai/app/main.py   # should be AFTER setup_observability(app)
