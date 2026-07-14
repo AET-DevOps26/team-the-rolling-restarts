@@ -46,12 +46,30 @@
 # never touches the live directory at all; only the swap below (two fast local renames, not a
 # network transfer) can fail partway, and even then grafana.old is left as a manual recovery path
 # instead of silently losing the previous config.
+#
+# Checked in check_mode against the LIVE path first (not the staging one) so the staging
+# copy + swap — and the resulting stack restart — only happen when the config actually
+# changed. Without this, every playbook run would restage+swap unconditionally (grafana.new
+# never persists between runs, so the staging copy always looks "changed" to Ansible) and the
+# shell swap task's own changed_when:true would notify a stack restart on every single deploy,
+# even when nothing about the grafana config differed.
+- name: Check whether the grafana config has changed
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../grafana/"
+    dest: "{{ project_root }}/grafana/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  check_mode: true
+  register: grafana_check
+  tags: [app, deploy]
+
 - name: Copy grafana-lgtm config to a staging directory
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../../grafana/"
     dest: "{{ project_root }}/grafana.new/"
     owner: "{{ ansible_user }}"
     group: "{{ ansible_user }}"
+  when: grafana_check.changed
   tags: [app, deploy]
 
 - name: Atomically swap the staged grafana config into place
@@ -63,6 +81,7 @@
     fi
     mv "{{ project_root }}/grafana.new" "{{ project_root }}/grafana"
     rm -rf "{{ project_root }}/grafana.old"
+  when: grafana_check.changed
   changed_when: true
   notify: restart rolling-restarts
   tags: [app, deploy]
