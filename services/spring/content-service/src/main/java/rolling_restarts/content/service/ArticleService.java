@@ -27,30 +27,46 @@ public class ArticleService {
 		this.mongoTemplate = mongoTemplate;
 	}
 
-	public Page<Article> findAll(String sourceId, String topicId, String query, Pageable pageable) {
-		if (!StringUtils.hasText(query)) {
-			return findWithoutTextSearch(sourceId, topicId, pageable);
+	public Page<Article> findAll(
+			String sourceId, List<String> sourceIds, String topicId, String query, Pageable pageable) {
+		if (sourceIds != null && sourceIds.isEmpty()) {
+			// Caller explicitly filtered to zero sources (e.g. a user subscribed to nothing) —
+			// zero matches by definition, no need to query.
+			return Page.empty(pageable);
 		}
-		return findWithTextSearch(sourceId, topicId, query.trim(), pageable);
+		if (!StringUtils.hasText(query)) {
+			return findWithoutTextSearch(sourceId, sourceIds, topicId, pageable);
+		}
+		return findWithTextSearch(sourceId, sourceIds, topicId, query.trim(), pageable);
 	}
 
-	private Page<Article> findWithoutTextSearch(String sourceId, String topicId, Pageable pageable) {
-		if (sourceId != null && topicId != null) {
-			return articleRepository.findBySourceIdAndTopicId(sourceId, topicId, pageable);
-		} else if (sourceId != null) {
-			return articleRepository.findBySourceId(sourceId, pageable);
-		} else if (topicId != null) {
-			return articleRepository.findByTopicId(topicId, pageable);
+	private Page<Article> findWithoutTextSearch(
+			String sourceId, List<String> sourceIds, String topicId, Pageable pageable) {
+		Query mongoQuery = new Query();
+		if (sourceId != null) {
+			mongoQuery.addCriteria(Criteria.where("sourceId").is(sourceId));
 		}
-		return articleRepository.findAll(pageable);
+		if (sourceIds != null) {
+			mongoQuery.addCriteria(Criteria.where("sourceId").in(sourceIds));
+		}
+		if (topicId != null) {
+			mongoQuery.addCriteria(Criteria.where("topicId").is(topicId));
+		}
+		long total = mongoTemplate.count(mongoQuery, Article.class);
+		mongoQuery.with(pageable);
+		List<Article> content = mongoTemplate.find(mongoQuery, Article.class);
+		return new PageImpl<>(content, pageable, total);
 	}
 
 	private Page<Article> findWithTextSearch(
-			String sourceId, String topicId, String query, Pageable pageable) {
+			String sourceId, List<String> sourceIds, String topicId, String query, Pageable pageable) {
 		TextCriteria textCriteria = TextCriteria.forDefaultLanguage().matching(query);
 		Query mongoQuery = TextQuery.queryText(textCriteria);
 		if (sourceId != null) {
 			mongoQuery.addCriteria(Criteria.where("sourceId").is(sourceId));
+		}
+		if (sourceIds != null) {
+			mongoQuery.addCriteria(Criteria.where("sourceId").in(sourceIds));
 		}
 		if (topicId != null) {
 			mongoQuery.addCriteria(Criteria.where("topicId").is(topicId));

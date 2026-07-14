@@ -44,6 +44,7 @@ export async function getArticlesPage(
     page?: number;
     size?: number;
     sourceId?: string;
+    sourceIds?: string[];
     topicId?: string;
     sort?: string;
     q?: string;
@@ -53,6 +54,9 @@ export async function getArticlesPage(
   q.set("page", String(params.page ?? 0));
   q.set("size", String(params.size ?? 20));
   if (params.sourceId) q.set("sourceId", params.sourceId);
+  if (params.sourceIds) {
+    for (const id of params.sourceIds) q.append("sourceIds", id);
+  }
   if (params.topicId) q.set("topicId", params.topicId);
   if (params.sort) q.set("sort", params.sort);
   if (params.q) q.set("q", params.q);
@@ -71,6 +75,7 @@ export async function getArticles(
     page?: number;
     size?: number;
     sourceId?: string;
+    sourceIds?: string[];
     topicId?: string;
     sort?: string;
     q?: string;
