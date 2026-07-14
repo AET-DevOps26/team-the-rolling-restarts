@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import Any, Literal
 
@@ -14,6 +15,8 @@ from app.llm.invoke import invoke_chat_model
 from app.llm.provider import get_chat_model
 from app.schemas import SentimentRequest, SentimentResponse
 from app.services.content import get_article_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -81,10 +84,14 @@ def _analyze_sentiment(model: Any, source_text: str) -> SentimentResult:
             _build_messages(source_text),
             endpoint="/sentiment",
             provider=settings.llm_provider,
+            # Not every provider supports structured output, so failing here is an
+            # anticipated first attempt with its own fallback below, not a genuine LLM
+            # error — don't let a routine fallback inflate gen_ai.llm.errors.
+            count_errors=False,
         )
         return _coerce_sentiment_result(result)
-    except Exception:
-        pass
+    except Exception as structured_exc:
+        logger.info("Structured sentiment output failed, falling back to JSON parsing: %s", structured_exc)
 
     try:
         result = invoke_chat_model(

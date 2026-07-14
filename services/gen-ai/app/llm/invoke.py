@@ -55,10 +55,18 @@ def invoke_chat_model(
     *,
     endpoint: str,
     provider: str,
+    count_errors: bool = True,
 ) -> Any:
     """Invoke a chat model (or a structured-output-wrapped runnable) with shared
     observability for all LLM-backed endpoints. `model` only needs to support
-    `.invoke(messages)`."""
+    `.invoke(messages)`.
+
+    `count_errors=False` skips the `gen_ai.llm.errors` increment on failure — for callers
+    where this specific invocation is an anticipated first attempt with its own fallback (e.g.
+    sentiment's structured-output attempt, expected to sometimes fail on providers without full
+    structured-output support), so a routine fallback doesn't inflate the error rate metric.
+    Latency/request counters and tracing are unaffected either way.
+    """
     attributes = {"endpoint": endpoint, "provider": provider}
     start = time.perf_counter()
 
@@ -69,7 +77,8 @@ def invoke_chat_model(
         try:
             result = model.invoke(messages)
         except Exception:
-            _llm_errors.add(1, attributes)
+            if count_errors:
+                _llm_errors.add(1, attributes)
             raise
         finally:
             elapsed = time.perf_counter() - start
