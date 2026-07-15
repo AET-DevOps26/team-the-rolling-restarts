@@ -27,7 +27,9 @@ src/
 Real, non-trivial page inventory exists — this is not a stub UI. The article
 detail page consumes live content APIs (`src/lib/api/reads.ts`) and GenAI via
 server actions (`src/app/(app)/article/[id]/ai-actions.ts` → `src/lib/api/ai.ts`
-→ gateway `/api/ai/*`). See [07-gotchas.md](07-gotchas.md) for remaining gaps
+→ gateway `/api/ai/*`). Save/unsave uses atomic user-service endpoints via
+`src/lib/actions/content.ts` (`POST`/`DELETE /api/users/users/me/saved-articles/{id}`),
+not a whole-settings GET-then-PUT. See [07-gotchas.md](07-gotchas.md) for remaining gaps
 (e.g. client test runner).
 
 ## Config files worth knowing about

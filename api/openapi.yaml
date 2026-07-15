@@ -612,6 +612,61 @@ paths:
       summary: Update current user profile
       tags:
       - Users
+  /api/users/users/me/saved-articles/{articleId}:
+    delete:
+      description: Atomically removes the article from the user's saved list.
+      operationId: unsaveArticle
+      parameters:
+      - in: path
+        name: articleId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Article removed from saved
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Not authenticated
+      security:
+      - bearer-jwt: []
+      summary: Remove a saved article for the current user
+      tags:
+      - Users
+    post:
+      description: Atomically adds the article to the user's saved list.
+      operationId: saveArticle
+      parameters:
+      - in: path
+        name: articleId
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Article saved
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+          description: Not authenticated
+      security:
+      - bearer-jwt: []
+      summary: Save an article for the current user
+      tags:
+      - Users
   /api/users/users/me/settings:
     get:
       description: 'Returns user preferences: selected topics, enabled sources, and saved article IDs'
