@@ -3,29 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { apiFetch, ApiError } from "@/lib/api/client";
 import { toApiErrorDisplay } from "@/lib/api/errors";
-import { getMySettings } from "@/lib/api/reads";
-import type { Source, UserSettings } from "@/lib/api/types";
+import type { Source } from "@/lib/api/types";
 import { normalizeRssUrl } from "@/lib/format/rss-url";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
-async function putSettings(settings: UserSettings): Promise<void> {
-  await apiFetch("/api/users/users/me/settings", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(settings),
-  });
-}
-
 export async function saveArticle(articleId: string): Promise<ActionResult> {
   try {
-    const settings = await getMySettings();
-    if (!settings.savedArticleIds.includes(articleId)) {
-      await putSettings({
-        ...settings,
-        savedArticleIds: [...settings.savedArticleIds, articleId],
-      });
-    }
+    await apiFetch(`/api/users/users/me/saved-articles/${articleId}`, { method: "POST" });
     revalidatePath("/saved");
     revalidatePath("/dashboard");
     return { ok: true };
@@ -36,11 +21,7 @@ export async function saveArticle(articleId: string): Promise<ActionResult> {
 
 export async function unsaveArticle(articleId: string): Promise<ActionResult> {
   try {
-    const settings = await getMySettings();
-    await putSettings({
-      ...settings,
-      savedArticleIds: settings.savedArticleIds.filter((id) => id !== articleId),
-    });
+    await apiFetch(`/api/users/users/me/saved-articles/${articleId}`, { method: "DELETE" });
     revalidatePath("/saved");
     revalidatePath("/dashboard");
     return { ok: true };

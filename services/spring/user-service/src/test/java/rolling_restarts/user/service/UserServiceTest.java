@@ -3,18 +3,26 @@ package rolling_restarts.user.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
 
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import rolling_restarts.user.model.User;
@@ -26,6 +34,9 @@ class UserServiceTest {
 
 	@Mock
 	private UserRepository userRepository;
+
+	@Mock
+	private MongoTemplate mongoTemplate;
 
 	@Mock
 	private PasswordEncoder passwordEncoder;
@@ -171,6 +182,72 @@ class UserServiceTest {
 		verify(userRepository, org.mockito.Mockito.never()).save(any(User.class));
 	}
 
+	@Test
+	void addSavedArticle_addsAtomicallyAndReturnsSettings() {
+		String id = "507f1f77bcf86cd799439011";
+		User user = userWithSavedArticles(id, List.of("article-1"));
+		when(mongoTemplate.findAndModify(
+				any(Query.class),
+				any(Update.class),
+				any(FindAndModifyOptions.class),
+				eq(User.class))).thenReturn(user);
+
+		UserSettings result = userService.addSavedArticle(id, "article-1");
+
+		assertEquals(List.of("article-1"), result.getSavedArticleIds());
+		ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+		verify(mongoTemplate).findAndModify(
+				any(Query.class),
+				updateCaptor.capture(),
+				any(FindAndModifyOptions.class),
+				eq(User.class));
+		Document updateDoc = updateCaptor.getValue().getUpdateObject();
+		assertTrue(updateDoc.containsKey("$addToSet"));
+		assertEquals(
+				"article-1",
+				updateDoc.get("$addToSet", Document.class).getString("settings.savedArticleIds"));
+	}
+
+	@Test
+	void removeSavedArticle_removesAtomicallyAndReturnsSettings() {
+		String id = "507f1f77bcf86cd799439011";
+		User user = userWithSavedArticles(id, List.of());
+		when(mongoTemplate.findAndModify(
+				any(Query.class),
+				any(Update.class),
+				any(FindAndModifyOptions.class),
+				eq(User.class))).thenReturn(user);
+
+		UserSettings result = userService.removeSavedArticle(id, "article-1");
+
+		assertEquals(List.of(), result.getSavedArticleIds());
+		ArgumentCaptor<Update> updateCaptor = ArgumentCaptor.forClass(Update.class);
+		verify(mongoTemplate).findAndModify(
+				any(Query.class),
+				updateCaptor.capture(),
+				any(FindAndModifyOptions.class),
+				eq(User.class));
+		Document updateDoc = updateCaptor.getValue().getUpdateObject();
+		assertTrue(updateDoc.containsKey("$pull"));
+		assertEquals(
+				"article-1",
+				updateDoc.get("$pull", Document.class).getString("settings.savedArticleIds"));
+	}
+
+	@Test
+	void addSavedArticle_missingUser_throws() {
+		String id = "507f1f77bcf86cd799439011";
+		when(mongoTemplate.findAndModify(
+				any(Query.class),
+				any(Update.class),
+				any(FindAndModifyOptions.class),
+				eq(User.class))).thenReturn(null);
+
+		IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+				() -> userService.addSavedArticle(id, "article-1"));
+		assertEquals("User not found", ex.getMessage());
+	}
+
 	private static User userWithEnabledSources(String id, List<String> enabledSourceIds) {
 		User user = new User();
 		user.setId(id);
@@ -178,6 +255,17 @@ class UserServiceTest {
 		settings.setSelectedTopicIds(List.of());
 		settings.setEnabledSourceIds(enabledSourceIds);
 		settings.setSavedArticleIds(List.of());
+		user.setSettings(settings);
+		return user;
+	}
+
+	private static User userWithSavedArticles(String id, List<String> savedArticleIds) {
+		User user = new User();
+		user.setId(id);
+		UserSettings settings = new UserSettings();
+		settings.setSelectedTopicIds(List.of());
+		settings.setEnabledSourceIds(List.of());
+		settings.setSavedArticleIds(savedArticleIds);
 		user.setSettings(settings);
 		return user;
 	}

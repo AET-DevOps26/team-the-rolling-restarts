@@ -25,7 +25,7 @@ const MAX_POLLS = 20;
 type FetchState =
   | { phase: "fetching"; name: string }
   | { phase: "success"; name: string }
-  | { phase: "failed"; name: string; error: string }
+  | { phase: "failed"; name: string; error: string; cleanupFailed?: boolean; subscribeFailed?: boolean }
   | { phase: "timeout"; name: string }
   | null;
 
@@ -47,7 +47,15 @@ export function SourcesSection({
   const pollTokenRef = useRef(0);
   useEffect(() => () => void (pollTokenRef.current += 1), []);
 
-  async function pollStatus(sourceId: string, sourceName: string) {
+  // `silent` polls track a source whose subscription failed: the source still exists and its RSS
+  // fetch runs server-side, so we keep refreshing to update its badge in SourceToggleList, but we
+  // leave the banner (and toasts) alone since the subscribe-failure message is already shown.
+  async function pollStatus(
+    sourceId: string,
+    sourceName: string,
+    options?: { silent?: boolean },
+  ) {
+    const silent = options?.silent ?? false;
     const token = (pollTokenRef.current += 1);
     for (let attempt = 0; attempt < MAX_POLLS; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
@@ -56,25 +64,40 @@ export function SourcesSection({
       if (pollTokenRef.current !== token) return;
       if (!res.ok) continue; // transient error — keep polling
       if (res.status === "SUCCESS") {
-        setFetchState({ phase: "success", name: sourceName });
-        toast.success(`Articles from ${sourceName} are ready`);
+        if (!silent) {
+          setFetchState({ phase: "success", name: sourceName });
+          toast.success(`Articles from ${sourceName} are ready`);
+        }
         router.refresh();
         return;
       }
       if (res.status === "FAILED") {
-        await unsubscribe(sourceId);
+        if (silent) {
+          router.refresh();
+          return;
+        }
+        const cleanup = await unsubscribe(sourceId);
+        const cleanupFailed = !cleanup.ok;
+        const fetchError = res.error ?? "The feed could not be read.";
         setFetchState({
           phase: "failed",
           name: sourceName,
-          error: res.error ?? "The feed could not be read.",
+          error: fetchError,
+          ...(cleanupFailed ? { cleanupFailed: true } : {}),
         });
-        toast.error(`Couldn't fetch ${sourceName} — it wasn't added to your feed`);
+        if (cleanupFailed) {
+          toast.error(
+            `Couldn't fetch ${sourceName} — and we weren't able to remove it. Please remove it manually from Settings.`
+          );
+        } else {
+          toast.error(`Couldn't fetch ${sourceName} — it wasn't added to your feed`);
+        }
         router.refresh();
         return;
       }
       // PENDING → keep polling
     }
-    setFetchState({ phase: "timeout", name: sourceName });
+    if (!silent) setFetchState({ phase: "timeout", name: sourceName });
   }
 
   async function handleAddSource(e: React.FormEvent) {
@@ -93,10 +116,17 @@ export function SourcesSection({
         void pollStatus(res.sourceId, addedName);
       } else if (res.sourceId) {
         const detailText = res.details?.join("; ");
-        toast.warning(detailText ? `${res.error}: ${detailText}` : res.error);
-        setFetchState({ phase: "fetching", name: addedName });
+        const errorMessage = detailText ? `${res.error}: ${detailText}` : res.error;
+        toast.error(errorMessage);
+        setFetchState({
+          phase: "failed",
+          name: addedName,
+          error: errorMessage,
+          subscribeFailed: true,
+        });
         router.refresh();
-        void pollStatus(res.sourceId, addedName);
+        // The source was created and is still fetching server-side; keep its badge in sync.
+        void pollStatus(res.sourceId, addedName, { silent: true });
       } else {
         const detailText = res.details?.join("; ");
         toast.error(detailText ? `${res.error}: ${detailText}` : res.error);
@@ -212,7 +242,23 @@ function FetchStatusBanner({
       <span className="flex items-start gap-2">
         <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
         <span>
-          Couldn&apos;t fetch {state.name}. {state.error} It wasn&apos;t kept in your feed.
+          {state.subscribeFailed ? (
+            <>
+              Couldn&apos;t add {state.name} to your feed. {state.error} Enable it from the list below
+              to try again.
+            </>
+          ) : state.cleanupFailed ? (
+            <>
+              Couldn&apos;t fetch {state.name}. {state.error} We weren&apos;t able to remove it
+              automatically — please remove it manually from Settings.
+            </>
+          ) : (
+            <>
+              Couldn&apos;t fetch {state.name}. {state.error}
+              {state.error.endsWith(".") ? " " : ". "}
+              It wasn&apos;t kept in your feed.
+            </>
+          )}
         </span>
       </span>
       <DismissButton onDismiss={onDismiss} />

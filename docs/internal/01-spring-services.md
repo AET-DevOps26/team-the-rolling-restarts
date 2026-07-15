@@ -21,6 +21,10 @@ package root `rolling_restarts.*` (note: underscore, not the usual `rollingresta
 - Package: `rolling_restarts.user` — `client/`, `config/`, `controller/`, `exception/`, `model/`, `repository/`, `service/`
 - Controllers: `AuthController.java`, `UserController.java`
 - Role: OAuth2 Authorization Server, user profiles/settings, auth
+- `UserController`: profile/settings CRUD plus atomic subscription endpoints
+  (`POST`/`DELETE /users/me/subscriptions/{sourceId}`) and atomic saved-article
+  endpoints (`POST`/`DELETE /users/me/saved-articles/{articleId}` — Mongo
+  `$addToSet`/`$pull` so concurrent saves cannot clobber each other)
 - `client/` package — outbound calls to another service (likely content-service, e.g. topic/source lookups)
 - Tests: 6 files, e.g. `AuthControllerTest.java`, `UserServiceTest.java`
 
