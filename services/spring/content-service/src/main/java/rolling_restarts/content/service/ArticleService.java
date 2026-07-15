@@ -34,43 +34,37 @@ public class ArticleService {
 			// zero matches by definition, no need to query.
 			return Page.empty(pageable);
 		}
-		if (!StringUtils.hasText(query)) {
-			return findWithoutTextSearch(sourceId, sourceIds, topicId, pageable);
+		if (sourceId != null && sourceIds != null && !sourceIds.contains(sourceId)) {
+			// The one specific source requested isn't in the caller's allowed set (e.g. a user
+			// browsing a source they aren't subscribed to) — zero matches, not an error.
+			return Page.empty(pageable);
 		}
-		return findWithTextSearch(sourceId, sourceIds, topicId, query.trim(), pageable);
+		Query mongoQuery = StringUtils.hasText(query)
+				? TextQuery.queryText(TextCriteria.forDefaultLanguage().matching(query.trim()))
+				: new Query();
+		applyFilters(mongoQuery, sourceId, sourceIds, topicId);
+		return queryAndCount(mongoQuery, pageable);
 	}
 
-	private Page<Article> findWithoutTextSearch(
-			String sourceId, List<String> sourceIds, String topicId, Pageable pageable) {
-		Query mongoQuery = new Query();
+	/**
+	 * Adds sourceId/topicId criteria. sourceId and sourceIds both constrain the same "sourceId"
+	 * field, so at most one criterion is added for it — Spring Data MongoDB's Query rejects a
+	 * second criterion for a field name already present. Both having already survived the
+	 * sourceId-not-in-sourceIds check in {@link #findAll}, filtering on sourceId alone (the more
+	 * specific of the two) is equivalent to filtering on both.
+	 */
+	private void applyFilters(Query mongoQuery, String sourceId, List<String> sourceIds, String topicId) {
 		if (sourceId != null) {
 			mongoQuery.addCriteria(Criteria.where("sourceId").is(sourceId));
-		}
-		if (sourceIds != null) {
+		} else if (sourceIds != null) {
 			mongoQuery.addCriteria(Criteria.where("sourceId").in(sourceIds));
 		}
 		if (topicId != null) {
 			mongoQuery.addCriteria(Criteria.where("topicId").is(topicId));
 		}
-		long total = mongoTemplate.count(mongoQuery, Article.class);
-		mongoQuery.with(pageable);
-		List<Article> content = mongoTemplate.find(mongoQuery, Article.class);
-		return new PageImpl<>(content, pageable, total);
 	}
 
-	private Page<Article> findWithTextSearch(
-			String sourceId, List<String> sourceIds, String topicId, String query, Pageable pageable) {
-		TextCriteria textCriteria = TextCriteria.forDefaultLanguage().matching(query);
-		Query mongoQuery = TextQuery.queryText(textCriteria);
-		if (sourceId != null) {
-			mongoQuery.addCriteria(Criteria.where("sourceId").is(sourceId));
-		}
-		if (sourceIds != null) {
-			mongoQuery.addCriteria(Criteria.where("sourceId").in(sourceIds));
-		}
-		if (topicId != null) {
-			mongoQuery.addCriteria(Criteria.where("topicId").is(topicId));
-		}
+	private Page<Article> queryAndCount(Query mongoQuery, Pageable pageable) {
 		long total = mongoTemplate.count(mongoQuery, Article.class);
 		mongoQuery.with(pageable);
 		List<Article> content = mongoTemplate.find(mongoQuery, Article.class);
