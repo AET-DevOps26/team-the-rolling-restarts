@@ -1,0 +1,39 @@
+# Overrides the grafana/otel-lgtm image's own built-in
+# /otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml (same pattern as this
+# repo's prometheus.yaml override). The image ships 3 providers there: "RED Metrics (classic
+# histogram)", "RED Metrics (exponential/native histogram)", and "JVM Metrics".
+#
+# - The native histogram one is dropped entirely — none of our services emit true Prometheus
+#   native histograms (only classic bucketed ones, see docs/internal/06-observability.md), so
+#   that dashboard can never show data.
+# - "RED Metrics (classic histogram)" points at our own mounted copy
+#   (infra/grafana/dashboards/red-metrics-classic.json, forked from the image's original) instead
+#   of the image's internal path, because the original's Request Rate/Error Rate panels used
+#   sum() with no `by (job)` grouping and legendFormat __auto — with the $job variable defaulting
+#   to "All", every service collapsed into one blended line whose legend showed the raw PromQL
+#   query text instead of a service name. Fixed the same way as our own Service Overview
+#   dashboard: `by (job)` grouping + explicit {{job}} legends (also applied to Duration
+#   percentiles and the Duration Heatmap's Y-axis scale/legend, same fixes as Service Overview).
+# - "JVM Metrics" still points at its original image-internal path — no known issue found there
+#   yet (see docs/internal/06-observability.md's Known gaps for the open investigation).
+#
+# Both providers set folder: "Service Health" (matching custom-dashboards.yaml's Service Overview
+# provider) so all 3 dashboards + the 2 alert rules live in one folder — omitting `folder:` here
+# left them filed under Grafana's default/General folder instead, confirmed live via the
+# Dashboards nav (only Service Overview appeared nested under Service Health; RED Metrics and JVM
+# Overview both appeared as unnested root-level entries).
+apiVersion: 1
+
+providers:
+  - name: "RED Metrics (classic histogram)"
+    type: file
+    folder: "Service Health"
+    options:
+      path: /otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json
+      foldersFromFilesStructure: false
+  - name: "JVM Metrics"
+    type: file
+    folder: "Service Health"
+    options:
+      path: /otel-lgtm/grafana-dashboard-jvm-metrics.json
+      foldersFromFilesStructure: false

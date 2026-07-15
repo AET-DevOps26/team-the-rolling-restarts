@@ -1,0 +1,14 @@
+# See deployment-namespace.yml for the full explanation of why this label/annotation shape is
+# needed (Rancher project association + auto-provisioned ResourceQuota) and its verification
+# caveats. Values here match monitoring-rolling-restarts's already-provisioned state (`kubectl get
+# namespace monitoring-rolling-restarts -o yaml` / `kubectl get resourcequota -n
+# monitoring-rolling-restarts`) — same project (p-rjflh / c-f49m7), different per-namespace quota.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring-rolling-restarts
+  labels:
+    field.cattle.io/projectId: p-rjflh
+  annotations:
+    field.cattle.io/projectId: c-f49m7:p-rjflh
+    field.cattle.io/resourceQuota: '{"limit":{"limitsCpu":"500m","limitsMemory":"900Mi"}}'

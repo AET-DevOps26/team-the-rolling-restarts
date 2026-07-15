@@ -12,15 +12,30 @@ in the working tree — exclude it from any `find`/`grep` over this directory).
 - `app/config.py` — Logos defaults (`llm_provider=logos`, `openai/gpt-oss-120b`,
   Logos base URL, Ollama URL, `internal_api_url` for gateway content reads).
 - `app/llm/provider.py` — `get_chat_model()` factory branches on `logos` vs
-  `ollama` (no network at import time).
-- `app/services/content.py` — `get_article_text()` fetches articles via httpx
-  from `{INTERNAL_API_URL}/api/content/articles/{id}`; 404 → `ArticleNotFoundError`.
+  `ollama` (no network at import time). **Only these two values are handled** — anything else
+  (e.g. `LLM_PROVIDER=openai`) raises `ValueError` rather than falling back to anything; see
+  [07-gotchas.md](07-gotchas.md). `logos` is TUM-network-only — reachable from the Kubernetes
+  cluster, not from the Azure VM.
+- `app/observability.py` — OTel traces + custom `gen_ai_llm_*` metrics (requests, errors, latency,
+  prompt/completion tokens), tagged by `endpoint`/`provider`; see
+  `docs/internal/06-observability.md` for the exact metric names and the "GenAI Overview" Grafana
+  dashboard built from them.
+- `app/services/content.py` — `get_article_text()` fetches articles via httpx from
+  `{INTERNAL_API_URL}/api/content/articles/{urlencoded id}`; 404 → `ArticleNotFoundError`,
+  connect/5xx failures → `UpstreamServiceError` (502). Falls back to the article's `snippet` when
+  `body` is empty (RSS feeds rarely provide full body text).
+- `app/services/source_text.py` — shared `build_source_text()`/`require_processable_source()`
+  used by all four routers, deduping what used to be a per-router `_build_source_text` helper;
+  rejects blank/whitespace-only source text with a 400.
+- `app/schemas_common.py` — shared `validate_exactly_one_source()` for the `articleId`-xor-`text`
+  request validation, deduped across all four request schemas in `app/schemas.py`.
 - `app/routers/summarize.py` — summarization endpoint with length/style prompts.
 - `app/routers/explain.py` — simplified explanations by knowledge level.
 - `app/routers/sentiment.py` — sentiment + bias via structured output (JSON fallback).
 - `app/routers/qa.py` — single-article grounded Q&A.
 - `tests/` — `test_health.py`, `test_summarize.py`, `test_explain.py`,
-  `test_sentiment.py`, `test_qa.py` (offline, mocked LLM + content).
+  `test_sentiment.py`, `test_qa.py`, `test_observability.py`, `test_metrics.py`,
+  `test_upstream_errors.py`, `test_content.py` (offline, mocked LLM + content).
 
 ## Generated client
 

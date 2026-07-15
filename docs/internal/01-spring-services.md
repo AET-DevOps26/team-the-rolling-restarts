@@ -33,7 +33,7 @@ package root `rolling_restarts.*` (note: underscore, not the usual `rollingresta
 - Package: `rolling_restarts.content` — `config/`, `controller/`, `exception/`, `model/`, `repository/`, `scheduler/`, `service/`, `util/`
 - Controllers: `ArticleController.java`, `SourceController.java`, `TopicController.java`
 - Role: RSS feed ingestion (`scheduler/` — scheduled fetch job), article storage, topics/sources
-- Tests: 7 files, e.g. `ArticleControllerTest.java`, `SourceServiceTest.java`
+- Tests: 13 files, e.g. `ArticleControllerTest.java`, `SourceServiceTest.java`, `RssFetcherServiceTest.java`, `PinnedDnsResolverProviderTest.java`
 
 ## Cross-cutting
 

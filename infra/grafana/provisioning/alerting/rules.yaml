@@ -1,0 +1,80 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: service-health
+    folder: Service Health
+    interval: 1m
+    rules:
+      - uid: slow-response-time
+        title: Slow response time (p95 > 1s)
+        condition: C
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 request duration for {{ $labels.job }} exceeds 1s"
+          description: "The 95th percentile request duration has been above 1 second for more than 5 minutes."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              expr: histogram_quantile(0.95, sum(rate({__name__=~"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket"}[5m])) by (le, job))
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [1]
+        noDataState: NoData
+        execErrState: Error
+      - uid: service-down
+        title: Service down
+        condition: C
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "Prometheus has not been able to scrape {{ $labels.job }} for more than 2 minutes."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: true
+              # max by (job) so one down replica out of several doesn't mark the whole service
+              # down; the label_replace(vector(0), ...) fallbacks guarantee each expected job has
+              # a series (defaulting to 0 = down) even if it's vanished entirely from discovery,
+              # since a plain `up{job=~...}` with zero matching series would otherwise dodge the
+              # lt-1 threshold below and rely solely on noDataState to catch it.
+              expr: |
+                max by (job) (up{job=~"api-gateway|user-service|content-service|gen-ai"})
+                or label_replace(vector(0), "job", "api-gateway", "", "")
+                or label_replace(vector(0), "job", "user-service", "", "")
+                or label_replace(vector(0), "job", "content-service", "", "")
+                or label_replace(vector(0), "job", "gen-ai", "", "")
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+        noDataState: Alerting
+        execErrState: Alerting

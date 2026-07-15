@@ -5,12 +5,24 @@ plugins {
 
 springBoot {
 	mainClass = 'rolling_restarts.user.UserServiceApplication'
+	// Generates META-INF/build-info.properties, which Spring Boot's ProjectInfoAutoConfiguration
+	// picks up to auto-register a BuildProperties bean (used by BuildInfoMetrics to expose the
+	// deployed version as a Prometheus metric — see docs/source/monitoring.md).
+	buildInfo()
 }
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
 	implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+	// Classic scrape endpoint (/actuator/prometheus), separate from the OTLP push path above.
+	// Only used for the `up{job=...}` liveness signal in Prometheus — the RED dashboard reads
+	// OTLP-derived metrics instead.
+	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+	// Bridges Logback log statements into the OTLP logs pipeline (management.opentelemetry
+	// .logging.export.otlp.endpoint only builds the exporter — Spring Boot doesn't
+	// auto-bridge Logback into it).
+	implementation 'io.opentelemetry.instrumentation:opentelemetry-logback-appender-1.0'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-authorization-server'
@@ -21,11 +33,28 @@ dependencies {
 
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
+	// Not imported directly by any test, but SmokeTest's full @SpringBootTest context needs
+	// RestTemplateBuilder resolvable on the classpath for Spring Boot's autoconfiguration
+	// condition evaluation — see the matching comment in content-service/build.gradle.
 	testImplementation 'org.springframework.boot:spring-boot-restclient'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	// Not referenced by any test class directly, but AuthControllerTest's @WebMvcTest slice
+	// needs it to correctly wire an HttpSecurity bean for the security-config-heavy context —
+	// removing it breaks context loading with NoSuchBeanDefinitionException even though no test
+	// imports a spring-security-test class.
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:testcontainers-mongodb'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+dependencyManagement {
+	imports {
+		// spring-boot-dependencies only imports io.opentelemetry:opentelemetry-bom (core API),
+		// not the instrumentation-bom-alpha that manages the Logback appender's version. Pinned
+		// to the instrumentation release that pairs with opentelemetry-bom 1.55.0 (Spring Boot
+		// 4.0.6's managed core version) to keep the two in lockstep.
+		mavenBom "io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom-alpha:2.21.0-alpha"
+	}
 }

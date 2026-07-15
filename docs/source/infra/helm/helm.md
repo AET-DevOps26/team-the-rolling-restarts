@@ -127,7 +127,14 @@ Append `ENV=prod` to any target to overlay production values (e.g. `make helm-de
 
 The image upload workflow writes a values file that only contains the workload image overrides. That means the deployment chart and the CI-generated image values can be combined safely without changing the chart structure.
 
-The workflow also passes `NEXT_PUBLIC_API_BASE_URL` as a Docker build argument when building `web-client`. Next.js inlines `NEXT_PUBLIC_*` variables at build time, so the API URL must be set during the image build—not via Kubernetes deployment env vars at runtime.
+The web-client image is built once and deployed identically everywhere — its API base URL is
+read at server runtime via `API_BASE_URL` (`infra/helm/values.yaml`'s `webClient.env`, set to
+`http://api-gateway:8080`, the bare in-namespace Service name), not baked in as a Docker build
+argument. `web-client/src/lib/api/client.ts` (the only place that reads it) is `"server-only"`
+and deliberately doesn't use the `NEXT_PUBLIC_` prefix, since that would get inlined into the
+compiled bundle at build time and couldn't be overridden per deployment target afterward — which
+is exactly the bug this convention exists to avoid (see `docs/internal/`'s observability/CI notes
+for the incident where a stale build-time value broke web-client's API calls in production).
 
 ## Notes
 

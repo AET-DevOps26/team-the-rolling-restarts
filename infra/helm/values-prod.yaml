@@ -1,4 +1,4 @@
 global:
-  replicas: 2
+  replicas: 3
 ingress:
   clusterIssuer: letsencrypt-prod

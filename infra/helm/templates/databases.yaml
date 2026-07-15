@@ -1,3 +1,7 @@
+{{/* Gated on appWorkloads.enabled so `make helm-destroy` can tear this down (including its data,
+same as a full uninstall always has) without touching grafana-lgtm (templates/monitoring.yaml),
+which has no such guard. */}}
+{{- if .Values.appWorkloads.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -85,3 +89,4 @@ spec:
     - protocol: TCP
       port: {{ .Values.mongodb.port }}
       targetPort: {{ .Values.mongodb.port }}
+{{- end }}

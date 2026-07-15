@@ -10,7 +10,8 @@ services:
     environment:
       NODE_ENV: development
       # Server-side fetches run inside the container; reach the gateway directly in dev.
-      NEXT_PUBLIC_API_BASE_URL: http://api-gateway:8080
+      # Not NEXT_PUBLIC_-prefixed — see web-client/src/lib/api/client.ts.
+      API_BASE_URL: http://api-gateway:8080
       WATCHPACK_POLLING: ${WATCHPACK_POLLING:-false}
     volumes:
       - ../web-client:/app

@@ -87,6 +87,12 @@ Optional helper workflow from repo root:
 make deploy-azure
 ```
 
+Docker itself is installed automatically by the Ansible `docker` role (`get.docker.com`'s official
+script), the same way `make azure-vm-docker`/`azure-cicd-setup` does it — no manual Docker install
+step needed, and safe to run `azure-cicd-setup` and `deploy-azure` against the same VM in either
+order (they used to conflict: apt-installed `docker.io` vs. `get.docker.com`'s `containerd.io`
+package, whichever ran second would fail outright).
+
 ## 3) Verify deployment
 
 From your machine:
@@ -104,6 +110,23 @@ sudo docker ps
 ```
 
 Note: if `docker ps` returns "permission denied while trying to connect to the docker API socket", reconnect your SSH session (or run `newgrp docker`) so group membership is refreshed.
+
+## Known limitation: gen-ai's LLM calls don't currently work on this target
+
+gen-ai's `LLM_PROVIDER=logos` (`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** —
+unreachable from an Azure VM on the public internet. There's also no Ollama instance provisioned
+here: `docker-compose.yaml`'s `ollama` service exists but is gated behind the `local-llm` compose
+profile, which nothing in this deployment path activates. Everything else (signup/login,
+dashboards, mongodb, grafana-lgtm) works — only `/summarize`, `/explain`, `/sentiment`, and `/qa`
+are affected.
+
+**Note:** this limitation has since been fixed for the *CI/CD* Azure path (`deploy-azure.yml`),
+which now runs a self-hosted Ollama via `infra/docker-compose.azure.yaml` (see
+[cicd-azure-deploy.md](cicd-azure-deploy.md)) — but that override is CI/CD-specific and isn't used
+by this manual path (`docker-compose.prod.yaml` doesn't include it). Two real fixes for *this*
+path, not yet decided between: adopt the same Ollama approach here (this is a small burstable
+ARM64 VM, so a real model may not run acceptably), or point gen-ai's existing `logos`-shaped code
+path at a real public OpenAI-compatible endpoint with a real API key.
 
 ## Security checklist
 

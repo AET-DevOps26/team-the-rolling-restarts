@@ -28,15 +28,52 @@ jobs:
       HELM_CHART: ./infra/helm
 
     steps:
-      # CI gate: build-and-package runs on push regardless of CI, so before deploying we require
-      # that the CI workflow for this exact commit has finished and passed. (Skipped for manual
-      # workflow_dispatch runs, which deploy the example image values.)
-      - name: Require CI to pass for this commit
-        if: github.event_name == 'workflow_run'
+      # workflow_run already carries the exact build-and-package run that just completed on
+      # main. workflow_dispatch has neither a commit nor a run to go on, so it looks up the most
+      # recent successful build-and-package run on whichever branch/ref the dispatch itself was
+      # run against (github.ref_name) instead — a real (non-placeholder) target for a manual
+      # re-deploy/recovery run of that same branch.
+      - name: Resolve build-and-package run to deploy
+        id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          # Mapped into env instead of interpolated directly into the shell script below: GitHub
+          # substitutes ${{ }} expressions before the shell ever runs, so a value an attacker
+          # controls (a branch name, for github.ref_name) spliced straight into the script source
+          # is a command-injection vector. Referencing them as quoted shell variables instead
+          # means the shell treats the value as data, not as script text.
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BUILD_RUN_ID_INPUT: ${{ github.event.workflow_run.id }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            SHA="$HEAD_SHA"
+            BUILD_RUN_ID="$BUILD_RUN_ID_INPUT"
+          else
+            BRANCH="$REF_NAME"
+            echo "Manual dispatch on $BRANCH — looking up the last successful build-and-package run on this branch ..."
+            run=$(gh api "repos/$REPO/actions/workflows/upload_images.yml/runs?branch=$BRANCH&event=push&status=success&per_page=1" \
+                  --jq '.workflow_runs[0] | "\(.id):\(.head_sha)"' 2>/dev/null || echo "")
+            if [ -z "$run" ] || [ "$run" = "null:null" ]; then
+              echo "::error::No successful build-and-package run found on $BRANCH."
+              exit 1
+            fi
+            BUILD_RUN_ID="${run%%:*}"
+            SHA="${run#*:}"
+          fi
+          echo "Deploying build-and-package run $BUILD_RUN_ID (commit $SHA)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "build_run_id=$BUILD_RUN_ID" >> "$GITHUB_OUTPUT"
+
+      # CI gate: build-and-package runs on push regardless of CI, so before deploying we require
+      # that the CI workflow for this exact commit has finished and passed.
+      - name: Require CI to pass for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ steps.resolve.outputs.sha }}
         run: |
           echo "Waiting for the CI workflow to finish for $SHA ..."
           for i in $(seq 1 60); do
@@ -62,17 +99,12 @@ jobs:
         uses: actions/checkout@v6.0.3
 
       - name: Download image-values artifact
-        if: github.event_name == 'workflow_run'
         uses: actions/download-artifact@v4
         with:
           name: image-values
           path: infra/helm
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.resolve.outputs.build_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Fallback to example image values
-        if: github.event_name == 'workflow_dispatch'
-        run: cp infra/helm/image-values.example.yaml infra/helm/image-values.yaml
 
       - name: Set up Helm
         uses: azure/setup-helm@v4
@@ -85,12 +117,40 @@ jobs:
           echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
+      # Recreates both namespaces this project needs, with the Rancher project-association
+      # label/annotation they must carry to actually work — not just a bare namespace. A bare
+      # `kubectl create namespace` (no labels), or Helm's own --create-namespace, gets a namespace
+      # created but never associated with this team's Rancher project: no RBAC is granted on it,
+      # and it gets a zero-limit ResourceQuota instead of a real one (confirmed live against a
+      # throwaway test namespace — see infra/k8s/namespaces/*.yml for the full explanation and
+      # verification caveats). This matters most for a full-cluster-wipe recovery, where these
+      # namespaces don't exist at all yet — `kubectl get` first and only `create` (not `apply`,
+      # which needs GET permission on the target that a genuinely nonexistent, never-granted
+      # namespace name doesn't have — confirmed live) when actually missing, so this is a no-op
+      # against the normal case where both already exist and are already correctly configured.
+      - name: Ensure namespaces exist with Rancher project association
+        run: |
+          kubectl get namespace deployment >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/deployment-namespace.yml
+          kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
+
       - name: Validate required secrets
         env:
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
         run: |
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
             echo "::error::SERVICE_CLIENT_SECRET secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+          if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]; then
+            echo "::error::GRAFANA_ADMIN_PASSWORD secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+          if [ -z "${GRAFANA_SMTP_USER:-}" ] || [ -z "${GRAFANA_SMTP_PASSWORD:-}" ] || [ -z "${GRAFANA_ALERT_EMAILS:-}" ]; then
+            echo "::error::GRAFANA_SMTP_USER/GRAFANA_SMTP_PASSWORD/GRAFANA_ALERT_EMAILS secrets are not all configured. Set them in repo secrets before deploying to production — without them, alert rules exist but nothing sends notifications anywhere."
             exit 1
           fi
 
@@ -105,6 +165,10 @@ jobs:
           # network, so Logos is reachable there. If unset, gen-ai deploys keyless and LLM
           # calls fail with 401 until a key is provided.
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
         run: |
           umask 077
           python3 -c '
@@ -127,7 +191,13 @@ jobs:
                       "publicKey": os.environ["JWT_RSA_PUBLIC_KEY"],
                       "privateKey": os.environ["JWT_RSA_PRIVATE_KEY"],
                   }
-              }
+              },
+              "monitoring": {
+                  "adminPassword": QuotedStr(os.environ["GRAFANA_ADMIN_PASSWORD"]),
+                  "smtpUser": QuotedStr(os.environ["GRAFANA_SMTP_USER"]),
+                  "smtpPassword": QuotedStr(os.environ["GRAFANA_SMTP_PASSWORD"]),
+                  "alertEmails": QuotedStr(os.environ["GRAFANA_ALERT_EMAILS"]),
+              },
           }
           data["userService"]["serviceClientSecret"] = QuotedStr(os.environ.get("SERVICE_CLIENT_SECRET", ""))
           # Optional — the llm-credentials secret is not `required` in the chart, so an empty
@@ -144,10 +214,16 @@ jobs:
           FILES="$FILES -f infra/helm/image-values.yaml"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
 
+      # --create-namespace is kept as a redundant safety net — both namespaces are already
+      # properly provisioned (with Rancher project association) by the step above, so this is
+      # normally a no-op. Without the step above, --create-namespace alone would still create a
+      # bare, non-project-associated "deployment" namespace on a full wipe, breaking RBAC exactly
+      # like a manually-wiped namespace does (docs/internal/07-gotchas.md).
       - name: Deploy with Helm
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             ${{ steps.values.outputs.files }} \
+            --create-namespace \
             --wait --timeout 10m
 
       # On any failure (e.g. a helm --wait timeout), dump enough cluster state to

@@ -38,26 +38,60 @@ class ArticleServiceTest {
 	private ArticleService articleService;
 
 	@Test
-	void findAll_withoutQuery_usesRepository() {
+	void findAll_withoutQuery_noFilters_usesMongoTemplate() {
 		PageRequest pageable = PageRequest.of(0, 20);
-		Page<Article> page = new PageImpl<>(List.of());
-		when(articleRepository.findAll(pageable)).thenReturn(page);
+		Article article = new Article();
+		article.setId("a1");
+		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(1L);
+		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of(article));
 
-		Page<Article> result = articleService.findAll(null, null, null, pageable);
+		Page<Article> result = articleService.findAll(null, null, null, null, pageable);
 
-		assertThat(result).isSameAs(page);
-		verify(mongoTemplate, never()).find(any(Query.class), eq(Article.class));
+		assertThat(result.getContent()).containsExactly(article);
+		ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
+		verify(mongoTemplate).count(queryCaptor.capture(), eq(Article.class));
+		assertThat(queryCaptor.getValue().getQueryObject()).isEmpty();
 	}
 
 	@Test
-	void findAll_withBlankQuery_usesRepository() {
+	void findAll_withBlankQuery_appliesSourceIdCriteria() {
 		PageRequest pageable = PageRequest.of(0, 20);
-		Page<Article> page = new PageImpl<>(List.of());
-		when(articleRepository.findBySourceId("src1", pageable)).thenReturn(page);
+		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(0L);
+		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of());
 
-		Page<Article> result = articleService.findAll("src1", null, "   ", pageable);
+		articleService.findAll("src1", null, null, "   ", pageable);
 
-		assertThat(result).isSameAs(page);
+		ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
+		verify(mongoTemplate).count(queryCaptor.capture(), eq(Article.class));
+		Document queryDoc = queryCaptor.getValue().getQueryObject();
+		assertThat(queryDoc.getString("sourceId")).isEqualTo("src1");
+	}
+
+	@Test
+	void findAll_withSourceIds_buildsInCriteria() {
+		PageRequest pageable = PageRequest.of(0, 20);
+		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(0L);
+		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of());
+
+		articleService.findAll(null, List.of("src1", "src2"), null, null, pageable);
+
+		ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
+		verify(mongoTemplate).count(queryCaptor.capture(), eq(Article.class));
+		Document queryDoc = queryCaptor.getValue().getQueryObject();
+		Document sourceIdCriteria = queryDoc.get("sourceId", Document.class);
+		assertThat(sourceIdCriteria).isNotNull();
+		assertThat(sourceIdCriteria.getList("$in", String.class)).containsExactly("src1", "src2");
+	}
+
+	@Test
+	void findAll_withEmptySourceIdsList_returnsEmptyPageWithoutQuerying() {
+		PageRequest pageable = PageRequest.of(0, 20);
+
+		Page<Article> result = articleService.findAll(null, List.of(), null, null, pageable);
+
+		assertThat(result.getTotalElements()).isZero();
+		assertThat(result.getContent()).isEmpty();
+		verify(mongoTemplate, never()).count(any(Query.class), eq(Article.class));
 		verify(mongoTemplate, never()).find(any(Query.class), eq(Article.class));
 	}
 
@@ -69,7 +103,7 @@ class ArticleServiceTest {
 		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(45L);
 		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of(article));
 
-		Page<Article> result = articleService.findAll("src1", "topic1", "climate", pageable);
+		Page<Article> result = articleService.findAll("src1", null, "topic1", "climate", pageable);
 
 		assertThat(result.getContent()).containsExactly(article);
 		assertThat(result.getTotalElements()).isEqualTo(45L);
@@ -85,5 +119,52 @@ class ArticleServiceTest {
 		Document text = queryDoc.get("$text", Document.class);
 		assertThat(text).isNotNull();
 		assertThat(text.getString("$search")).isEqualTo("climate");
+	}
+
+	@Test
+	void findAll_withSourceIdContainedInSourceIds_filtersOnSourceIdAlone() {
+		PageRequest pageable = PageRequest.of(0, 20);
+		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(0L);
+		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of());
+
+		// A specific-source filter (e.g. the sidebar's ?source= link) combined with the caller's
+		// subscribed-sources filter must not throw — Query rejects a second criterion for a field
+		// already present, so only one criterion for "sourceId" may ever be added.
+		articleService.findAll("src1", List.of("src1", "src2"), null, null, pageable);
+
+		ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
+		verify(mongoTemplate).count(queryCaptor.capture(), eq(Article.class));
+		Document queryDoc = queryCaptor.getValue().getQueryObject();
+		assertThat(queryDoc.getString("sourceId")).isEqualTo("src1");
+	}
+
+	@Test
+	void findAll_withSourceIdNotInSourceIds_returnsEmptyPageWithoutQuerying() {
+		PageRequest pageable = PageRequest.of(0, 20);
+
+		// Requesting a source the caller isn't allowed to see (e.g. browsing a source the user
+		// isn't subscribed to) is zero matches, not an error.
+		Page<Article> result = articleService.findAll("other", List.of("src1", "src2"), null, null, pageable);
+
+		assertThat(result.getTotalElements()).isZero();
+		verify(mongoTemplate, never()).count(any(Query.class), eq(Article.class));
+		verify(mongoTemplate, never()).find(any(Query.class), eq(Article.class));
+	}
+
+	@Test
+	void findAll_withQueryAndSourceIds_combinesTextAndInCriteria() {
+		PageRequest pageable = PageRequest.of(0, 20);
+		when(mongoTemplate.count(any(Query.class), eq(Article.class))).thenReturn(2L);
+		when(mongoTemplate.find(any(Query.class), eq(Article.class))).thenReturn(List.of());
+
+		articleService.findAll(null, List.of("src1", "src2"), null, "climate", pageable);
+
+		ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
+		verify(mongoTemplate).count(queryCaptor.capture(), eq(Article.class));
+		Document queryDoc = queryCaptor.getValue().getQueryObject();
+		Document sourceIdCriteria = queryDoc.get("sourceId", Document.class);
+		assertThat(sourceIdCriteria).isNotNull();
+		assertThat(sourceIdCriteria.getList("$in", String.class)).containsExactly("src1", "src2");
+		assertThat(queryDoc.get("$text", Document.class)).isNotNull();
 	}
 }

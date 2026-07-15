@@ -59,6 +59,11 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 20
 
+          # Keep in sync with infra/helm/values.yaml (mongodb.resources). 512Mi (not 260Mi): the
+          # 260Mi limit caused a live OOMKill during first-boot init (WiredTiger cache warmup +
+          # root user creation), interrupting init before the root user was created and leaving
+          # every dependent service permanently failing auth even after Mongo itself recovered.
+          # See docs/internal/06-observability.md.
           resources:
             requests:
               cpu: "100m"

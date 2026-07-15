@@ -39,6 +39,50 @@ api_json() {
   curl $curl_extra "${args[@]}" "$url" 2>/dev/null || true
 }
 
+# Best-effort: query Loki (via Grafana's datasource proxy) for a log line matching a regex,
+# emitted by the given service in the last N seconds. Grafana only runs on the same host as
+# the reverse proxy for local docker-compose — for the VM/k8s targets it's not reachable
+# without a tunnel/port-forward, so this returns "skip" (not "fail") when unreachable.
+loki_grafana_host() {
+  # base_url is like http://localhost:8080 or http://<vm-ip> or https://<ingress-host> — Grafana
+  # shares the same host, on the docker-compose-published Grafana port.
+  echo "$base_url" | sed -E 's#^(https?://[^:/]+).*#\1#'
+}
+
+check_log_reaches_loki() {
+  local desc="$1" service="$2" pattern="$3"
+  local grafana_url grafana_port="${LGTM_GRAFANA_PORT:-3001}"
+  grafana_url="$(loki_grafana_host):${grafana_port}"
+
+  if ! curl $curl_extra -so /dev/null --connect-timeout 3 --max-time 5 "$grafana_url/api/health"; then
+    skip "$desc (Grafana not reachable at $grafana_url)"
+    return
+  fi
+
+  local now start body count
+  now=$(date +%s)
+  start=$((now - 300))
+  # GRAFANA_ADMIN_PASSWORD is only ever the real secret if the caller's shell actually exports it
+  # (same caveat as LGTM_GRAFANA_PORT above — this Makefile doesn't export infra/.env's vars into
+  # recipes' shells). Falls back to the image's own first-boot default; a wrong password makes the
+  # Loki query 401 (empty body, count=0), which `check` below reports as "not found" — that IS a
+  # hard failure (increments `fail`), not best-effort, since it's indistinguishable here from the
+  # log entry genuinely being absent. Export GRAFANA_ADMIN_PASSWORD before running this script if
+  # it's not the image's first-boot default.
+  local grafana_auth="-u admin:${GRAFANA_ADMIN_PASSWORD:-admin}"
+  body=$(curl $curl_extra -s $grafana_auth --connect-timeout 5 --max-time 10 \
+    "$grafana_url/api/datasources/proxy/uid/loki/loki/api/v1/query_range" \
+    --data-urlencode "query={service_name=\"$service\"} |~ \"$pattern\"" \
+    --data-urlencode "start=${start}000000000" \
+    --data-urlencode "end=${now}000000000" 2>/dev/null || true)
+  count=$(echo "$body" | jq -r '[.data.result[]?.values[]?] | length' 2>/dev/null || echo 0)
+  if [ "${count:-0}" -gt 0 ]; then
+    check "$desc" "found" "found"
+  else
+    check "$desc" "found" "not found"
+  fi
+}
+
 # Register (idempotent) then log in a user; echo their JWT. Arg: USERNAME
 register_login() {
   local uname="$1"
@@ -52,6 +96,10 @@ register_login() {
 echo "=== Reverse Proxy + Health ==="
 check "Web Client via /" "200" "$(http "$base_url/")"
 check "API Gateway health" "200" "$(http "$base_url/actuator/health")"
+echo ""
+
+echo "=== Log Aggregation (Loki) ==="
+check_log_reaches_loki "api-gateway health-check request logged in Loki" "api-gateway" "GET /actuator/health"
 echo ""
 
 echo "=== API Routing ==="

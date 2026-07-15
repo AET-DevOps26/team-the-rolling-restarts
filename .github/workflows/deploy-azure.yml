@@ -126,8 +126,6 @@ jobs:
           file: ./web-client/Dockerfile
           target: production
           push: true
-          build-args: |
-            NEXT_PUBLIC_API_BASE_URL=${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           tags: |
             ${{ steps.meta.outputs.registry_base }}/web-client:${{ steps.meta.outputs.image_tag }}
             ${{ steps.meta.outputs.registry_base }}/web-client:latest
@@ -212,7 +210,6 @@ jobs:
 
       - name: Generate deployment .env
         env:
-          NEXT_PUBLIC_API_BASE_URL: ${{ vars.NEXT_PUBLIC_API_BASE_URL }}
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
@@ -222,10 +219,26 @@ jobs:
           JWT_RSA_PUBLIC_KEY: ${{ secrets.JWT_RSA_PUBLIC_KEY }}
           JWT_RSA_PRIVATE_KEY: ${{ secrets.JWT_RSA_PRIVATE_KEY }}
           SERVICE_CLIENT_SECRET: ${{ secrets.SERVICE_CLIENT_SECRET }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
+          # Public URL of the VM, e.g. http://<vm-public-ip>/monitoring/. Optional — the compose
+          # file falls back to http://localhost/monitoring/ if unset, which still works locally
+          # but produces dead links in alert emails sent from this deployment target.
+          GRAFANA_ROOT_URL: ${{ vars.GRAFANA_ROOT_URL }}
         run: |
           umask 077
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
             echo "::error::SERVICE_CLIENT_SECRET secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+          if [ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]; then
+            echo "::error::GRAFANA_ADMIN_PASSWORD secret is not configured. Set it in repo secrets before deploying to production."
+            exit 1
+          fi
+          if [ -z "${GRAFANA_SMTP_USER:-}" ] || [ -z "${GRAFANA_SMTP_PASSWORD:-}" ] || [ -z "${GRAFANA_ALERT_EMAILS:-}" ]; then
+            echo "::error::GRAFANA_SMTP_USER/GRAFANA_SMTP_PASSWORD/GRAFANA_ALERT_EMAILS secrets are not all configured. Set them in repo secrets before deploying to production — without them, alert rules exist but nothing sends notifications anywhere."
             exit 1
           fi
           # A docker-compose --env-file is line-based and cannot hold multi-line values, so the
@@ -241,7 +254,6 @@ jobs:
           SPRING_PROFILES_ACTIVE=production
           APP_PORT=80
           GEN_AI_PORT=8000
-          NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
           # The Azure VM is NOT on the TUM network, so Logos is unreachable here. GenAI runs
           # against the self-hosted Ollama defined in docker-compose.azure.yaml. OLLAMA_MODEL
           # tells that container which model to pull; keep it in sync with LLM_MODEL. Override
@@ -257,6 +269,11 @@ jobs:
           JWT_RSA_PUBLIC_KEY=${JWT_RSA_PUBLIC_KEY_ONELINE}
           JWT_RSA_PRIVATE_KEY=${JWT_RSA_PRIVATE_KEY_ONELINE}
           SERVICE_CLIENT_SECRET=${SERVICE_CLIENT_SECRET}
+          GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+          GRAFANA_SMTP_USER=${GRAFANA_SMTP_USER}
+          GRAFANA_SMTP_PASSWORD=${GRAFANA_SMTP_PASSWORD}
+          GRAFANA_ALERT_EMAILS=${GRAFANA_ALERT_EMAILS}
+          GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL}
           EOF
 
       # The stack is deployed through the Azure control plane (az vm run-command)
@@ -274,6 +291,12 @@ jobs:
           OVERRIDE_B64="$(base64 -w0 infra/docker-compose.azure.yaml)"
           NGINX_B64="$(base64 -w0 infra/nginx/default.conf)"
           ENV_B64="$(base64 -w0 deploy.env)"
+          # docker-compose.yaml's grafana-lgtm service bind-mounts ./grafana/prometheus.yaml,
+          # ./grafana/dashboards/*.json, and ./grafana/provisioning/**/*.yaml relative to
+          # DEPLOY_DIR — without this, those host paths never exist and Docker's fallback
+          # (auto-creating a missing bind source as an empty directory) breaks the mount
+          # ("not a directory") the same way it did for the Ansible-deployed path.
+          GRAFANA_B64="$(tar -czf - -C infra grafana | base64 -w0)"
 
           # Header: inject values (expanded) as quoted shell assignments.
           cat > remote-deploy.sh <<EOF
@@ -286,6 +309,7 @@ jobs:
           OVERRIDE_B64="${OVERRIDE_B64}"
           NGINX_B64="${NGINX_B64}"
           ENV_B64="${ENV_B64}"
+          GRAFANA_B64="${GRAFANA_B64}"
           EOF
 
           # Body: static logic (quoted heredoc, nothing expanded here).
@@ -295,6 +319,10 @@ jobs:
           printf '%s' "$OVERRIDE_B64" | base64 -d > "$DEPLOY_DIR/docker-compose.azure.yaml"
           mkdir -p "$DEPLOY_DIR/nginx"
           printf '%s' "$NGINX_B64"    | base64 -d > "$DEPLOY_DIR/nginx/default.conf"
+          # Wipe first: self-heals any stale state (including Docker's own directory-autocreation
+          # poisoning from a prior failed deploy), same as the Ansible app role's grafana sync.
+          rm -rf "$DEPLOY_DIR/grafana"
+          printf '%s' "$GRAFANA_B64" | base64 -d | tar -xzf - -C "$DEPLOY_DIR"
           umask 077
           printf '%s' "$ENV_B64" | base64 -d > "$DEPLOY_DIR/.env"
           printf '%s' "$ACR_TOKEN" | docker login "$ACR_LOGIN_SERVER" \

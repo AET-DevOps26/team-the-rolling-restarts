@@ -281,6 +281,15 @@ paths:
         required: false
         schema:
           type: string
+      - description: Filter to a set of source IDs (e.g. a caller's subscribed sources), so pagination
+          totals are computed post-filter instead of requiring the caller to filter results client-side
+        in: query
+        name: sourceIds
+        required: false
+        schema:
+          items:
+            type: string
+          type: array
       - description: Filter by topic ID
         in: query
         name: topicId

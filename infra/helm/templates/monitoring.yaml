@@ -1,0 +1,315 @@
+# Lives in monitoring.namespace (not gated by appWorkloads.enabled, unlike templates/secrets.yaml —
+# monitoring.yaml as a whole is unconditional) since the Deployment below that consumes it via
+# secretKeyRef runs in that same namespace; a Secret in a different namespace isn't visible to it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-admin-credentials
+  namespace: {{ .Values.monitoring.namespace }}
+type: Opaque
+stringData:
+  password: {{ required "monitoring.adminPassword is required — set it in secrets-values.yaml" .Values.monitoring.adminPassword | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-prometheus-config
+  namespace: {{ .Values.monitoring.namespace }}
+data:
+  # Rendered with `tpl` (not a plain .Files.Get) so the app-namespace placeholder inside the file
+  # can resolve to {{ .Release.Namespace }} — this ConfigMap lives in monitoring.namespace, but
+  # Prometheus's kubernetes_sd_configs needs to discover pods over in the app namespace instead.
+  prometheus.yaml: |
+{{ tpl (.Files.Get "files/grafana/prometheus.yaml") $ | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-dashboard
+  namespace: {{ .Values.monitoring.namespace }}
+data:
+  service-overview.json: |
+{{ .Files.Get "files/grafana/dashboards/service-overview.json" | indent 4 }}
+  red-metrics-classic.json: |
+{{ .Files.Get "files/grafana/dashboards/red-metrics-classic.json" | indent 4 }}
+  genai-overview.json: |
+{{ .Files.Get "files/grafana/dashboards/genai-overview.json" | indent 4 }}
+  webclient-overview.json: |
+{{ .Files.Get "files/grafana/dashboards/webclient-overview.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-provisioning
+  namespace: {{ .Values.monitoring.namespace }}
+data:
+  custom-dashboards.yaml: |
+{{ .Files.Get "files/grafana/provisioning/dashboards/custom-dashboards.yaml" | indent 4 }}
+  default-dashboards-override.yaml: |
+{{ .Files.Get "files/grafana/provisioning/dashboards/default-dashboards-override.yaml" | indent 4 }}
+  rules.yaml: |
+{{ .Files.Get "files/grafana/provisioning/alerting/rules.yaml" | indent 4 }}
+  contactpoints.yaml: |
+{{ .Files.Get "files/grafana/provisioning/alerting/contactpoints.yaml" | indent 4 }}
+---
+# grafana-lgtm reads GRAFANA_ALERT_EMAILS itself via contactpoints.yaml's $__env{} expansion; the
+# other three keys feed the Deployment's GF_SMTP_* env vars below. All four are required — without
+# them, alert rules exist but nothing sends notifications anywhere (see docs/source/monitoring.md).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-smtp-credentials
+  namespace: {{ .Values.monitoring.namespace }}
+type: Opaque
+stringData:
+  smtpUser: {{ required "monitoring.smtpUser is required — set it in secrets-values.yaml" .Values.monitoring.smtpUser | quote }}
+  smtpPassword: {{ required "monitoring.smtpPassword is required — set it in secrets-values.yaml" .Values.monitoring.smtpPassword | quote }}
+  alertEmails: {{ required "monitoring.alertEmails is required — set it in secrets-values.yaml" .Values.monitoring.alertEmails | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.monitoring.name }}-data
+  namespace: {{ .Values.monitoring.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.monitoring.storage }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.monitoring.name }}
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: {{ .Values.monitoring.name }}
+  template:
+    metadata:
+      labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 8 }}
+      annotations:
+        # The initContainer below reads monitoring.adminPassword via secretKeyRef, not as a
+        # literal value in this pod template — so a `helm upgrade` that ONLY rotates the secret's
+        # value (no other change) renders an IDENTICAL Deployment YAML, and Kubernetes has no way
+        # to know the underlying Secret changed. Without this, the pod is never recreated, the
+        # initContainer never re-runs, and the rotated password silently never takes effect. This
+        # annotation hashes the actual value, forcing a new pod on rotation specifically. Same
+        # reasoning applies to the SMTP credentials/alert recipients below — they're also read via
+        # secretKeyRef only, so without this they'd silently keep serving stale values on rotation.
+        checksum/grafana-admin-password: {{ .Values.monitoring.adminPassword | sha256sum }}
+        checksum/grafana-smtp-credentials: {{ printf "%s%s%s" .Values.monitoring.smtpUser .Values.monitoring.smtpPassword .Values.monitoring.alertEmails | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.monitoring.name }}
+      # Makes the deployed password the actual source of truth instead of a first-boot-only
+      # default: GF_SECURITY_ADMIN_PASSWORD (below) is only ever read by `grafana server` the very
+      # first time it starts against an empty /data volume — on a PVC that already has a
+      # previously-initialized instance (e.g. after rotating the secret), it's silently ignored.
+      # `grafana cli admin reset-admin-password` is idempotent either way: on a fresh volume it
+      # runs the same migrations `grafana server` would (creating the default admin/org) then sets
+      # the password; on an existing volume it just resets it. Runs before the main container
+      # starts, so there's no live-server stale-cache race (confirmed live: running the same
+      # command via `kubectl exec` against an already-running server updated the DB file but the
+      # server kept serving the old password until restarted).
+      initContainers:
+        - name: {{ .Values.monitoring.name }}-set-admin-password
+          image: {{ .Values.monitoring.image }}
+          command:
+            - sh
+            - -c
+            - |
+              cd /otel-lgtm/grafana && \
+              GF_PATHS_HOME=/otel-lgtm/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins \
+              ./bin/grafana cli admin reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD"
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin-credentials
+                  key: password
+          # allowPrivilegeEscalation/dropped capabilities/seccompProfile are safe defaults that
+          # only restrict privilege escalation and syscalls, not the UID the image already runs
+          # as. Deliberately NOT setting runAsNonRoot: true — this bundled image (Prometheus/
+          # Grafana/Tempo/Loki/Pyroscope) hasn't been verified to actually run as non-root, and
+          # getting that wrong (e.g. it needs root to write /data on first boot) would break the
+          # deployment outright rather than just being less hardened.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          # Kept well under the main container's limits below (400m/850Mi) — Kubernetes computes a
+          # pod's effective quota usage as max(sum of app containers, largest single initContainer)
+          # per resource, since initContainers never run concurrently with app containers. As long
+          # as this stays smaller than the main container's limits, it adds nothing to the pod's
+          # quota footprint. Learned live: omitting resources entirely made every pod creation fail
+          # outright ("failed quota: ... must specify limits.cpu/memory for grafana-lgtm-set-admin-password"),
+          # since this namespace's ResourceQuota requires explicit limits on every container.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: {{ .Values.monitoring.name }}
+          image: {{ .Values.monitoring.image }}
+          # See the initContainer's securityContext above for why runAsNonRoot isn't set here.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          ports:
+            - containerPort: 3000
+            - containerPort: 4317
+            - containerPort: 4318
+          env:
+            # The base image's own run-grafana.sh defaults this to "true" with org role "Admin" —
+            # without this override, anyone reaching the Service gets full admin access with no
+            # login at all. The admin password itself is set by the initContainer above, not by
+            # GF_SECURITY_ADMIN_USER/PASSWORD here — those only ever apply at the same first-boot
+            # moment the initContainer already handles idempotently, so they're omitted here to
+            # avoid a second, silently-inert mechanism.
+            - name: GF_AUTH_ANONYMOUS_ENABLED
+              value: "false"
+            # Routed through the shared ingress at /monitoring (templates/ingress.yaml) via an
+            # ExternalName Service, since an Ingress can only target Services in its own namespace
+            # and grafana-lgtm lives in monitoring.namespace.
+            - name: GF_SERVER_ROOT_URL
+              value: "https://{{ $.Values.host }}/monitoring/"
+            - name: GF_SERVER_SERVE_FROM_SUB_PATH
+              value: "true"
+            # Alert email delivery — the recipient list (GRAFANA_ALERT_EMAILS) is read directly by
+            # provisioning/alerting/contactpoints.yaml via Grafana's own $__env{} expansion, not
+            # consumed here; it's still injected into this container so that expansion has
+            # something to read.
+            - name: GF_SMTP_ENABLED
+              value: "true"
+            - name: GF_SMTP_HOST
+              value: {{ .Values.monitoring.smtpHost | quote }}
+            - name: GF_SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtpUser
+            - name: GF_SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: smtpPassword
+            # References GF_SMTP_USER (defined above, same env list) via Kubernetes' dependent-env
+            # syntax instead of a second secretKeyRef against the same key — one less place to
+            # keep in sync if the Secret's key name ever changes.
+            - name: GF_SMTP_FROM_ADDRESS
+              value: "$(GF_SMTP_USER)"
+            - name: GF_SMTP_FROM_NAME
+              value: "Grafana Alerting"
+            - name: GRAFANA_ALERT_EMAILS
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-smtp-credentials
+                  key: alertEmails
+          # Hit directly on the container port, bypassing GF_SERVER_SERVE_FROM_SUB_PATH's
+          # /monitoring prefix (that only affects how Grafana builds browser-facing URLs, not its
+          # own routing) — confirmed by infra/scripts/smoke-test.sh's Grafana health check using
+          # the same bare /api/health path. Generous initialDelay/failureThreshold on readiness:
+          # this image bundles Prometheus/Grafana/Tempo/Loki/Pyroscope and can take a while to
+          # come up, especially against a fresh PVC needing first-boot migrations, and Kubernetes
+          # would otherwise route /monitoring traffic here (or restart a merely-slow-starting pod)
+          # before it's actually ready.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 3000
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+{{ toYaml .Values.monitoring.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: prometheus-config
+              mountPath: /otel-lgtm/prometheus.yaml
+              subPath: prometheus.yaml
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/service-overview.json
+              subPath: service-overview.json
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json
+              subPath: red-metrics-classic.json
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/genai-overview.json
+              subPath: genai-overview.json
+            - name: dashboard
+              mountPath: /otel-lgtm/grafana-dashboards-custom/webclient-overview.json
+              subPath: webclient-overview.json
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml
+              subPath: custom-dashboards.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml
+              subPath: default-dashboards-override.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml
+              subPath: rules.yaml
+            - name: provisioning
+              mountPath: /otel-lgtm/grafana/conf/provisioning/alerting/contactpoints.yaml
+              subPath: contactpoints.yaml
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.monitoring.name }}-data
+        - name: prometheus-config
+          configMap:
+            name: grafana-lgtm-prometheus-config
+        - name: dashboard
+          configMap:
+            name: grafana-lgtm-dashboard
+        - name: provisioning
+          configMap:
+            name: grafana-lgtm-provisioning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.monitoring.name }}
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app: {{ .Values.monitoring.name }}
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: 3000
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318

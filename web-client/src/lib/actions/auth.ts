@@ -13,7 +13,11 @@ const COOKIE_MAX_AGE = 60 * 60; // 1h, matches JWT TTL
 async function setToken(token: string) {
   (await cookies()).set(AUTH_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Deliberately not NODE_ENV-keyed: that conflates "production build" with "served over
+    // HTTPS," which aren't the same thing on the Azure VM deployment target (no TLS there —
+    // see issue #90). A Secure cookie is never sent back over a plain HTTP connection, which
+    // broke login persistence there. Each deployment target sets this explicitly instead.
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
     maxAge: COOKIE_MAX_AGE,

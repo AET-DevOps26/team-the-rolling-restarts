@@ -4,7 +4,6 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from opentelemetry import metrics, trace
 
@@ -52,14 +51,30 @@ def _record_token_usage(result: Any, attributes: dict[str, str]) -> None:
 
 
 def invoke_chat_model(
-    model: BaseChatModel,
+    model: Any,
     messages: list[BaseMessage],
     *,
     endpoint: str,
     provider: str,
     invoke_fn: Callable[[], Any] | None = None,
+    count_errors: bool = True,
 ) -> Any:
-    """Invoke the chat model with shared observability for all LLM-backed endpoints."""
+    """Invoke a chat model (or a structured-output-wrapped runnable) with shared
+    observability for all LLM-backed endpoints. `model` only needs to support
+    `.invoke(messages)`.
+
+    `invoke_fn`, if given, is called instead of `model.invoke(messages)` — for callers whose
+    actual invocation isn't a plain `model.invoke(messages)` call (e.g. sentiment's structured-
+    output attempt, which calls `structured.invoke(messages)` on a wrapped runnable). `model`/
+    `messages` are still required in that case, since they're unused for the call itself but
+    nothing else about this function's observability behavior changes.
+
+    `count_errors=False` skips the `gen_ai.llm.errors` increment on failure — for callers
+    where this specific invocation is an anticipated first attempt with its own fallback (e.g.
+    sentiment's structured-output attempt, expected to sometimes fail on providers without full
+    structured-output support), so a routine fallback doesn't inflate the error rate metric.
+    Latency/request counters and tracing are unaffected either way.
+    """
     attributes = {"endpoint": endpoint, "provider": provider}
     start = time.perf_counter()
     result: Any
@@ -71,7 +86,8 @@ def invoke_chat_model(
         try:
             result = invoke_fn() if invoke_fn is not None else model.invoke(messages)
         except Exception:
-            _llm_errors.add(1, attributes)
+            if count_errors:
+                _llm_errors.add(1, attributes)
             raise
         finally:
             elapsed = time.perf_counter() - start

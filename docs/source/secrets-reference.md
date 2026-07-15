@@ -21,6 +21,10 @@ These must be changed from defaults in production. The dev defaults below work o
 | `JWT_RSA_PUBLIC_KEY` / `JWT_RSA_PRIVATE_KEY` | Committed dev key pair (in `docker-compose.dev.yaml`) | Generate a fresh RSA pair, inject via secret store | user-service (JWT signing) |
 | `SERVICE_CLIENT_SECRET` | `dev-service-secret` (in `docker-compose.dev.yaml`) | Strong random value (`openssl rand -hex 32`) | user-service → content-service subscribe/unsubscribe (client_credentials, scope `source.write`) |
 | `LLM_API_KEY` | _(empty)_ | Logos API key (`lg-...`, from tutor); TUM network / eduVPN only | gen-ai |
+| `GRAFANA_ADMIN_PASSWORD` | `admin` | Strong random password (`openssl rand -hex 16`) | grafana-lgtm admin login (also reachable at `/monitoring` via the reverse proxy, not just `LGTM_GRAFANA_PORT` directly) |
+| `GRAFANA_SMTP_USER` | _(empty)_ | Sending email address (Gmail: the account itself) | grafana-lgtm SMTP auth — alert email delivery |
+| `GRAFANA_SMTP_PASSWORD` | _(empty)_ | Gmail: an App Password, NOT the account password (requires 2FA; generate at myaccount.google.com/apppasswords) | grafana-lgtm SMTP auth |
+| `GRAFANA_ALERT_EMAILS` | _(empty)_ | Comma-separated recipient list | `email-alerts` contact point (`infra/grafana/provisioning/alerting/contactpoints.yaml`), read via Grafana's `$__env{}` provisioning expansion |
 
 ### Configuration
 
@@ -30,7 +34,7 @@ Safe to leave at defaults for local dev. Override as needed.
 | -------- | ----------- | ----------- |
 | `REGISTRY` | `ghcr.io/aet-devops26/team-the-rolling-restarts` | Container image registry. Use `ghcr.io/<github-username>/rolling-restarts` for personal dev |
 | `IMAGE_TAG` | `latest` | Image tag. Makefile defaults to current commit SHA |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080` | API base URL baked into web client at build time |
+| `API_BASE_URL` | `http://localhost:8080` | Gateway base URL for the "test" compose profile (`infra/docker-compose.yaml` itself hardcodes the correct value per deployment target directly, not from this file — see `web-client/src/lib/api/client.ts`) |
 | `APP_PORT` | `8080` (local) / `80` (VM) | Host port for the nginx reverse proxy — the single entry point; the web client is served through it at `/`, not on its own port |
 | `GEN_AI_PORT` | `8000` | Host port for GenAI service |
 | `LLM_PROVIDER` | `logos` | LLM provider (`logos` for cloud, `ollama` for local) |
@@ -45,13 +49,14 @@ Safe to leave at defaults for local dev. Override as needed.
 | `LGTM_GRAFANA_PORT` | `3001` | Host port for Grafana |
 | `LGTM_OTLP_GRPC_PORT` | `4317` | Host port for OTLP gRPC |
 | `LGTM_OTLP_HTTP_PORT` | `4318` | Host port for OTLP HTTP |
+| `GF_SMTP_HOST` | `smtp.gmail.com:587` | SMTP relay host:port for alert email delivery — any provider works, Gmail is the default |
 | `WATCHPACK_POLLING` | `false` | Set `true` on some Linux setups for file watching |
 
 ### Example `infra/.env` (dev)
 
 ```bash
 # Works out of the box for local development
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+API_BASE_URL=http://localhost:8080
 APP_PORT=8080
 GEN_AI_PORT=8000
 
@@ -71,6 +76,11 @@ MONGO_ROOT_PASSWORD=secret
 LGTM_GRAFANA_PORT=3001
 LGTM_OTLP_GRPC_PORT=4317
 LGTM_OTLP_HTTP_PORT=4318
+GRAFANA_ADMIN_PASSWORD=your-strong-password-here
+GF_SMTP_HOST=smtp.gmail.com:587
+GRAFANA_SMTP_USER=you@gmail.com
+GRAFANA_SMTP_PASSWORD=your-app-password-here
+GRAFANA_ALERT_EMAILS=you@gmail.com,teammate@example.com
 WATCHPACK_POLLING=false
 ```
 
@@ -104,7 +114,6 @@ registry: ghcr.io/aet-devops26/team-the-rolling-restarts
 image_tag: latest
 
 app_env:
-  NEXT_PUBLIC_API_BASE_URL: "https://your-domain.com"
   APP_PORT: "8080"
   GEN_AI_PORT: "8000"
 
@@ -125,6 +134,11 @@ app_env:
   LGTM_GRAFANA_PORT: "3001"
   LGTM_OTLP_GRPC_PORT: "4317"
   LGTM_OTLP_HTTP_PORT: "4318"
+  GRAFANA_ADMIN_PASSWORD: "CHANGE-ME-strong-random"  # <-- real secret
+  GF_SMTP_HOST: "smtp.gmail.com:587"
+  GRAFANA_SMTP_USER: "you@gmail.com"
+  GRAFANA_SMTP_PASSWORD: "CHANGE-ME-app-password"  # <-- real secret
+  GRAFANA_ALERT_EMAILS: "you@gmail.com,teammate@example.com"
 ```
 
 ---
@@ -151,12 +165,31 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 | `userService.jwtKeys.publicKey` / `userService.jwtKeys.privateKey` | yes | Fresh RSA pair | `jwt-keys` Secret → user-service JWT signing |
 | `userService.serviceClientSecret` | yes | Strong random value (`openssl rand -hex 32`) | `service-credentials` Secret → user-service's client_credentials token for content-service subscribe/unsubscribe |
 | `genAi.llmApiKey` | no | Logos API key (`lg-...`); TUM network / eduVPN only | `llm-credentials` Secret → gen-ai cloud LLM calls |
+| `monitoring.adminPassword` | yes | Strong random password (`openssl rand -hex 16`) | `grafana-admin-credentials` Secret (in `monitoring.namespace`) → grafana-lgtm admin login, reachable at `/monitoring` via the shared ingress |
+| `monitoring.smtpUser` | yes | Sending email address (Gmail: the account itself) | `grafana-smtp-credentials` Secret → grafana-lgtm SMTP auth for alert email delivery |
+| `monitoring.smtpPassword` | yes | Gmail: an App Password, NOT the account password (requires 2FA; generate at myaccount.google.com/apppasswords) | `grafana-smtp-credentials` Secret |
+| `monitoring.alertEmails` | yes | Comma-separated recipient list | `grafana-smtp-credentials` Secret → `email-alerts` contact point, read via Grafana's `$__env{}` provisioning expansion |
 
 > **Rotating `mongodb.rootPassword`:** MongoDB only applies the root password on first init (empty
 > data dir). Changing it while the `mongodb-data` PVC still exists leaves the old password in place
 > and the services fail with "Authentication failed". Wipe the volume to re-initialize:
 > `kubectl -n deployment delete deploy mongodb && kubectl -n deployment delete pvc mongodb-data`,
-> then redeploy.
+> then redeploy. **Separately**, even if `secrets-values.yaml` is just being _corrected_ to match a
+> password MongoDB already has (not an actual rotation) — `helm upgrade` updates the
+> `mongodb-credentials`/`mongodb-user-credentials` Secrets, but `user-service`/`content-service`
+> read them once at container start via `secretKeyRef` and won't pick up the change on their own;
+> a Secret-value-only change doesn't alter their Deployment's rendered YAML at all, so Kubernetes
+> has no reason to restart them. Confirmed live: they kept failing with `AuthenticationFailed`
+> until explicitly restarted with `kubectl rollout restart deployment/user-service
+> deployment/content-service -n deployment`.
+>
+> **Rotating `monitoring.adminPassword`:** unlike the above, this one _is_ fully automatic — an
+> initContainer (Kubernetes) / one-shot service (docker-compose) runs `grafana cli admin
+> reset-admin-password` on every deploy, before Grafana starts, so changing the value and
+> redeploying is enough. See `docs/internal/07-gotchas.md` for how this works and two sharp edges
+> hit building it (a `ResourceQuota` requiring explicit limits on the initContainer, and a
+> `checksum/grafana-admin-password` pod-template annotation needed so a Secret-only value change
+> actually triggers a new pod on the Helm path).
 
 Both services share the same MongoDB instance with data isolation via separate databases:
 
@@ -175,11 +208,13 @@ These are set directly in `values.yaml` or overridden per-environment.
 | `apiGateway.env` `JWT_ISSUER_URI` | `http://user-service:8081` | Keep (cluster-internal) | JWT issuer for token validation |
 | `ingress.clusterIssuer` | `letsencrypt-staging` | `letsencrypt-prod` (via `values-prod.yaml`) | TLS certificate issuer |
 | `host` | `rolling-restarts.stud...` | Your domain | Ingress hostname (path-based routing) |
+| `monitoring.smtpHost` | `smtp.gmail.com:587` | Your SMTP provider | SMTP relay host:port for alert email delivery |
 
 ### Example `infra/helm/secrets-values.yaml` (prod)
 
-All four keys are mandatory — see `secrets-values.example.yaml` for the full template, or run
-`make helm-secrets` to generate this automatically.
+All fields shown here are mandatory (`genAi.llmApiKey` is the one optional exception) — see
+`secrets-values.example.yaml` for the full template with generation commands for each value, or
+run `make helm-secrets` to generate the mongodb/JWT/service-client portion automatically.
 
 ```yaml
 mongodb:
@@ -196,6 +231,11 @@ userService:
       ...
       -----END PRIVATE KEY-----
   serviceClientSecret: "a-strong-random-value-here"
+monitoring:
+  adminPassword: "a-strong-random-password-here"
+  smtpUser: "you@gmail.com"
+  smtpPassword: "your-app-password-here"
+  alertEmails: "you@gmail.com,teammate@example.com"
 ```
 
 ### Helm values file layering

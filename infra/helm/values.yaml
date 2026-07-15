@@ -1,3 +1,11 @@
+# Toggle for `make helm-destroy`: rendering the app workloads (web-client, api-gateway,
+# user-service, content-service, gen-ai, mongodb, ingress) is gated on this so `helm upgrade
+# --set appWorkloads.enabled=false` tears down only those resources — including mongodb's data,
+# same as a full uninstall always has — while leaving grafana-lgtm's monitoring stack (not gated
+# on this) running untouched. Never set to false for a normal deploy.
+appWorkloads:
+  enabled: true
+
 # Shared defaults used by every workload in the chart.
 global:
   registry: ghcr.io/aet-devops26/team-the-rolling-restarts
@@ -28,7 +36,19 @@ webClient:
   env:
     - name: NODE_ENV
       value: production
-    # NEXT_PUBLIC_API_BASE_URL is baked into the image at build time (see web-client/Dockerfile).
+    # Not NEXT_PUBLIC_-prefixed (see web-client/src/lib/api/client.ts) — read at container
+    # runtime, not baked into the image at build time, so api-gateway's bare in-namespace
+    # Service name works here same as it does for every other service's internal calls.
+    - name: API_BASE_URL
+      value: http://api-gateway:8080
+    # This deployment target has real TLS (cert-manager/nginx-ingress) — see issue #90 for why
+    # this can't just be inferred from NODE_ENV.
+    - name: COOKIE_SECURE
+      value: "true"
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318
+    - name: OTEL_SERVICE_NAME
+      value: web-client
   probes:
     readiness:
       initialDelaySeconds: 5
@@ -38,11 +58,13 @@ webClient:
       periodSeconds: 20
   resources:
     requests:
-      cpu: 10m
-      memory: 64Mi
+      cpu: 20m
+      memory: 90Mi
     limits:
       cpu: 100m
-      memory: 128Mi
+      # 200Mi: 230Mi fixed the earlier 80%-of-180Mi tightness (measured live at 41-63% of 230Mi
+      # afterward) with more room than needed; trimmed back to fund user-service's increase below.
+      memory: 200Mi
 
 # API Gateway routes traffic to user-service and content-service.
 apiGateway:
@@ -63,8 +85,17 @@ apiGateway:
       value: http://gen-ai:8000
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
+    - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/metrics
+    - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/traces
+    - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/logs
     # CORS_ALLOWED_ORIGINS is injected by templates/deployment.yaml as https://<.Values.host>
     # so it always matches the ingress origin (and the dev host override) without drifting.
+  # Pod-annotation target for Prometheus's label/annotation-based auto-discovery (see
+  # infra/helm/files/grafana/prometheus.yaml) — set on any workload Prometheus should scrape.
+  metricsPath: /actuator/prometheus
   probes:
     path: /actuator/health
     readiness:
@@ -77,11 +108,16 @@ apiGateway:
       timeoutSeconds: 2
   resources:
     requests:
-      cpu: 50m
-      memory: 200Mi
+      cpu: 60m
+      memory: 180Mi
     limits:
-      cpu: 200m
-      memory: 300Mi
+      cpu: 220m
+      # 330Mi: the 300Mi trim was too aggressive — measured live at 85-90% of 300Mi at idle.
+      # Reverting to 330Mi restores a safer margin. Sized as part of the post-namespace-
+      # consolidation budget for the single shared namespace's 4 CPU / 6144Mi quota — see
+      # docs/internal/06-observability.md and docs/source/monitoring.md's "Kubernetes resource
+      # budget" section for the full distribution across all services at 3 replicas each.
+      memory: 330Mi
 
 # User service handles auth, login, and user settings (MongoDB).
 userService:
@@ -98,6 +134,12 @@ userService:
       value: http://user-service:8081
     - name: CONTENT_SERVICE_URL
       value: http://content-service:8082
+    - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/metrics
+    - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/traces
+    - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/logs
   secretEnv:
     - name: SPRING_MONGODB_URI
       secretName: mongodb-user-credentials
@@ -111,13 +153,19 @@ userService:
     - name: SERVICE_CLIENT_SECRET
       secretName: service-credentials
       secretKey: client-secret
+  metricsPath: /actuator/prometheus
   resources:
     requests:
-      cpu: 50m
-      memory: 200Mi
+      cpu: 60m
+      memory: 210Mi
     limits:
-      cpu: 200m
-      memory: 300Mi
+      cpu: 220m
+      # 460Mi: measured live climbing steadily across 3 separate idle readings (70-72% -> 78-81%
+      # -> 82-86% of 400Mi), notably higher than content-service's stable 75-77% on the same
+      # limit despite similar code shape — 400Mi wasn't enough margin. 460Mi restores headroom
+      # while this is investigated further. See docs/internal/06-observability.md and
+      # docs/source/monitoring.md's "Kubernetes resource budget" section.
+      memory: 460Mi
   jwtKeys:
     publicKey: ""
     privateKey: ""
@@ -148,10 +196,17 @@ contentService:
       value: -XX:MaxRAMPercentage=75
     - name: JWT_ISSUER_URI
       value: http://user-service:8081
+    - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/metrics
+    - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/traces
+    - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318/v1/logs
   secretEnv:
     - name: SPRING_MONGODB_URI
       secretName: mongodb-credentials
       secretKey: uri
+  metricsPath: /actuator/prometheus
   probes:
     path: /actuator/health
     readiness:
@@ -164,11 +219,14 @@ contentService:
       timeoutSeconds: 5
   resources:
     requests:
-      cpu: 50m
-      memory: 200Mi
+      cpu: 60m
+      memory: 210Mi
     limits:
-      cpu: 200m
-      memory: 300Mi
+      cpu: 220m
+      # 400Mi: same OOM risk applies to content-service as user-service (see its resources block
+      # above). See docs/source/monitoring.md's "Kubernetes resource budget" section for the full
+      # per-service distribution at 3 replicas each.
+      memory: 400Mi
 
 # GenAI defaults mirror the handwritten Kubernetes manifest.
 genAi:
@@ -193,13 +251,14 @@ genAi:
     - name: INTERNAL_API_URL
       value: http://api-gateway:8080
     - name: OTEL_EXPORTER_OTLP_ENDPOINT
-      value: http://grafana-lgtm:4318
+      value: http://grafana-lgtm.{{ .Values.monitoring.namespace }}:4318
     - name: OTEL_SERVICE_NAME
       value: gen-ai
   secretEnv:
     - name: LLM_API_KEY
       secretName: llm-credentials
       secretKey: apiKey
+  metricsPath: /metrics
   probes:
     path: /health
     readiness:
@@ -211,10 +270,16 @@ genAi:
   resources:
     requests:
       cpu: 30m
-      memory: 64Mi
+      memory: 80Mi
     limits:
-      cpu: 150m
-      memory: 200Mi
+      cpu: 100m
+      # 130Mi: measured live at a stable 34-39% of 180Mi across multiple readings (idle usage
+      # only ever 62-71Mi) — gen-ai never runs any model locally (ChatOllama and ChatOpenAI in
+      # app/llm/provider.py are both thin HTTP clients; Ollama, when used, runs as a separate
+      # container gated behind docker-compose's "local-llm" profile and doesn't exist in
+      # Kubernetes at all), so this consistent, comfortable margin funds user-service's increase
+      # above. See docs/source/monitoring.md's "Kubernetes resource budget" section.
+      memory: 130Mi
 
 # Database services
 mongodb:
@@ -229,11 +294,54 @@ mongodb:
   storage: 1Gi
   resources:
     requests:
-      cpu: 50m
+      cpu: 100m
       memory: 256Mi
     limits:
-      cpu: 200m
+      cpu: 250m
+      # 512Mi (not 260Mi): the 260Mi limit left almost no headroom above the 256Mi request, and
+      # caused a live OOMKill during MongoDB's first-boot init (WiredTiger cache warmup + root
+      # user creation) — the OOM interrupted init before the root user was created, leaving every
+      # dependent service permanently failing auth (UserNotFound) even after Mongo itself
+      # recovered. 512Mi restores the original safe margin. See
+      # docs/internal/06-observability.md.
       memory: 512Mi
+
+# grafana-lgtm: bundled Prometheus + Grafana + Tempo/Loki/Pyroscope, same image as docker-compose.
+# Runs in its own namespace (monitoring.namespace), separate from the app workloads above, each
+# with its own ResourceQuota — see docs/internal/06-observability.md and
+# docs/source/monitoring.md's "Kubernetes resource budget" section.
+monitoring:
+  name: grafana-lgtm
+  # Must already exist before `helm upgrade --install` — Helm only auto-creates its own
+  # `--create-namespace` target (the release/app namespace), not other namespaces referenced by
+  # templates. CI creates it idempotently in .github/workflows/deploy_kubernetes.yml.
+  namespace: monitoring-rolling-restarts
+  image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+  # SMTP relay for alert email delivery (provisioning/alerting/contactpoints.yaml +
+  # rules.yaml). Any provider works; smtpUser/smtpPassword/alertEmails (secrets, not here) must
+  # match whatever host is set. See docs/source/monitoring.md and secrets-values.example.yaml.
+  smtpHost: smtp.gmail.com:587
+  # PVC for /data — Grafana, Prometheus, Loki, Tempo, and Pyroscope all persist under this single
+  # path in the image (verified directly: run-prometheus.sh's --storage.tsdb.path, run-grafana.sh's
+  # GF_PATHS_DATA, run-loki.sh/run-pyroscope.sh's mkdir, tempo-config.yaml's wal/blocks paths all
+  # point under /data). Without it, all dashboards/config/metrics/logs/traces are lost on every pod
+  # restart — this stack previously had no persistence at all.
+  storage: 2Gi
+  resources:
+    requests:
+      # 480Mi: idle usage measured live at 467Mi (73% of the old 640Mi limit) with nobody even
+      # viewing Grafana — this bundles Prometheus/Grafana/Tempo/Loki/Pyroscope in one process.
+      cpu: 100m
+      memory: 480Mi
+    limits:
+      # 850Mi/400m (not 900Mi/450m): the dedicated monitoring namespace's own ResourceQuota is a
+      # hard 500m CPU / 900Mi memory ceiling (confirmed live via `kubectl describe resourcequota
+      # -n monitoring-rolling-restarts`) — grafana-lgtm is the only workload in that namespace, but
+      # sizing exactly at the ceiling leaves zero headroom for anything else ever added there.
+      # 850Mi/400m leaves ~6%/20% margin while still covering the active-dashboard-browsing OOM
+      # this stack hit before (measured at 725Mi/80% of a 900Mi limit under that load).
+      cpu: 400m
+      memory: 850Mi
 
 ingress:
   enabled: true

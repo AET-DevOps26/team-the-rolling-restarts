@@ -13,7 +13,7 @@ afterEach(() => {
 
 describe("apiFetch", () => {
   it("builds URL from base and attaches bearer token", async () => {
-    process.env.NEXT_PUBLIC_API_BASE_URL = "http://gw:8080";
+    process.env.API_BASE_URL = "http://gw:8080";
     cookieStore.get.mockReturnValue({ value: "jwt-123" });
     const fetchMock = vi
       .spyOn(globalThis, "fetch")

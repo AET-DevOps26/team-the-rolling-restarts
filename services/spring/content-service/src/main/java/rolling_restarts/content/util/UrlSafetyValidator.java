@@ -17,8 +17,12 @@ public final class UrlSafetyValidator {
 	/**
 	 * Validates that {@code url} is an http/https URL whose host resolves only to public,
 	 * routable addresses. Throws {@link IllegalArgumentException} otherwise.
+	 *
+	 * @return the resolved addresses that were validated, so a caller can pin the connection to
+	 *     exactly these addresses (see {@link PinnedDnsResolverProvider}) and close the gap
+	 *     between this validation and the later connection re-resolving independently.
 	 */
-	public static void validatePublicUrl(String url) {
+	public static InetAddress[] validatePublicUrl(String url) {
 		final URI uri;
 		try {
 			uri = URI.create(url);
@@ -48,6 +52,8 @@ public final class UrlSafetyValidator {
 				throw new IllegalArgumentException("RSS URL must not target internal networks");
 			}
 		}
+
+		return addresses;
 	}
 
 	/**
