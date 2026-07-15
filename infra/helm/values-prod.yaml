@@ -1,4 +1,5 @@
 global:
-  replicas: 3
+  autoscaling:
+    enabled: true
 ingress:
   clusterIssuer: letsencrypt-prod

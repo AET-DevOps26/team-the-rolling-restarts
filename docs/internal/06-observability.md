@@ -191,8 +191,9 @@ genuinely bundles Prometheus (verified by pulling `grafana/otel-lgtm` and inspec
   resourcequota`: it enforces only `limits.cpu`/`limits.memory`, not `requests`). This resolves
   the earlier "doesn't fit at 2 replicas with monitoring co-located" gap noted below — the full
   distribution across all services, sized so **api-gateway/user-service/content-service/gen-ai/
-  web-client can each run 3 replicas simultaneously** (headroom for a future HPA) alongside the
-  `mongodb`/`grafana-lgtm` singletons, is documented in `docs/source/monitoring.md`'s "Kubernetes
+  web-client can each run 3 replicas simultaneously** — now the live `maxReplicas` ceiling each
+  service's HPA scales up to, not just reserved headroom — alongside the `mongodb`/`grafana-lgtm`
+  singletons, is documented in `docs/source/monitoring.md`'s "Kubernetes
   resource budget" section. As part of this redistribution, **mongodb's limit was restored from
   260Mi to 512Mi** — the 260Mi limit had caused a live OOMKill during first-boot init (WiredTiger
   cache warmup + root user creation), interrupting init before the root user existed and leaving

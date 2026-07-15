@@ -1,0 +1,38 @@
+{{/* One HorizontalPodAutoscaler per scalable app workload. mongodb is excluded — it's a
+stateful singleton, not part of the $apps list below. Gated on appWorkloads.enabled (same as
+deployment.yaml) and global.autoscaling.enabled (see values.yaml for why dev leaves this off). */}}
+{{- if and .Values.appWorkloads.enabled .Values.global.autoscaling.enabled }}
+{{- $apps := list
+  (dict "key" "webClient" "cfg" .Values.webClient)
+  (dict "key" "apiGateway" "cfg" .Values.apiGateway)
+  (dict "key" "userService" "cfg" .Values.userService)
+  (dict "key" "contentService" "cfg" .Values.contentService)
+  (dict "key" "genAi" "cfg" .Values.genAi)
+-}}
+{{- range $index, $app := $apps }}
+{{- $cfg := $app.cfg -}}
+{{- if $index }}
+---
+{{- end }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $cfg.name }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $cfg.name }}
+  minReplicas: {{ $.Values.global.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.global.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $.Values.global.autoscaling.targetCPUUtilizationPercent }}
+{{- end }}
+{{- end }}

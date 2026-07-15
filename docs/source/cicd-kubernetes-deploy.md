@@ -147,8 +147,10 @@ The generated file overrides:
 separate from the app workloads' namespace — see `docs/source/monitoring.md`'s "Monitoring runs
 in its own namespace" section. The app namespace's quota is **3500m CPU / 5244Mi memory**, sized
 with headroom for **api-gateway, user-service, content-service, gen-ai, and web-client to each run
-3 replicas simultaneously** (in anticipation of a future HPA), alongside the `mongodb` singleton
-(`replicas: 1`, not horizontally scaled):
+3 replicas simultaneously** — this is now the live `maxReplicas` ceiling for each service's
+`HorizontalPodAutoscaler` (`global.autoscaling` in `values.yaml`, prod-enabled via
+`values-prod.yaml`; `minReplicas: 1`), not just headroom held in reserve — alongside the `mongodb`
+singleton (`replicas: 1`, not horizontally scaled, and not part of the `$apps` HPA loop):
 
 | Workload | Replicas | CPU limit | Memory limit | ×N CPU | ×N Memory |
 | --- | --- | --- | --- | --- | --- |

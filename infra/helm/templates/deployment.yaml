@@ -21,7 +21,12 @@ metadata:
   labels:
 {{ include "newsGenAI.labels" (dict "name" $cfg.name "releaseName" $.Release.Name) | indent 4 }}
 spec:
+  # Omitted (not just left at its current value) when autoscaling.enabled: Helm's 3-way merge
+  # otherwise resets replicas to this value on every upgrade, fighting the HPA's own scaling
+  # decisions on every deploy instead of leaving it alone between deploys.
+  {{- if not $.Values.global.autoscaling.enabled }}
   replicas: {{ default $.Values.global.replicas $cfg.replicas }}
+  {{- end }}
   # Recreate (not RollingUpdate) so an upgrade tears the old pod down before starting the new
   # one. The `deployment` namespace has a tight limits ResourceQuota (2 CPU / 3000Mi); a rolling
   # update would briefly need 2x a pod's limits and be rejected with "exceeded quota".
