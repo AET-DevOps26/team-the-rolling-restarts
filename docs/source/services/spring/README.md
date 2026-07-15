@@ -61,7 +61,7 @@ Base `application.properties` contains no default credentials — they must come
 - **JWT validation.** user-service is the OAuth2 Authorization Server; api-gateway and content-service are resource servers that validate JWTs against its JWKS (`JWT_ISSUER_URI`).
 - **CORS** is configured only on api-gateway and fails closed (see `CORS_ALLOWED_ORIGINS` above).
 - **Service-to-service subscriber counts.** content-service's `POST /sources/{id}/subscribe` and `/unsubscribe` require the `source.write` scope, which only user-service's `client_credentials` token carries — an ordinary end-user JWT cannot mutate the shared count or delete a source. user-service obtains that token from its own token endpoint using `SERVICE_CLIENT_SECRET`.
-- **Outbound SSRF.** content-service validates user-supplied RSS URLs (`UrlSafetyValidator`) against loopback/link-local/site-local/multicast, IPv6 unique-local (`fc00::/7`), and RFC 6598 shared-address space (`100.64.0.0/10`) ranges, both at source creation and again immediately before each fetch.
+- **Outbound SSRF.** content-service validates user-supplied RSS URLs (`UrlSafetyValidator`) against loopback/link-local/site-local/multicast, IPv6 unique-local (`fc00::/7`), and RFC 6598 shared-address space (`100.64.0.0/10`) ranges, both at source creation and again immediately before each fetch. The fetch-time validation also pins the connection to exactly the addresses just validated (`PinnedDnsResolverProvider`, a JVM-wide `InetAddressResolverProvider`, JEP 418), closing a DNS-rebinding TOCTOU gap where the actual HTTP connection would otherwise re-resolve the hostname independently a moment later.
 
 ## OpenAPI (Code-First)
 

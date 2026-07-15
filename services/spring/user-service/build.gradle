@@ -33,9 +33,16 @@ dependencies {
 
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
+	// Not imported directly by any test, but SmokeTest's full @SpringBootTest context needs
+	// RestTemplateBuilder resolvable on the classpath for Spring Boot's autoconfiguration
+	// condition evaluation — see the matching comment in content-service/build.gradle.
 	testImplementation 'org.springframework.boot:spring-boot-restclient'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	// Not referenced by any test class directly, but AuthControllerTest's @WebMvcTest slice
+	// needs it to correctly wire an HttpSecurity bean for the security-config-heavy context —
+	// removing it breaks context loading with NoSuchBeanDefinitionException even though no test
+	// imports a spring-security-test class.
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:testcontainers-mongodb'

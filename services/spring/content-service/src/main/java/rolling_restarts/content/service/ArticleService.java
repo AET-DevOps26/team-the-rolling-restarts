@@ -27,34 +27,44 @@ public class ArticleService {
 		this.mongoTemplate = mongoTemplate;
 	}
 
-	public Page<Article> findAll(String sourceId, String topicId, String query, Pageable pageable) {
-		if (!StringUtils.hasText(query)) {
-			return findWithoutTextSearch(sourceId, topicId, pageable);
+	public Page<Article> findAll(
+			String sourceId, List<String> sourceIds, String topicId, String query, Pageable pageable) {
+		if (sourceIds != null && sourceIds.isEmpty()) {
+			// Caller explicitly filtered to zero sources (e.g. a user subscribed to nothing) —
+			// zero matches by definition, no need to query.
+			return Page.empty(pageable);
 		}
-		return findWithTextSearch(sourceId, topicId, query.trim(), pageable);
+		if (sourceId != null && sourceIds != null && !sourceIds.contains(sourceId)) {
+			// The one specific source requested isn't in the caller's allowed set (e.g. a user
+			// browsing a source they aren't subscribed to) — zero matches, not an error.
+			return Page.empty(pageable);
+		}
+		Query mongoQuery = StringUtils.hasText(query)
+				? TextQuery.queryText(TextCriteria.forDefaultLanguage().matching(query.trim()))
+				: new Query();
+		applyFilters(mongoQuery, sourceId, sourceIds, topicId);
+		return queryAndCount(mongoQuery, pageable);
 	}
 
-	private Page<Article> findWithoutTextSearch(String sourceId, String topicId, Pageable pageable) {
-		if (sourceId != null && topicId != null) {
-			return articleRepository.findBySourceIdAndTopicId(sourceId, topicId, pageable);
-		} else if (sourceId != null) {
-			return articleRepository.findBySourceId(sourceId, pageable);
-		} else if (topicId != null) {
-			return articleRepository.findByTopicId(topicId, pageable);
-		}
-		return articleRepository.findAll(pageable);
-	}
-
-	private Page<Article> findWithTextSearch(
-			String sourceId, String topicId, String query, Pageable pageable) {
-		TextCriteria textCriteria = TextCriteria.forDefaultLanguage().matching(query);
-		Query mongoQuery = TextQuery.queryText(textCriteria);
+	/**
+	 * Adds sourceId/topicId criteria. sourceId and sourceIds both constrain the same "sourceId"
+	 * field, so at most one criterion is added for it — Spring Data MongoDB's Query rejects a
+	 * second criterion for a field name already present. Both having already survived the
+	 * sourceId-not-in-sourceIds check in {@link #findAll}, filtering on sourceId alone (the more
+	 * specific of the two) is equivalent to filtering on both.
+	 */
+	private void applyFilters(Query mongoQuery, String sourceId, List<String> sourceIds, String topicId) {
 		if (sourceId != null) {
 			mongoQuery.addCriteria(Criteria.where("sourceId").is(sourceId));
+		} else if (sourceIds != null) {
+			mongoQuery.addCriteria(Criteria.where("sourceId").in(sourceIds));
 		}
 		if (topicId != null) {
 			mongoQuery.addCriteria(Criteria.where("topicId").is(topicId));
 		}
+	}
+
+	private Page<Article> queryAndCount(Query mongoQuery, Pageable pageable) {
 		long total = mongoTemplate.count(mongoQuery, Article.class);
 		mongoQuery.with(pageable);
 		List<Article> content = mongoTemplate.find(mongoQuery, Article.class);

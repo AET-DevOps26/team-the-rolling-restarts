@@ -62,12 +62,14 @@ export function DashboardFeed({
   const topicsById = useMemo(() => new Map(topics.map((t) => [t.id, t])), [topics]);
   const sourcesById = useMemo(() => new Map(sources.map((s) => [s.id, s])), [sources]);
   const savedSet = useMemo(() => new Set(savedIds), [savedIds]);
-  const enabledSources = useMemo(() => new Set(enabledSourceIds), [enabledSourceIds]);
 
-  const visible = useMemo(() => {
-    const list = articles.filter((a) => enabledSources.has(a.sourceId));
-    return applySort(list, sort, selectedTopicIds);
-  }, [articles, enabledSources, sort, selectedTopicIds]);
+  // `articles` is already filtered to the user's subscribed sources server-side (see
+  // dashboard/page.tsx), so pagination totals and rendered content agree — no client-side
+  // re-filtering needed here.
+  const visible = useMemo(
+    () => applySort(articles, sort, selectedTopicIds),
+    [articles, sort, selectedTopicIds]
+  );
 
   const topicName = topic ? topicsById.get(topic)?.name ?? topic : undefined;
   const sourceName = source ? sourcesById.get(source)?.name ?? source : undefined;

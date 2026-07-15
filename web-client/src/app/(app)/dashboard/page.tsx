@@ -19,25 +19,33 @@ export default async function DashboardPage({
   const currentPage = parseSearchPage(pageParam);
   const articleParams = { topicId: topic, sourceId: source, sort: "publishedAt,desc" as const };
 
-  const [articlesBundle, topics, sources, settings] = await Promise.all([
-    q
-      ? getArticlesPage({
-          ...articleParams,
-          size: FEED_PAGE_SIZE,
-          q,
-          page: currentPage - 1,
-        })
-      : getArticles({ ...articleParams, size: FEED_PAGE_SIZE }).then((articles) => ({
-          articles,
-          page: 0,
-          size: FEED_PAGE_SIZE,
-          totalElements: articles.length,
-          totalPages: 1,
-        })),
-    getTopics(),
-    getSources(),
-    getMySettings(),
-  ]);
+  const [topics, sources, settings] = await Promise.all([getTopics(), getSources(), getMySettings()]);
+
+  // A user subscribed to zero sources always has zero matching articles; skip the network call
+  // rather than sending an empty `sourceIds` filter, which is indistinguishable on the wire from
+  // "no filter at all" (a repeated query param with zero occurrences vs. the param being absent).
+  const articlesBundle =
+    settings.enabledSourceIds.length === 0
+      ? { articles: [], page: 0, size: FEED_PAGE_SIZE, totalElements: 0, totalPages: 0 }
+      : q
+        ? await getArticlesPage({
+            ...articleParams,
+            sourceIds: settings.enabledSourceIds,
+            size: FEED_PAGE_SIZE,
+            q,
+            page: currentPage - 1,
+          })
+        : await getArticles({
+            ...articleParams,
+            sourceIds: settings.enabledSourceIds,
+            size: FEED_PAGE_SIZE,
+          }).then((articles) => ({
+            articles,
+            page: 0,
+            size: FEED_PAGE_SIZE,
+            totalElements: articles.length,
+            totalPages: 1,
+          }));
 
   const { articles, totalElements, totalPages, size: pageSize } = articlesBundle;
   const boundedPage =
