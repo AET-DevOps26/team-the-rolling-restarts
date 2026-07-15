@@ -69,8 +69,14 @@ namespace object but leaves it with no Rancher project association, which
 breaks RBAC and risks a zero-limit quota. Confirmed live (against a
 throwaway test namespace, not the real ones — see
 `docs/internal/07-gotchas.md` for the full verification and its caveats).
-`deploy_monitoring.yml` has the equivalent step for
-`monitoring-rolling-restarts` alone, for the case where it runs standalone.
+`deploy_monitoring.yml` has the equivalent step covering **both** namespaces
+too, not just `monitoring-rolling-restarts` — it needs `deployment` as well
+since its own `helm upgrade` reads the `newsgenai` release record (a Secret)
+from there, and it can run standalone or win the shared concurrency group
+before `deploy_kubernetes.yml` ever gets a chance to recreate `deployment`
+itself. Still doesn't make a from-scratch bootstrap possible on its own —
+`--reuse-values` (below) requires the release to already exist, which only
+`deploy_kubernetes.yml`'s `--install` can create.
 
 Secrets wired into `infra/helm/secrets-values.yaml` at deploy time: Mongo
 root credentials, JWT RSA key pair, `SERVICE_CLIENT_SECRET`, and

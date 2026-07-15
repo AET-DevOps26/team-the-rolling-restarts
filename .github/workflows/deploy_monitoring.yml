@@ -52,14 +52,23 @@ jobs:
           echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
-      # See the matching step in deploy_kubernetes.yml for the full explanation: this namespace
-      # needs the Rancher project-association label/annotation to get working RBAC and a real
+      # See the matching step in deploy_kubernetes.yml for the full explanation: these namespaces
+      # need the Rancher project-association label/annotation to get working RBAC and a real
       # (non-zero) ResourceQuota, not just a bare namespace. `kubectl get` first and only `create`
-      # (not `apply`) when actually missing — this workflow assumes the Helm release already
-      # exists (--reuse-values below), so in practice deploy_kubernetes.yml's own equivalent step
-      # normally gets there first on a full wipe; this is a no-op in that case.
-      - name: Ensure monitoring namespace exists with Rancher project association
-        run: kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
+      # (not `apply`) when actually missing. `deployment` is recreated here too — not just
+      # `monitoring-rolling-restarts` — because this workflow's own Helm command targets the
+      # `newsgenai` release living in `deployment`; without this, a full wipe left that namespace's
+      # RBAC broken even after deploy_kubernetes.yml gained its own equivalent step, since this
+      # workflow can win the shared `deploy-k8s` concurrency group and run first (or standalone,
+      # e.g. a dashboard-only change that never touches deploy_kubernetes.yml's trigger paths).
+      # Still a no-op against the normal case where both namespaces already exist and are already
+      # correctly configured. This does NOT make a from-scratch bootstrap possible on its own —
+      # `--reuse-values` below still requires the `newsgenai` release to already exist, which only
+      # deploy_kubernetes.yml's `--install` can create.
+      - name: Ensure namespaces exist with Rancher project association
+        run: |
+          kubectl get namespace deployment >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/deployment-namespace.yml
+          kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
 
       # monitoring.adminPassword/smtpUser/smtpPassword/alertEmails are `required` by
       # templates/monitoring.yaml — --reuse-values alone can't be trusted to already have them:
