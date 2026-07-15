@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: content-service
+        monitoring: "true"
+      annotations:
+        prometheus.io/port: "8082"
+        prometheus.io/path: /actuator/prometheus
     spec:
       containers:
         - name: content-service
@@ -29,6 +33,12 @@ spec:
               value: "-XX:MaxRAMPercentage=75"
             - name: JWT_ISSUER_URI
               value: "http://user-service:8081"
+            - name: MANAGEMENT_OTLP_METRICS_EXPORT_URL
+              value: "http://grafana-lgtm.monitoring-rolling-restarts:4318/v1/metrics"
+            - name: MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT
+              value: "http://grafana-lgtm.monitoring-rolling-restarts:4318/v1/traces"
+            - name: MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT
+              value: "http://grafana-lgtm.monitoring-rolling-restarts:4318/v1/logs"
             - name: SPRING_MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -58,15 +68,15 @@ spec:
             failureThreshold: 30
             periodSeconds: 10
 
-          # The target cluster enforces a ResourceQuota on LIMITS (total
-          # limits.cpu=2, limits.memory=3000Mi), so limits — not just requests —
-          # must stay small. These three JVM services dominate the budget:
-          # 3 x (350m, 512Mi) = 1050m / 1536Mi of the 2000m / 3000Mi cap.
-          # Keep in sync with infra/helm/values.yaml (contentService.resources).
+          # Keep in sync with infra/helm/values.yaml (contentService.resources). See
+          # docs/source/monitoring.md's "Kubernetes resource budget" section for the full
+          # per-service distribution across the namespace's 4 CPU / 6144Mi quota at 3 replicas
+          # each.
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
+              cpu: "60m"
+              memory: "210Mi"
             limits:
-              cpu: "350m"
-              memory: "512Mi"
+              cpu: "220m"
+              # 400Mi: same OOM risk applies as user-service; see docs/internal/06-observability.md.
+              memory: "400Mi"

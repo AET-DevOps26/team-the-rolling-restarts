@@ -31,6 +31,61 @@
   notify: restart rolling-restarts
   tags: [app, deploy]
 
+# docker-compose.yaml's grafana-lgtm service bind-mounts ./grafana/prometheus.yaml,
+# ./grafana/dashboards/*.json, and ./grafana/provisioning/**/*.yaml relative to project_root —
+# without this, those host paths never exist, and Docker's default behavior for a missing
+# bind-mount source (auto-creating it as an empty directory) collides with the container's file
+# destination ("not a directory" mount error).
+#
+# Staged, not copied straight into the live path: copying directly into project_root/grafana
+# used to mean any failure partway through the transfer (network blip, disk full) left the live
+# deployment with a missing or half-written config directory for however long until the next
+# successful run — and since docker-compose bind-mounts that path, the very next `docker compose
+# up` (including "Force-recreate containers" below, in this same play) would hit Docker's
+# directory-autocreation gotcha again. Copying into a staging directory first means a failed copy
+# never touches the live directory at all; only the swap below (two fast local renames, not a
+# network transfer) can fail partway, and even then grafana.old is left as a manual recovery path
+# instead of silently losing the previous config.
+#
+# Checked in check_mode against the LIVE path first (not the staging one) so the staging
+# copy + swap — and the resulting stack restart — only happen when the config actually
+# changed. Without this, every playbook run would restage+swap unconditionally (grafana.new
+# never persists between runs, so the staging copy always looks "changed" to Ansible) and the
+# shell swap task's own changed_when:true would notify a stack restart on every single deploy,
+# even when nothing about the grafana config differed.
+- name: Check whether the grafana config has changed
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../grafana/"
+    dest: "{{ project_root }}/grafana/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  check_mode: true
+  register: grafana_check
+  tags: [app, deploy]
+
+- name: Copy grafana-lgtm config to a staging directory
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../grafana/"
+    dest: "{{ project_root }}/grafana.new/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+  when: grafana_check.changed
+  tags: [app, deploy]
+
+- name: Atomically swap the staged grafana config into place
+  ansible.builtin.shell: |
+    set -e
+    rm -rf "{{ project_root }}/grafana.old"
+    if [ -d "{{ project_root }}/grafana" ]; then
+      mv "{{ project_root }}/grafana" "{{ project_root }}/grafana.old"
+    fi
+    mv "{{ project_root }}/grafana.new" "{{ project_root }}/grafana"
+    rm -rf "{{ project_root }}/grafana.old"
+  when: grafana_check.changed
+  changed_when: true
+  notify: restart rolling-restarts
+  tags: [app, deploy]
+
 - name: Render deployment environment file
   ansible.builtin.template:
     src: env.j2
@@ -62,10 +117,18 @@
     - restart rolling-restarts
   tags: [app, deploy]
 
+- name: Pull latest images
+  ansible.builtin.command:
+    cmd: docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} pull
+    chdir: "{{ project_root }}"
+  become_user: "{{ ansible_user }}"
+  tags: [app, deploy]
+
 - name: Force-recreate containers to pick up env/config changes
   ansible.builtin.command:
     cmd: docker compose --env-file {{ compose_env_path }} -f {{ compose_file }} -f {{ compose_prod_file }} up -d --force-recreate
     chdir: "{{ project_root }}"
+  become_user: "{{ ansible_user }}"
   tags: [app, deploy]
 
 - name: Ensure project service is enabled and started

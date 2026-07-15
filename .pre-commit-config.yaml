@@ -8,6 +8,15 @@ repos:
         language: system
         files: ^api/openapi\.yaml$
 
+      # Block commits that introduce secrets. Same gitleaks image + .gitleaks.toml allowlist as
+      # `make security-scan`'s gitleaks check (and the pre-push hook below), scoped to the
+      # staged diff so it's fast enough to run on every commit. See docs/source/security-scanning.md.
+      - id: gitleaks
+        name: Scan staged changes for secrets
+        entry: infra/scripts/gitleaks-check.sh --staged
+        language: script
+        pass_filenames: false
+
 # NOTE: client generation (./api/scripts/gen-all.sh) is NOT a git hook. Code-first means the
 # spec and clients are derived from the Spring services, which requires booting them (~30s) —
 # too slow for pre-commit/post-checkout. That runs in CI (and on demand via `make generate`).

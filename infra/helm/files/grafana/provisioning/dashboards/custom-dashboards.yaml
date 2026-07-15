@@ -1,0 +1,21 @@
+apiVersion: 1
+
+providers:
+  - name: "Service Overview (committed)"
+    type: file
+    folder: "Service Health"
+    options:
+      path: /otel-lgtm/grafana-dashboards-custom/service-overview.json
+      foldersFromFilesStructure: false
+  - name: "GenAI Overview (committed)"
+    type: file
+    folder: "Service Health"
+    options:
+      path: /otel-lgtm/grafana-dashboards-custom/genai-overview.json
+      foldersFromFilesStructure: false
+  - name: "Web Client Overview (committed)"
+    type: file
+    folder: "Service Health"
+    options:
+      path: /otel-lgtm/grafana-dashboards-custom/webclient-overview.json
+      foldersFromFilesStructure: false

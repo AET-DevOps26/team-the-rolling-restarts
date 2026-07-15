@@ -43,3 +43,37 @@ services:
   gen-ai:
     build: !reset null
     image: ${REGISTRY_BASE}/gen-ai:${IMAGE_TAG}
+    # The Azure VM is off the TUM network, so Logos is unreachable; GenAI runs against the
+    # local Ollama below. Wait for the model to finish pulling before starting.
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  # Self-hosted LLM for the Azure VM. The base compose gates ollama behind the `local-llm`
+  # profile; clear that here so it runs as part of the normal Azure stack, and pull the model
+  # on first boot (the volume persists it across restarts).
+  ollama:
+    profiles: !reset []
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        ollama serve &
+        server_pid=$$!
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        ollama pull "$${OLLAMA_MODEL:-llama3.2:1b}"
+        wait "$$server_pid"
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+    healthcheck:
+      # Healthy only once the configured model is actually present, so gen-ai doesn't start
+      # (and fail) before the pull completes.
+      test:
+        - CMD-SHELL
+        - ollama list | grep -q "$${OLLAMA_MODEL%%:*}"
+      # Generous window: the first-boot model pull (~1GB+) must finish before this goes
+      # healthy, and gen-ai waits on it. 60 x 10s = 10 min after the start period.
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s

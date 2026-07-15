@@ -24,7 +24,18 @@ spec:
           env:
             - name: NODE_ENV
               value: "production"
-            # NEXT_PUBLIC_API_BASE_URL is baked into the image at build time (see web-client/Dockerfile).
+            # Not NEXT_PUBLIC_-prefixed (see web-client/src/lib/api/client.ts) — read at
+            # container runtime, not baked into the image at build time.
+            - name: API_BASE_URL
+              value: http://api-gateway:8080
+            # This deployment target has real TLS (cert-manager/nginx-ingress) — see issue #90
+            # for why this can't just be inferred from NODE_ENV.
+            - name: COOKIE_SECURE
+              value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://grafana-lgtm.monitoring-rolling-restarts:4318
+            - name: OTEL_SERVICE_NAME
+              value: web-client
 
           readinessProbe:
             httpGet:
@@ -40,11 +51,13 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
 
-          # Keep in sync with infra/helm/values.yaml (webClient.resources).
+          # Keep in sync with infra/helm/values.yaml (webClient.resources). 200Mi: 230Mi fixed the
+          # earlier tightness with more room than needed (measured live at 41-63% afterward);
+          # trimmed back to fund user-service's increase.
           resources:
             requests:
-              cpu: "50m"
-              memory: "128Mi"
+              cpu: "20m"
+              memory: "90Mi"
             limits:
-              cpu: "200m"
-              memory: "256Mi"
+              cpu: "100m"
+              memory: "200Mi"

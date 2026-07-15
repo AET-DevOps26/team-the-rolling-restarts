@@ -1,4 +1,6 @@
-{{/* Render the services alongside the deployments so ports stay in sync. */}}
+{{/* Render the services alongside the deployments so ports stay in sync. Gated on
+appWorkloads.enabled — see templates/deployment.yaml. */}}
+{{- if .Values.appWorkloads.enabled }}
 {{- $apps := list
   (dict "key" "webClient" "cfg" .Values.webClient)
   (dict "key" "apiGateway" "cfg" .Values.apiGateway)
@@ -26,4 +28,5 @@ spec:
     - protocol: {{ default $.Values.global.service.protocol (get $service "protocol") }}
       port: {{ $cfg.port }}
       targetPort: {{ $cfg.port }}
+{{- end }}
 {{- end }}

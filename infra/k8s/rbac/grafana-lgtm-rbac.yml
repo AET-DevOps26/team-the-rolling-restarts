@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-lgtm
+  namespace: monitoring-rolling-restarts
+---
+# Role/RoleBinding deliberately have NO namespace field here, unlike the ServiceAccount above —
+# per docs/source/infra/k8s/kubernetes.md, this repo's raw manifests never assume a namespace and
+# rely on `kubectl apply -R -f . -n <namespace>` (or the current kubectl context) at apply time.
+# That's exactly what's needed here: a RoleBinding must live in the same namespace as the pods it
+# grants access to — the APP namespace, not monitoring-rolling-restarts where the ServiceAccount
+# itself lives — so applying this file with `-n <app-namespace>` places the Role/RoleBinding
+# correctly. The RoleBinding's subject below crosses that namespace boundary explicitly (a
+# standard, fully-supported RBAC feature) instead of requiring a ClusterRole/ClusterRoleBinding
+# (this cluster's RBAC does not permit creating those: confirmed via
+# `kubectl auth can-i create clusterrole` returning "no").
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana-lgtm-pod-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana-lgtm-pod-reader
+subjects:
+  - kind: ServiceAccount
+    name: grafana-lgtm
+    namespace: monitoring-rolling-restarts
+roleRef:
+  kind: Role
+  name: grafana-lgtm-pod-reader
+  apiGroup: rbac.authorization.k8s.io

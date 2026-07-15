@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { getSource, getTopic } from "@/lib/mock";
+import type { Source, Topic } from "@/lib/api/types";
 
 export type FeedSort = "for-you" | "trending" | "latest";
 
@@ -18,28 +18,43 @@ function isFeedSort(value: string): value is FeedSort {
 export type ActiveFilters = {
   topic?: string;
   source?: string;
+  q?: string;
+  /** 1-based page for search results; omitted on page 1. */
+  page?: number;
 };
 
-function chipHrefWithoutKey(key: keyof ActiveFilters, filters: ActiveFilters) {
+export function dashboardHref(filters: ActiveFilters) {
   const params = new URLSearchParams();
-  for (const [k, v] of Object.entries(filters)) {
-    if (k !== key && v) params.set(k, v);
-  }
+  if (filters.topic) params.set("topic", filters.topic);
+  if (filters.source) params.set("source", filters.source);
+  if (filters.q) params.set("q", filters.q);
+  if (filters.page && filters.page > 1) params.set("page", String(filters.page));
   const search = params.toString();
   return search ? `/dashboard?${search}` : "/dashboard";
+}
+
+function chipHrefWithoutKey(key: keyof ActiveFilters, filters: ActiveFilters) {
+  const next = { ...filters };
+  delete next[key];
+  delete next.page;
+  return dashboardHref(next);
 }
 
 export function FeedToolbar({
   sort,
   onSortChange,
   filters,
+  topicsById,
+  sourcesById,
 }: {
   sort: FeedSort;
   onSortChange: (next: FeedSort) => void;
   filters: ActiveFilters;
+  topicsById: Map<string, Topic>;
+  sourcesById: Map<string, Source>;
 }) {
-  const topic = filters.topic ? getTopic(filters.topic) : undefined;
-  const source = filters.source ? getSource(filters.source) : undefined;
+  const topic = filters.topic ? topicsById.get(filters.topic) : undefined;
+  const source = filters.source ? sourcesById.get(filters.source) : undefined;
   const hasFilters = Boolean(filters.topic || filters.source);
 
   return (

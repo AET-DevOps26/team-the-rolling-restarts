@@ -4,9 +4,10 @@ import { Bookmark, Home, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AppBrand } from "@/components/layout/app-brand";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { SOURCES, TOPICS } from "@/lib/mock";
+import type { Source, Topic } from "@/lib/api/types";
 import {
   mainNav,
   type MainNavIcon,
@@ -26,7 +27,15 @@ function isActive(pathname: string | null, href: RouteHref) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppSidebar({ className }: { className?: string }) {
+export function AppSidebar({
+  className,
+  topics,
+  sources,
+}: {
+  className?: string;
+  topics: Topic[];
+  sources: Source[];
+}) {
   const pathname = usePathname();
   return (
     <aside
@@ -36,11 +45,7 @@ export function AppSidebar({ className }: { className?: string }) {
       )}
     >
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <span
-          aria-hidden
-          className="inline-block size-6 rounded-md bg-primary"
-        />
-        <span className="font-semibold tracking-tight">NewsLens</span>
+        <AppBrand />
       </div>
       <nav aria-label="Primary" className="flex flex-col gap-1 px-3 py-4">
         {mainNav.map((item) => {
@@ -69,7 +74,7 @@ export function AppSidebar({ className }: { className?: string }) {
           Topics
         </p>
         <ul className="flex flex-col gap-0.5">
-          {TOPICS.map((topic) => (
+          {topics.map((topic) => (
             <li key={topic.id}>
               <Link
                 href={`/dashboard?topic=${topic.id}`}
@@ -94,7 +99,7 @@ export function AppSidebar({ className }: { className?: string }) {
           Sources
         </p>
         <ul className="flex flex-col gap-0.5">
-          {SOURCES.slice(0, 6).map((source) => (
+          {sources.slice(0, 6).map((source) => (
             <li key={source.id}>
               <Link
                 href={`/dashboard?source=${source.id}`}
@@ -102,7 +107,7 @@ export function AppSidebar({ className }: { className?: string }) {
               >
                 <span>{source.name}</span>
                 <span className="text-xs text-muted-foreground/70">
-                  {source.weeklyCount}
+                  {source.subscriberCount}
                 </span>
               </Link>
             </li>

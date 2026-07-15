@@ -3,8 +3,9 @@
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
        azure-cicd-setup azure-provider-register azure-vm-docker azure-gh-vars azure-cicd-help \
-       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets \
-       docs-serve
+       helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-destroy-all helm-setup helm-secrets \
+       docs-serve \
+       security-scan score
 
 HELM_DIR    ?= infra/helm
 COMPOSE_ENV  ?= infra/.env
@@ -27,7 +28,7 @@ help:
 	  '  make generate          - regenerate OpenAPI spec + consumer clients (Python, TypeScript)' \
 	  '  make spring-build      - compile and test Spring services' \
 	  '  make spring-openapi-docs - export each services OpenAPI spec to build/openapi/' \
-	  '  make install-hooks     - install the pre-push hook that regenerates the OpenAPI contract' \
+	  '  make install-hooks     - install the pre-push hook (secret scan + OpenAPI contract regen)' \
 	  '  make clean             - remove build artifacts (handles root-owned Docker files)' \
 	  '  make preflight         - full pre-flight: generate, build, lint helm, validate terraform' \
 	  '' \
@@ -38,7 +39,7 @@ help:
 	  '  make compose-logs      - follow container logs' \
 	  '  make compose-test      - run integration tests via Docker Compose' \
 	  '  make smoke-test        - run endpoint smoke tests against localhost' \
-	  '  make push-images       - build and push all images to registry' \
+	  '  make push-images       - build+push all images to REGISTRY (PLATFORM=... for multi-arch); writes infra/helm/image-values.yaml' \
 	  '' \
 	  'Azure VM:' \
 	  '  make smoke-test-vm     - run smoke tests against the Azure VM' \
@@ -55,13 +56,19 @@ help:
 	  '' \
 	  'Kubernetes / Helm:' \
 	  '  make helm-setup        - seed image-values.yaml from example (first time)' \
-	  '  make helm-secrets      - generate secrets-values.yaml (RSA key + random Mongo password)' \
+	  '  make helm-secrets      - generate secrets-values.yaml (RSA key, random Mongo password, service secret)' \
+	  '  make push-images REGISTRY=... - build+push your own test images and write image-values.yaml' \
 	  '  make helm-deploy       - install or upgrade the Helm release (ENV=prod for production TLS)' \
-	  '  make helm-destroy      - uninstall the Helm release' \
+	  '  make helm-destroy      - tear down the app workloads only (grafana-lgtm survives)' \
+	  '  make helm-destroy-all  - tear down everything, including grafana-lgtm; uninstalls the release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
 	  '' \
 	  'Documentation:' \
 	  '  make docs-serve        - serve MkDocs locally at http://localhost:8000' \
+	  '' \
+	  'Security:' \
+	  '  make security-scan        - run all security/quality scanners and write SARIF to output/' \
+	  '  make score               - open the guestlecture TUI viewer against local scan results' \
 	  '' \
 	  'Config is read from infra/.env. Override any var: make push-images IMAGE_TAG=my-tag'
 
@@ -86,13 +93,15 @@ generate:
 spring-build:
 	cd services/spring && ./gradlew build
 
-# Install the git pre-push hook that regenerates api/openapi.yaml from the services (code-first),
-# so the committed contract never drifts and no manual `make generate` is needed before pushing.
+# Install the git pre-push hook: blocks pushes that contain secrets (gitleaks, see
+# infra/scripts/gitleaks-check.sh), then regenerates api/openapi.yaml from the services
+# (code-first) so the committed contract never drifts and no manual `make generate` is
+# needed before pushing.
 install-hooks:
 	@mkdir -p .git/hooks
 	@ln -sf ../../scripts/git-hooks/pre-push .git/hooks/pre-push
 	@chmod +x scripts/git-hooks/pre-push
-	@echo "Installed pre-push hook: regenerates api/openapi.yaml from the Spring services on push."
+	@echo "Installed pre-push hook: scans for secrets, then regenerates api/openapi.yaml from the Spring services on push."
 
 # Generate each Spring service's OpenAPI spec from its springdoc endpoint (test-based, no live
 # DB) and collect them into services/spring/build/openapi/ for inspection or CI artifact upload.
@@ -139,6 +148,18 @@ compose-test:
 smoke-test:
 	@infra/scripts/smoke-test.sh "http://localhost:$(or $(APP_PORT),8080)"
 
+security-scan:
+	@infra/scripts/security-scan.sh
+
+SCORE_DIR = output/AET-DevOps26
+
+score:
+	@if [ ! -d "$(SCORE_DIR)" ] || [ -z "$$(ls $(SCORE_DIR)/team-the-rolling-restarts/*.json 2>/dev/null)" ]; then \
+	  echo "No scan results found. Run 'make security-scan' first."; exit 1; fi
+	docker run --interactive --rm --tty \
+	  --volume "$(CURDIR)/$(SCORE_DIR):/data" \
+	  ghcr.io/pstoeckle/guestlecture:v0.1.3 /data
+
 VM_IP ?= $(shell cd $(TF_DIR) && terraform output -raw vm_public_ip 2>/dev/null)
 
 smoke-test-vm:
@@ -147,7 +168,13 @@ smoke-test-vm:
 	@echo ""
 	@infra/scripts/smoke-test.sh "http://$(VM_IP)$(if $(filter-out 80,$(or $(APP_PORT),8080)),:$(APP_PORT),)"
 
-K8S_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
+K8S_BASE_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
+ENV ?= dev
+ifeq ($(ENV),prod)
+K8S_HOST ?= $(K8S_BASE_HOST)
+else
+K8S_HOST ?= dev.$(K8S_BASE_HOST)
+endif
 
 smoke-test-k8s:
 	@echo "Targeting K8s ingress at $(K8S_HOST)"
@@ -156,9 +183,86 @@ smoke-test-k8s:
 
 # --- Images ---
 
+# One recipe, parameterized like REGISTRY/IMAGE_TAG already are — PLATFORM is the only thing that
+# changes behavior (multi-arch buildx vs. plain single-arch build+push); everything else is just a
+# variable:
+#   make push-images REGISTRY=...                        - single-arch build+push
+#   make push-images REGISTRY=... PLATFORM=linux/amd64,linux/arm64 - multi-arch buildx (web-client
+#                                                           skipped for arm64 — SWC crashes under
+#                                                           QEMU, CI builds it natively instead)
+# Requires (PLATFORM only): docker buildx, QEMU (docker run --privileged multiarch/qemu-user-static --reset)
+# Always writes infra/helm/image-values.yaml (gitignored) pointing at what was just pushed, so
+# `make helm-deploy` picks it up immediately.
+PLATFORM ?=
+
 push-images:
-	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml build
-	docker compose --env-file $(COMPOSE_ENV) -f infra/docker-compose.yaml push
+	@test -n "$(REGISTRY)" || { echo "REGISTRY is required, e.g. make push-images REGISTRY=ghcr.io/<you>/rolling-restarts"; exit 1; }
+	$(MAKE) generate
+ifdef PLATFORM
+	@echo "Cross-building for $(PLATFORM) — using docker buildx"
+	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
+	  echo "Note: skipping web-client for arm64 (SWC/QEMU incompatible — CI builds it natively)."; \
+	else \
+	  docker buildx build --platform $(PLATFORM) --push \
+	    -t $(REGISTRY)/web-client:$(IMAGE_TAG) \
+	    -f web-client/Dockerfile web-client; \
+	fi
+	@for svc in api-gateway user-service content-service; do \
+	  docker buildx build --platform $(PLATFORM) --push \
+	    -t $(REGISTRY)/$$svc:$(IMAGE_TAG) \
+	    -f services/spring/$$svc/Dockerfile services/spring || exit 1; \
+	done
+	docker buildx build --platform $(PLATFORM) --push \
+	  -t $(REGISTRY)/gen-ai:$(IMAGE_TAG) \
+	  -f services/gen-ai/Dockerfile services/gen-ai
+else
+	docker build -t $(REGISTRY)/web-client:$(IMAGE_TAG) -f web-client/Dockerfile web-client
+	docker push $(REGISTRY)/web-client:$(IMAGE_TAG)
+	@for svc in api-gateway user-service content-service; do \
+	  docker build -t $(REGISTRY)/$$svc:$(IMAGE_TAG) -f services/spring/$$svc/Dockerfile services/spring && \
+	  docker push $(REGISTRY)/$$svc:$(IMAGE_TAG) || exit 1; \
+	done
+	docker build -t $(REGISTRY)/gen-ai:$(IMAGE_TAG) -f services/gen-ai/Dockerfile services/gen-ai
+	docker push $(REGISTRY)/gen-ai:$(IMAGE_TAG)
+endif
+	@if echo "$(PLATFORM)" | grep -q "arm64"; then \
+	  printf '%s\n' \
+	    '# Generated by `make push-images` — points at the images just built and pushed.' \
+	    '# web-client omitted: skipped for this arm64 build (see the note above), so no image' \
+	    '# exists at this tag to deploy — supply one separately (e.g. from a native CI build)' \
+	    '# before `make helm-deploy`, or this field is missing and Helm will error asking for it.' \
+	    'apiGateway:' \
+	    '  image: $(REGISTRY)/api-gateway:$(IMAGE_TAG)' \
+	    '' \
+	    'userService:' \
+	    '  image: $(REGISTRY)/user-service:$(IMAGE_TAG)' \
+	    '' \
+	    'contentService:' \
+	    '  image: $(REGISTRY)/content-service:$(IMAGE_TAG)' \
+	    '' \
+	    'genAi:' \
+	    '  image: $(REGISTRY)/gen-ai:$(IMAGE_TAG)' \
+	    > infra/helm/image-values.yaml; \
+	else \
+	  printf '%s\n' \
+	    '# Generated by `make push-images` — points at the images just built and pushed.' \
+	    'webClient:' \
+	    '  image: $(REGISTRY)/web-client:$(IMAGE_TAG)' \
+	    '' \
+	    'apiGateway:' \
+	    '  image: $(REGISTRY)/api-gateway:$(IMAGE_TAG)' \
+	    '' \
+	    'userService:' \
+	    '  image: $(REGISTRY)/user-service:$(IMAGE_TAG)' \
+	    '' \
+	    'contentService:' \
+	    '  image: $(REGISTRY)/content-service:$(IMAGE_TAG)' \
+	    '' \
+	    'genAi:' \
+	    '  image: $(REGISTRY)/gen-ai:$(IMAGE_TAG)' \
+	    > infra/helm/image-values.yaml; \
+	fi
+	@echo "Wrote infra/helm/image-values.yaml — run 'make helm-deploy' to deploy these images."
 
 # Resource group used by azure-nuke. Defaults to the Terraform default; override
 # (make azure-nuke AZURE_RG=...) if you changed resource_group_name.
@@ -232,13 +336,16 @@ azure-provider-register:
 
 # Install Docker + the Compose plugin on the VM over the Azure control plane
 # (no SSH needed, same mechanism the deploy job uses). Idempotent: the installer
-# is skipped when docker is already present, so it is safe to re-run.
+# is skipped when docker AND the Compose plugin are already present (checking `command -v docker`
+# alone would skip on a host that has the docker binary but not `docker compose`, leaving Compose
+# broken) — must match infra/ansible/roles/docker/tasks/main.yml's check, or whichever path runs
+# second on a given VM silently diverges from the other.
 azure-vm-docker:
 	cd $(TF_DIR) && az vm run-command invoke \
 		--resource-group "$$(terraform output -raw resource_group_name)" \
 		--name "$$(terraform output -raw vm_name)" \
 		--command-id RunShellScript \
-		--scripts 'command -v docker >/dev/null 2>&1 || curl -fsSL https://get.docker.com | sh; systemctl enable --now docker; docker --version' \
+		--scripts '(command -v docker >/dev/null && docker compose version >/dev/null 2>&1) || curl -fsSL https://get.docker.com | sh; systemctl enable --now docker; docker --version' \
 		--query "value[0].message" -o tsv
 
 # Sync the GitHub Actions variables that are derived from the provisioned infra.
@@ -250,8 +357,7 @@ azure-gh-vars:
 	gh variable set ACR_NAME             --repo "$(GH_REPO)" --body "$$(terraform output -raw acr_name)" && \
 	gh variable set ACR_LOGIN_SERVER     --repo "$(GH_REPO)" --body "$$(terraform output -raw acr_login_server)" && \
 	gh variable set AZURE_RESOURCE_GROUP --repo "$(GH_REPO)" --body "$$(terraform output -raw resource_group_name)" && \
-	gh variable set DEPLOY_DIR           --repo "$(GH_REPO)" --body "$(DEPLOY_DIR)" && \
-	gh variable set NEXT_PUBLIC_API_BASE_URL --repo "$(GH_REPO)" --body "http://$$(terraform output -raw vm_public_ip)"
+	gh variable set DEPLOY_DIR           --repo "$(GH_REPO)" --body "$(DEPLOY_DIR)"
 
 # Print the remaining manual steps: creating the service principal and setting the
 # sensitive secrets. These take values only you have, so they are not automated.
@@ -271,14 +377,16 @@ azure-cicd-help:
 	  '   printf %s "<llm-api-key>" | gh secret set LLM_API_KEY --repo $(GH_REPO) --env production' \
 	  '' \
 	  '3. Config variables not derived from Terraform (set once if defaults dont fit):' \
-	  '   gh variable set LLM_PROVIDER  --repo $(GH_REPO) --body openai' \
-	  '   gh variable set LLM_MODEL     --repo $(GH_REPO) --body gpt-4o-mini' \
+	  '   # deploy-azure.yml already defaults LLM_PROVIDER/LLM_MODEL to ollama/llama3.2:1b —' \
+	  '   # logos is unreachable from Azure off the TUM network. Only override if you want a' \
+	  '   # different provider (previously suggesting LLM_PROVIDER=openai here broke every LLM' \
+	  '   # endpoint for weeks; openai/logos are unusable from Azure, see docs/internal/07-gotchas.md).' \
 	  '   gh variable set MONGO_DATABASE --repo $(GH_REPO) --body mydatabase' \
 	  '' \
 	  'Then trigger: gh workflow run deploy-azure.yml --repo $(GH_REPO)'
 
 # --- Helm (delegates to infra/helm/Makefile) ---
-helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-setup helm-secrets:
+helm-lint helm-template helm-install helm-upgrade helm-deploy helm-destroy helm-destroy-all helm-setup helm-secrets:
 	$(MAKE) -C $(HELM_DIR) $@
 
 # --- Documentation ---

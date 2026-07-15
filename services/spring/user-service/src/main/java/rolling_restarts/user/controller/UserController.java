@@ -102,6 +102,40 @@ public class UserController {
 		return ResponseEntity.ok(UserSettingsResponse.from(updated));
 	}
 
+	@PostMapping("/me/saved-articles/{articleId}")
+	@Operation(
+			operationId = "saveArticle",
+			summary = "Save an article for the current user",
+			description = "Atomically adds the article to the user's saved list.",
+			responses = {
+					@ApiResponse(responseCode = "200", description = "Article saved"),
+					@ApiResponse(responseCode = "401", description = "Not authenticated")
+			})
+	public ResponseEntity<UserSettingsResponse> saveArticle(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable String articleId) {
+		String userId = jwt.getSubject();
+		UserSettings settings = userService.addSavedArticle(userId, articleId);
+		return ResponseEntity.ok(UserSettingsResponse.from(settings));
+	}
+
+	@DeleteMapping("/me/saved-articles/{articleId}")
+	@Operation(
+			operationId = "unsaveArticle",
+			summary = "Remove a saved article for the current user",
+			description = "Atomically removes the article from the user's saved list.",
+			responses = {
+					@ApiResponse(responseCode = "200", description = "Article removed from saved"),
+					@ApiResponse(responseCode = "401", description = "Not authenticated")
+			})
+	public ResponseEntity<UserSettingsResponse> unsaveArticle(
+			@AuthenticationPrincipal Jwt jwt,
+			@PathVariable String articleId) {
+		String userId = jwt.getSubject();
+		UserSettings settings = userService.removeSavedArticle(userId, articleId);
+		return ResponseEntity.ok(UserSettingsResponse.from(settings));
+	}
+
 	@PostMapping("/me/subscriptions/{sourceId}")
 	@Operation(
 			operationId = "subscribeToSource",
@@ -117,7 +151,7 @@ public class UserController {
 			@PathVariable String sourceId) {
 		String userId = jwt.getSubject();
 		if (userService.addSubscription(userId, sourceId)) {
-			contentServiceClient.subscribe(sourceId, jwt.getTokenValue());
+			contentServiceClient.subscribe(sourceId);
 		}
 		return ResponseEntity.ok(UserSettingsResponse.from(userService.getSettings(userId)));
 	}
@@ -138,7 +172,7 @@ public class UserController {
 			@PathVariable String sourceId) {
 		String userId = jwt.getSubject();
 		if (userService.removeSubscription(userId, sourceId)) {
-			contentServiceClient.unsubscribe(sourceId, jwt.getTokenValue());
+			contentServiceClient.unsubscribe(sourceId);
 		}
 		return ResponseEntity.ok(UserSettingsResponse.from(userService.getSettings(userId)));
 	}

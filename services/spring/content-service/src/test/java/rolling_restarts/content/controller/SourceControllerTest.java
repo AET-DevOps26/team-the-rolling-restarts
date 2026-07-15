@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import rolling_restarts.content.config.SecurityConfig;
 import rolling_restarts.content.model.Source;
 import rolling_restarts.content.repository.SourceRepository;
+import rolling_restarts.content.service.RssFetcherService;
 import rolling_restarts.content.service.SourceService;
 
 @WebMvcTest(SourceController.class)
@@ -37,6 +38,9 @@ class SourceControllerTest {
 
 	@MockitoBean
 	private SourceService sourceService;
+
+	@MockitoBean
+	private RssFetcherService rssFetcherService;
 
 	@Test
 	void list_returnsAllSources() throws Exception {
@@ -89,6 +93,26 @@ class SourceControllerTest {
 								"""))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.name").value("Example"));
+	}
+
+	@Test
+	@WithMockUser
+	void create_bareDomainUrl_normalizesToHttpsAndReturns201() throws Exception {
+		when(sourceRepository.findByRssUrl("https://example.com/feed")).thenReturn(Optional.empty());
+		when(sourceRepository.save(any(Source.class))).thenAnswer(invocation -> {
+			Source s = invocation.getArgument(0);
+			s.setId("new-id");
+			return s;
+		});
+
+		mockMvc.perform(post("/sources")
+						.with(csrf())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"Example","rssUrl":"example.com/feed"}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.rssUrl").value("https://example.com/feed"));
 	}
 
 	@Test
@@ -153,7 +177,7 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void subscribe_existingSource_returns200() throws Exception {
 		Source source = new Source();
 		source.setId("1");
@@ -167,7 +191,7 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void subscribe_missingSource_returns404() throws Exception {
 		when(sourceService.subscribe("999")).thenReturn(null);
 
@@ -183,6 +207,15 @@ class SourceControllerTest {
 
 	@Test
 	@WithMockUser
+	void subscribe_withoutServiceScope_returns403() throws Exception {
+		// An ordinary authenticated end user (no source.write scope) must not be able to mutate
+		// the shared subscriber count — this is the IDOR fix.
+		mockMvc.perform(post("/sources/1/subscribe").with(csrf()))
+				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void unsubscribe_existingSource_returns204() throws Exception {
 		when(sourceService.unsubscribe("1")).thenReturn(true);
 
@@ -191,11 +224,18 @@ class SourceControllerTest {
 	}
 
 	@Test
-	@WithMockUser
+	@WithMockUser(authorities = "SCOPE_source.write")
 	void unsubscribe_missingSource_returns404() throws Exception {
 		when(sourceService.unsubscribe("999")).thenReturn(false);
 
 		mockMvc.perform(post("/sources/999/unsubscribe").with(csrf()))
 				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	@WithMockUser
+	void unsubscribe_withoutServiceScope_returns403() throws Exception {
+		mockMvc.perform(post("/sources/1/unsubscribe").with(csrf()))
+				.andExpect(status().isForbidden());
 	}
 }

@@ -6,12 +6,28 @@ These raw manifests mirror the Helm chart in [infra/helm/helm.md](../helm/helm.m
 
 Use the `infra/k8s` directory as the working directory. First create your real
 `secrets.yml` from the tracked template (it is gitignored — never commit it),
-then apply everything recursively:
+create both namespaces (one-time, if they don't already exist — see "Cluster Notes"
+below), replace the `<APP_NAMESPACE>` placeholder in `configmaps/grafana-lgtm-config.yml`'s
+embedded `prometheus.yaml` with your actual app namespace, then apply everything recursively:
 
 ```bash
 cd infra/k8s
 cp secrets.yml.example secrets.yml   # then fill in real values (see the comments inside)
-kubectl apply -R -f .
+# One-time, only if these don't already exist. Use `create`, not `apply` — on a Rancher-managed
+# cluster like this course's, `apply`'s GET-before-create check needs permission this identity
+# doesn't have for a namespace name it's never been granted access to (confirmed live). These
+# manifests also carry the Rancher project-association label/annotation a bare `kubectl create
+# namespace` lacks — see namespaces/deployment-namespace.yml for why that matters.
+kubectl get namespace deployment >/dev/null 2>&1 || kubectl create -f namespaces/deployment-namespace.yml
+kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f namespaces/monitoring-namespace.yml
+# -n deployment: resources without an explicit metadata.namespace (the app ones) land in the app
+# namespace regardless of your current kubectl context; grafana-lgtm's manifests set their own
+# metadata.namespace: monitoring-rolling-restarts, which wins over -n regardless. Explicit file
+# list (not -R -f .) deliberately excludes namespaces/ — those were just bootstrapped above with
+# `create`, and re-applying them here would hit the same apply-permission issue that motivated
+# using `create` in the first place.
+kubectl apply -n deployment -R \
+  -f secrets.yml -f deployments -f services -f configmaps -f rbac -f ingress.yml
 ```
 
 This is the default path for the raw manifests in this repository because it keeps the deployment, service, and ingress files together and lets kubectl recurse through the directory layout.
@@ -24,9 +40,12 @@ kubectl delete -R -f .
 
 ## What is here
 
-- [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim).
-- [services/](services) contains one service manifest per workload, including `mongodb-service.yml`.
-- [secrets.yml.example](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml.example) is the tracked template for the `mongodb-credentials`, `mongodb-user-credentials`, and `jwt-keys` Secrets consumed by MongoDB and the Spring services. Copy it to `secrets.yml` (gitignored) and fill in real values — the file's comments explain each field. Use a sealed-secret or external secret store for any non-local deployment.
+- [deployments/](deployments) contains one deployment manifest per workload, plus `mongodb-deployment.yml` (the shared MongoDB Deployment and its PersistentVolumeClaim) and `grafana-lgtm-deployment.yml` (the monitoring stack).
+- [services/](services) contains one service manifest per workload, including `mongodb-service.yml` and `grafana-lgtm-service.yml`.
+- [configmaps/](configmaps) contains `grafana-lgtm-config.yml`, the Prometheus/dashboard/alerting config for the monitoring stack (hand-maintained — see the comment at the top of that file for what it must stay in sync with).
+- [rbac/](rbac) contains `grafana-lgtm-rbac.yml` — a ServiceAccount + namespaced Role/RoleBinding granting `grafana-lgtm`'s Prometheus `get/list/watch` on `pods` only, needed for per-pod metrics scraping (see `docs/internal/06-observability.md`).
+- [secrets.yml.example](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/secrets.yml.example) is the tracked template for the `mongodb-credentials`, `mongodb-user-credentials`, `jwt-keys`, and `service-credentials` Secrets consumed by MongoDB and the Spring services. Copy it to `secrets.yml` (gitignored) and fill in real values — the file's comments explain each field. Use a sealed-secret or external secret store for any non-local deployment.
+- [namespaces/](namespaces) contains `deployment-namespace.yml` and `monitoring-namespace.yml` — one-time bootstrap manifests for a fully-wiped cluster, carrying the Rancher project-association label/annotation a bare `kubectl create namespace` lacks (see the comment at the top of `deployment-namespace.yml` for the full explanation and how it was verified).
 - [ingress.yml](https://github.com/AET-DevOps26/team-the-rolling-restarts/blob/main/infra/k8s/ingress.yml) defines the external routing rules.
 
 ## Stack Setup Notes
@@ -66,7 +85,11 @@ Use the Helm chart when you want reusable installs, upgrades, shared configurati
 
 ## Cluster Notes
 
-If you need to adjust your current kubectl context, do that outside the manifests themselves. The repository does not assume a namespace in these files.
+If you need to adjust your current kubectl context, do that outside the manifests themselves. The repository does not assume a namespace in these files — **except** `grafana-lgtm`, which now runs in its own dedicated namespace: its ServiceAccount, Deployment, Service, PVC, and ConfigMaps hardcode `namespace: monitoring-rolling-restarts` (that name must already exist — `kubectl create -f namespaces/monitoring-namespace.yml`, not a bare `kubectl create namespace` — before applying; see the "Default Workflow" section above). This is deliberate: it isolates the monitoring stack's own `ResourceQuota` from the app workloads', and it's a fixed project-level name rather than a per-user choice, unlike the app namespace.
+
+One consequence: `grafana-lgtm-rbac.yml`'s `Role`/`RoleBinding` have *no* namespace field (they rely on whatever `-n <app-namespace>` you apply the directory with, same as everything else) — a `RoleBinding` must live in the same namespace as the pods it grants access to, which is the app namespace, not `monitoring-rolling-restarts` where the `ServiceAccount` itself lives. The `RoleBinding`'s `subject` names that namespace explicitly instead.
+
+Another: `configmaps/grafana-lgtm-config.yml`'s embedded `prometheus.yaml` has a literal `<APP_NAMESPACE>` placeholder in its `kubernetes_sd_configs` — replace it with your actual app namespace before applying. The Helm chart doesn't have this problem (that file is rendered with `tpl`, so `{{ .Release.Namespace }}` resolves automatically), but raw manifests have no templating step.
 
 ## Usage Guide
 
@@ -103,7 +126,7 @@ kubectl get ingress
 - `content-service` listens on port `8082`.
 - `gen-ai` listens on port `8000`.
 - `mongodb` listens on port `27017` (ClusterIP only — not exposed via ingress). user-service uses database `users`, content-service uses database `content`, both via the `*-credentials` Secrets.
-- The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator` → API gateway, `/ai/` → GenAI service, `/` → web client.
+- The ingress uses path-based routing on a single host (`rolling-restarts.stud.k8s.aet.cit.tum.de`): `/api/` and `/actuator/health` → API gateway, `/ai/` → GenAI service, `/` → web client. Only `/actuator/health` is publicly routed — `/actuator/prometheus` is reachable internally only (Prometheus scrapes pods directly, not through the ingress).
 - The ingress secret is `rolling-restarts-tls`.
 
 ## Relationship To Helm

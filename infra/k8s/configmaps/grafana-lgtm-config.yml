@@ -1,0 +1,2493 @@
+# This file is hand-maintained, not generated. Keep in sync with:
+#   - infra/helm/files/grafana/dashboards/service-overview.json
+#   - infra/helm/files/grafana/provisioning/dashboards/custom-dashboards.yaml
+#   - infra/helm/files/grafana/provisioning/alerting/rules.yaml
+#   - infra/helm/files/grafana/provisioning/alerting/contactpoints.yaml
+#   (dashboard + provisioning content must be byte-identical to the copies above,
+#   and to infra/grafana/{dashboards,provisioning}/* used by docker-compose)
+#
+# prometheus.yaml is the ONE exception: this file's scrape_configs uses
+# per-pod Kubernetes service discovery (see docs/internal/06-observability.md
+# for why), so it intentionally differs from infra/grafana/prometheus.yaml
+# (docker-compose, static targets). It is ALSO the one place this copy cannot be
+# byte-identical to infra/helm/files/grafana/prometheus.yaml: that Helm copy is rendered through
+# `tpl` so `{{ .Release.Namespace }}` resolves to the real app namespace automatically, but this
+# raw-manifest copy has no templating — replace <APP_NAMESPACE> below with your actual app
+# namespace before applying (see docs/source/infra/k8s/kubernetes.md).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-prometheus-config
+  namespace: monitoring-rolling-restarts
+data:
+  prometheus.yaml: |
+    ---
+    global:
+      scrape_native_histograms: true
+    otlp:
+      keep_identifying_resource_attributes: true
+      # Recommended attributes to be promoted to labels.
+      promote_resource_attributes:
+        - service.instance.id
+        - service.name
+        - service.namespace
+        - service.version
+        - cloud.availability_zone
+        - cloud.region
+        - container.name
+        - deployment.environment # backward compatibility
+        - deployment.environment.name
+        - k8s.cluster.name
+        - k8s.container.name
+        - k8s.cronjob.name
+        - k8s.daemonset.name
+        - k8s.deployment.name
+        - k8s.job.name
+        - k8s.namespace.name
+        - k8s.node.name
+        - k8s.pod.name
+        - k8s.replicaset.name
+        - k8s.statefulset.name
+        - host.name
+        - postgresql.database.name
+        - postgresql.schema.name
+        - postgresql.table.name
+        - postgresql.index.name
+        - database # used by otelcol/receiver/mongodb
+        - kafka.cluster.alias
+    storage:
+      tsdb:
+        # A 10min time window is enough because it can easily absorb retries and network delays.
+        out_of_order_time_window: 10m
+    scrape_configs:
+      # Single generic label/annotation-based auto-discovery job, replacing one hardcoded
+      # job_name block per service: any pod in the app namespace carrying `monitoring: "true"`
+      # is scraped automatically, with its port/path read from `prometheus.io/port`/
+      # `prometheus.io/path` annotations. Onboarding a new service means adding those to its pod
+      # template — no prometheus.yaml edit needed. `job` is set from the pod's `app` label so
+      # existing dashboards/alerts filtering `job=~"api-gateway|..."` keep working unchanged.
+      # Replace <APP_NAMESPACE> with your actual app namespace — see the ConfigMap-level comment
+      # above.
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["<APP_NAMESPACE>"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_monitoring]
+            regex: "true"
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            regex: (.+)
+            target_label: __metrics_path__
+          - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: (.+);(.+)
+            target_label: __address__
+            replacement: ${1}:${2}
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: instance
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: job
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-dashboard
+  namespace: monitoring-rolling-restarts
+data:
+  service-overview.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "request rate, error rate, duration",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "id": 6,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# RED Metrics: (r)equest rate, (e)rror rate, (d)uration\n\nThis dashboard reads the classic (non-native) histograms exposed by each service's own scrape\nendpoint: `http_server_requests_seconds_*` for the Spring services (api-gateway, user-service,\ncontent-service; via `/actuator/prometheus`, with\n`management.metrics.distribution.percentiles-histogram.http.server.requests=true` enabling the\n`_bucket` series) and `http_request_duration_seconds_*` for gen-ai (via `/metrics`).",
+            "mode": "markdown"
+          },
+          "pluginVersion": "10.3.3",
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "id": 1,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)",
+              "legendFormat": "{{job}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Request Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 13
+          },
+          "id": 2,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\", status=~\"5..|5xx\"}[5m])) by (job) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)\n\n",
+              "legendFormat": "{{job}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Error Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "scaleDistribution": {
+                  "log": 2,
+                  "type": "log"
+                }
+              },
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 21
+          },
+          "id": 5,
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "color": {
+              "exponent": 0.5,
+              "fill": "dark-orange",
+              "mode": "scheme",
+              "reverse": false,
+              "scale": "exponential",
+              "scheme": "Oranges",
+              "steps": 64
+            },
+            "exemplars": {
+              "color": "rgba(255,0,255,0.7)"
+            },
+            "filterValues": {
+              "le": 1e-09
+            },
+            "legend": {
+              "show": true
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "tooltip": {
+              "mode": "single",
+              "showColorScale": false,
+              "yHistogram": false
+            },
+            "yAxis": {
+              "axisPlacement": "left",
+              "reverse": false,
+              "unit": "s"
+            }
+          },
+          "pluginVersion": "10.3.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le)",
+              "format": "time_series",
+              "instant": false,
+              "legendFormat": "{{le}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Duration Heatmap",
+          "type": "heatmap"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 29
+          },
+          "id": 4,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "histogram_quantile(0.95, sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le, job))",
+              "format": "time_series",
+              "instant": false,
+              "legendFormat": "{{job}} 95th",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "histogram_quantile(0.5, sum(rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket\",job=~\"$job\", instance=~\"$instance\"}[5m])) by (le, job))",
+              "hide": false,
+              "legendFormat": "{{job}} 50th",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Duration percentiles",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "Per-route breakdown: uri for the Spring services (Micrometer's default route-template tag, e.g. /api/users/**), handler for gen-ai (prometheus_fastapi_instrumentator's route tag, e.g. /summarize) — unified into one `uri` label via label_replace so both show up in one legend.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 37
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate({__name__=\"http_server_requests_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job, uri)\nor\nlabel_replace(\n  sum(rate({__name__=\"http_request_duration_seconds_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job, handler),\n  \"uri\", \"$1\", \"handler\", \"(.*)\"\n)",
+              "legendFormat": "{{job}} {{uri}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Request Rate by Endpoint",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "",
+      "schemaVersion": 39,
+      "tags": ["service-health", "red-metrics"],
+      "templating": {
+        "list": [
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values(job)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "",
+            "multi": true,
+            "name": "job",
+            "options": [],
+            "query": {
+              "query": "label_values(job)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          },
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values({job=~\"$job\"},instance)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "instance",
+            "multi": true,
+            "name": "instance",
+            "options": [],
+            "query": {
+              "query": "label_values({job=~\"$job\"},instance)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Service Overview (Request Rate / Error Rate / Duration)",
+      "uid": "rolling-restarts-service-overview",
+      "version": 1,
+      "weekStart": ""
+    }
+  red-metrics-classic.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "request rate, error rate, duration",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": 4,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "description": "",
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 0,
+            "y": 0
+          },
+          "id": 6,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# RED Metrics: (r)equest rate, (e)rror rate, (d)uration\n\nThis dashboard uses explicit bucket histograms and the stable [OpenTelemetry metrics semantic conventions](https://opentelemetry.io/docs/specs/semconv/general/metrics/).\nTo enable this for the [OpenTelemetry Java instrumentation agent](https://github.com/open-telemetry/opentelemetry-java-instrumentation/), set the following environment variables:\n\n```\nexport OTEL_EXPORTER_OTLP_METRICS_DEFAULT_HISTOGRAM_AGGREGATION=explicit_bucket_histogram\n```",
+            "mode": "markdown"
+          },
+          "pluginVersion": "10.3.3",
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "id": 1,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count|http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_milliseconds_count|http_server_duration_seconds_count|http_server_duration_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job)",
+              "legendFormat": "{{job}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Request Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 13
+          },
+          "id": 2,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "(sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count|http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_milliseconds_count|http_server_duration_seconds_count|http_server_duration_count\", job=~\"$job\", instance=~\"$instance\", status=~\"5..\"}[5m])) by (job) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count|http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_milliseconds_count|http_server_duration_seconds_count|http_server_duration_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job))\nor\n(sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count|http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_milliseconds_count|http_server_duration_seconds_count|http_server_duration_count\", job=~\"$job\", instance=~\"$instance\", http_status_code=~\"5..\"}[5m])) by (job) / sum(rate({__name__=~\"http_server_requests_seconds_count|http_request_duration_seconds_count|http_server_request_duration_seconds_count|http_server_request_duration_count|http_server_duration_milliseconds_count|http_server_duration_seconds_count|http_server_duration_count\", job=~\"$job\", instance=~\"$instance\"}[5m])) by (job))",
+              "legendFormat": "{{job}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Error Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "description": "",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 21
+          },
+          "id": 3,
+          "options": {
+            "displayMode": "gradient",
+            "maxVizHeight": 300,
+            "minVizHeight": 10,
+            "minVizWidth": 0,
+            "namePlacement": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "showUnfilled": true,
+            "sizing": "auto",
+            "valueMode": "color"
+          },
+          "pluginVersion": "10.3.3",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "sum by (le) (rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket|http_server_request_duration_seconds_bucket|http_server_request_duration_bucket|http_server_duration_milliseconds_bucket|http_server_duration_seconds_bucket|http_server_duration_bucket\", job=~\"$job\", instance=~\"$instance\"}[5m]))",
+              "format": "heatmap",
+              "instant": false,
+              "legendFormat": "{{le}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Duration histogram (s)",
+          "type": "bargauge"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "scaleDistribution": {
+                  "log": 2,
+                  "type": "log"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 29
+          },
+          "id": 5,
+          "options": {
+            "calculate": false,
+            "cellGap": 1,
+            "color": {
+              "exponent": 0.5,
+              "fill": "dark-orange",
+              "mode": "scheme",
+              "reverse": false,
+              "scale": "exponential",
+              "scheme": "Oranges",
+              "steps": 64
+            },
+            "exemplars": {
+              "color": "rgba(255,0,255,0.7)"
+            },
+            "filterValues": {
+              "le": 1e-09
+            },
+            "legend": {
+              "show": true
+            },
+            "rowsFrame": {
+              "layout": "auto"
+            },
+            "tooltip": {
+              "show": true,
+              "yHistogram": false
+            },
+            "yAxis": {
+              "axisPlacement": "left",
+              "reverse": false,
+              "unit": "s"
+            }
+          },
+          "pluginVersion": "10.2.0",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by (le) (rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket|http_server_request_duration_seconds_bucket|http_server_request_duration_bucket|http_server_duration_milliseconds_bucket|http_server_duration_seconds_bucket|http_server_duration_bucket\", job=~\"$job\", instance=~\"$instance\"}[5m]))",
+              "format": "heatmap",
+              "instant": false,
+              "legendFormat": "{{le}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Duration Heatmap",
+          "type": "heatmap"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green"
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 37
+          },
+          "id": 4,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "9.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "histogram_quantile(0.95, sum by (le, job) (rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket|http_server_request_duration_seconds_bucket|http_server_request_duration_bucket|http_server_duration_milliseconds_bucket|http_server_duration_seconds_bucket|http_server_duration_bucket\", job=~\"$job\", instance=~\"$instance\"}[5m])))",
+              "format": "time_series",
+              "instant": false,
+              "legendFormat": "{{job}} 95th",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": true,
+              "expr": "histogram_quantile(0.5, sum by (le, job) (rate({__name__=~\"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket|http_server_request_duration_seconds_bucket|http_server_request_duration_bucket|http_server_duration_milliseconds_bucket|http_server_duration_seconds_bucket|http_server_duration_bucket\", job=~\"$job\", instance=~\"$instance\"}[5m])))",
+              "hide": false,
+              "legendFormat": "{{job}} 50th",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Duration percentiles",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "",
+      "schemaVersion": 39,
+      "tags": ["service-health", "red-metrics", "classic-histogram"],
+      "templating": {
+        "list": [
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values(job)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "",
+            "multi": true,
+            "name": "job",
+            "options": [],
+            "query": {
+              "query": "label_values(job)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          },
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": [
+                "All"
+              ],
+              "value": [
+                "$__all"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values({job=~\"$job\"},instance)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "instance",
+            "multi": true,
+            "name": "instance",
+            "options": [],
+            "query": {
+              "query": "label_values({job=~\"$job\"},instance)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "RED Metrics (classic histogram)",
+      "uid": "f543a537-cb96-470d-a349-660ad1513136",
+      "version": 1,
+      "weekStart": ""
+    }
+  genai-overview.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "gen-ai's LLM-specific metrics: request rate, error rate, latency, and token usage, broken out by endpoint (summarize/explain/sentiment/qa) and provider (logos/ollama)",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# GenAI Overview\n\nThese panels read gen-ai's own custom OTel metrics (`services/gen-ai/app/llm/invoke.py`), emitted around every LLM call made by any of the 4 LLM-backed endpoints (`/summarize`, `/explain`, `/sentiment`, `/qa`), tagged by `endpoint` and `provider` (`logos`/`ollama`). These are pushed via OTLP, not classic-scraped — for gen-ai's generic HTTP-layer RED metrics (all routes, not just LLM ones), see Service Overview / RED Metrics (classic histogram), filtered to `job=gen-ai`.",
+            "mode": "markdown"
+          },
+          "pluginVersion": "10.3.3",
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "id": 2,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(gen_ai_llm_requests_total{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (endpoint, provider)",
+              "legendFormat": "{{endpoint}} ({{provider}})",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "LLM Request Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "id": 3,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(gen_ai_llm_errors_total{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (endpoint, provider)\n/\nsum(rate(gen_ai_llm_requests_total{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (endpoint, provider)",
+              "legendFormat": "{{endpoint}} ({{provider}})",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "LLM Error Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 13
+          },
+          "id": 4,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum(rate(gen_ai_llm_latency_seconds_bucket{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (le, endpoint, provider))",
+              "legendFormat": "{{endpoint}} ({{provider}}) 95th",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum(rate(gen_ai_llm_latency_seconds_bucket{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (le, endpoint, provider))",
+              "hide": false,
+              "legendFormat": "{{endpoint}} ({{provider}}) 50th",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "LLM Latency percentiles",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 13
+          },
+          "id": 5,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(gen_ai_llm_prompt_tokens_total{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (endpoint, provider)",
+              "legendFormat": "{{endpoint}} ({{provider}}) prompt",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(gen_ai_llm_completion_tokens_total{endpoint=~\"$endpoint\", provider=~\"$provider\"}[5m])) by (endpoint, provider)",
+              "hide": false,
+              "legendFormat": "{{endpoint}} ({{provider}}) completion",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Token Usage Rate (tokens/s)",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "",
+      "schemaVersion": 39,
+      "tags": ["service-health", "genai", "llm"],
+      "templating": {
+        "list": [
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": ["All"],
+              "value": ["$__all"]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values(gen_ai_llm_requests_total, endpoint)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "endpoint",
+            "multi": true,
+            "name": "endpoint",
+            "options": [],
+            "query": {
+              "query": "label_values(gen_ai_llm_requests_total, endpoint)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          },
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": ["All"],
+              "value": ["$__all"]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values(gen_ai_llm_requests_total{endpoint=~\"$endpoint\"}, provider)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "provider",
+            "multi": true,
+            "name": "provider",
+            "options": [],
+            "query": {
+              "query": "label_values(gen_ai_llm_requests_total{endpoint=~\"$endpoint\"}, provider)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "GenAI Overview (LLM Requests / Latency / Tokens)",
+      "uid": "rolling-restarts-genai-overview",
+      "version": 1,
+      "weekStart": ""
+    }
+  webclient-overview.json: |
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "web-client's OpenTelemetry traces (web-client/instrumentation.ts, @vercel/otel), auto-converted into RED metrics by Tempo's metrics-generator (traces_spanmetrics_*) since Next.js's server-side rendering has no scrapable /actuator/prometheus endpoint of its own.",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "datasource": {
+            "type": "datasource",
+            "uid": "grafana"
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 1,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# Web Client Overview\n\nweb-client (Next.js) exports OTel traces via `@vercel/otel` (see `web-client/instrumentation.ts`), pushed over OTLP to Tempo like the other services. Unlike the Spring/gen-ai services, web-client has no Prometheus-scrapable metrics endpoint of its own — these RED-style panels instead read `traces_spanmetrics_*`, span metrics that Tempo's metrics-generator derives automatically from the received traces. `span_kind=\"SPAN_KIND_SERVER\"` covers inbound page requests (route rendered = `span_name`); `span_kind=\"SPAN_KIND_CLIENT\"` covers web-client's own outbound fetch calls to api-gateway.",
+            "mode": "markdown"
+          },
+          "pluginVersion": "10.3.3",
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "reqps",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 5
+          },
+          "id": 2,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (span_name)",
+              "legendFormat": "{{span_name}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Page Request Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 5
+          },
+          "id": 3,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\", status_code=\"STATUS_CODE_ERROR\"}[5m])) by (span_name)\n/\nsum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (span_name)",
+              "legendFormat": "{{span_name}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Page Error Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 13
+          },
+          "id": 4,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.95, sum(rate(traces_spanmetrics_latency_bucket{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (le, span_name))",
+              "legendFormat": "{{span_name}} 95th",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "histogram_quantile(0.5, sum(rate(traces_spanmetrics_latency_bucket{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\", span_name=~\"$route\"}[5m])) by (le, span_name))",
+              "hide": false,
+              "legendFormat": "{{span_name}} 50th",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Page Latency percentiles",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s",
+              "unitScale": true
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 13
+          },
+          "id": 5,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(rate(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_CLIENT\"}[5m])) by (span_name)",
+              "legendFormat": "{{span_name}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Downstream Fetch Call Rate (to api-gateway)",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "",
+      "schemaVersion": 39,
+      "tags": ["service-health", "web-client", "traces"],
+      "templating": {
+        "list": [
+          {
+            "allValue": ".+",
+            "current": {
+              "selected": true,
+              "text": ["All"],
+              "value": ["$__all"]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "prometheus"
+            },
+            "definition": "label_values(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\"}, span_name)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "route",
+            "multi": true,
+            "name": "route",
+            "options": [],
+            "query": {
+              "query": "label_values(traces_spanmetrics_calls_total{service=\"web-client\", span_kind=\"SPAN_KIND_SERVER\"}, span_name)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "type": "query"
+          }
+        ]
+      },
+      "time": {
+        "from": "now-30m",
+        "to": "now"
+      },
+      "timepicker": {},
+      "timezone": "",
+      "title": "Web Client Overview (Traces / RED via Tempo metrics-generator)",
+      "uid": "rolling-restarts-webclient-overview",
+      "version": 1,
+      "weekStart": ""
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-lgtm-provisioning
+  namespace: monitoring-rolling-restarts
+data:
+  custom-dashboards.yaml: |
+    apiVersion: 1
+
+    providers:
+      - name: "Service Overview (committed)"
+        type: file
+        folder: "Service Health"
+        options:
+          path: /otel-lgtm/grafana-dashboards-custom/service-overview.json
+          foldersFromFilesStructure: false
+      - name: "GenAI Overview (committed)"
+        type: file
+        folder: "Service Health"
+        options:
+          path: /otel-lgtm/grafana-dashboards-custom/genai-overview.json
+          foldersFromFilesStructure: false
+      - name: "Web Client Overview (committed)"
+        type: file
+        folder: "Service Health"
+        options:
+          path: /otel-lgtm/grafana-dashboards-custom/webclient-overview.json
+          foldersFromFilesStructure: false
+  default-dashboards-override.yaml: |
+    apiVersion: 1
+
+    providers:
+      - name: "RED Metrics (classic histogram)"
+        type: file
+        folder: "Service Health"
+        options:
+          path: /otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json
+          foldersFromFilesStructure: false
+      - name: "JVM Metrics"
+        type: file
+        folder: "Service Health"
+        options:
+          path: /otel-lgtm/grafana-dashboard-jvm-metrics.json
+          foldersFromFilesStructure: false
+  rules.yaml: |
+    apiVersion: 1
+    
+    groups:
+      - orgId: 1
+        name: service-health
+        folder: Service Health
+        interval: 1m
+        rules:
+          - uid: slow-response-time
+            title: Slow response time (p95 > 1s)
+            condition: C
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "p95 request duration for {{ $labels.job }} exceeds 1s"
+              description: "The 95th percentile request duration has been above 1 second for more than 5 minutes."
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 600
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  refId: A
+                  instant: true
+                  expr: histogram_quantile(0.95, sum(rate({__name__=~"http_server_requests_seconds_bucket|http_request_duration_seconds_bucket"}[5m])) by (le, job))
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  refId: C
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator:
+                        type: gt
+                        params: [1]
+            noDataState: NoData
+            execErrState: Error
+          - uid: service-down
+            title: Service down
+            condition: C
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.job }} is down"
+              description: "Prometheus has not been able to scrape {{ $labels.job }} for more than 2 minutes."
+            data:
+              - refId: A
+                relativeTimeRange:
+                  from: 300
+                  to: 0
+                datasourceUid: prometheus
+                model:
+                  refId: A
+                  instant: true
+                  expr: 'up{job=~"api-gateway|user-service|content-service|gen-ai"}'
+              - refId: C
+                datasourceUid: __expr__
+                model:
+                  refId: C
+                  type: threshold
+                  expression: A
+                  conditions:
+                    - evaluator:
+                        type: lt
+                        params: [1]
+            noDataState: Alerting
+            execErrState: Alerting
+  contactpoints.yaml: |
+    apiVersion: 1
+
+    # Recipient list comes from the GRAFANA_ALERT_EMAILS env var (not hardcoded here) so it can be
+    # replaced on any redeploy without touching this file: infra/.env (docker-compose), the
+    # grafana-smtp-credentials Secret's alertEmails key (raw k8s), or monitoring.alertEmails (Helm
+    # secrets-values.yaml). $__env{...} is Grafana's provisioning-time env var expansion syntax (same
+    # mechanism used for datasource secureJsonData), resolved when this file is loaded — not by
+    # shell/Compose/Kubernetes substitution.
+    contactPoints:
+      - orgId: 1
+        name: email-alerts
+        receivers:
+          - uid: email-alerts-receiver
+            type: email
+            settings:
+              addresses: $__env{GRAFANA_ALERT_EMAILS}
+              singleEmail: true
+
+    # Root policy: routes every alert (both service-health rules) to the one contact point above.
+    # No sub-routes/matchers needed — there's only one destination for all alerts right now.
+    policies:
+      - orgId: 1
+        receiver: email-alerts
+        group_by: ["alertname"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h

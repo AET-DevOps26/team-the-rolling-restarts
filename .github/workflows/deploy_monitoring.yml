@@ -1,0 +1,151 @@
+name: Deploy Monitoring
+
+# Redeploys only when something monitoring-related changes — dashboards, provisioning, the
+# monitoring Helm templates/values, or the raw-manifest equivalents. Unlike deploy_kubernetes.yml,
+# this does NOT wait on build-and-package/CI: grafana-lgtm runs an upstream public image
+# (grafana/otel-lgtm), nothing here gets built or pushed by this repo's own pipeline.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/grafana/**"
+      - "infra/helm/files/grafana/**"
+      - "infra/helm/templates/monitoring.yaml"
+      - "infra/helm/templates/monitoring-rbac.yaml"
+      - "infra/helm/values.yaml"
+      - "infra/helm/values-prod.yaml"
+      - "infra/k8s/configmaps/grafana-lgtm-config.yml"
+      - "infra/k8s/deployments/grafana-lgtm-deployment.yml"
+      - "infra/k8s/rbac/grafana-lgtm-rbac.yml"
+      - "infra/k8s/services/grafana-lgtm-service.yml"
+      - "infra/k8s/namespaces/monitoring-namespace.yml"
+  workflow_dispatch:
+
+# Same group as deploy_kubernetes.yml: both run `helm upgrade` against the same release, and two
+# concurrent Helm operations on one release conflict ("another operation ... is in progress") —
+# serializing them here prevents that race instead of just hoping the timing doesn't overlap.
+concurrency:
+  group: deploy-k8s
+  cancel-in-progress: false
+
+jobs:
+  deploy-monitoring:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      HELM_RELEASE: newsgenai
+      HELM_CHART: ./infra/helm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.17.3
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_BASE64 }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # See the matching step in deploy_kubernetes.yml for the full explanation: this namespace
+      # needs the Rancher project-association label/annotation to get working RBAC and a real
+      # (non-zero) ResourceQuota, not just a bare namespace. `kubectl get` first and only `create`
+      # (not `apply`) when actually missing — this workflow assumes the Helm release already
+      # exists (--reuse-values below), so in practice deploy_kubernetes.yml's own equivalent step
+      # normally gets there first on a full wipe; this is a no-op in that case.
+      - name: Ensure monitoring namespace exists with Rancher project association
+        run: kubectl get namespace monitoring-rolling-restarts >/dev/null 2>&1 || kubectl create -f infra/k8s/namespaces/monitoring-namespace.yml
+
+      # monitoring.adminPassword/smtpUser/smtpPassword/alertEmails are `required` by
+      # templates/monitoring.yaml — --reuse-values alone can't be trusted to already have them:
+      # this workflow's push trigger fires immediately, while deploy_kubernetes.yml (the one that
+      # normally supplies them) waits on build-and-package first (several minutes) and could still
+      # be mid-run, or a release from before these fields existed could be the one being reused.
+      # Confirmed live as a real race: this workflow can win the shared `deploy-k8s` concurrency
+      # group and run to completion before deploy_kubernetes.yml ever sets these, failing outright
+      # on Helm's `required` guard. Generating just these four fields here (not the full mongo/
+      # JWT/service-client secret set deploy_kubernetes.yml also handles) keeps this workflow's
+      # original intent — it still doesn't need the app secrets — while closing the gap for the
+      # fields it now genuinely requires.
+      - name: Generate monitoring secrets values
+        env:
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
+          GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
+          GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
+        run: |
+          umask 077
+          for var in GRAFANA_ADMIN_PASSWORD GRAFANA_SMTP_USER GRAFANA_SMTP_PASSWORD GRAFANA_ALERT_EMAILS; do
+            if [ -z "${!var:-}" ]; then
+              echo "::error::$var secret is not configured. Set it in repo secrets before deploying to production."
+              exit 1
+            fi
+          done
+          # YAML-serialized (not a heredoc) so a secret value containing a quote, colon, or
+          # newline can't break the file or get reinterpreted — same approach as
+          # deploy_kubernetes.yml's "Generate secrets values" step.
+          python3 -c '
+          import os, yaml, sys
+
+          class QuotedStr(str): pass
+          yaml.add_representer(QuotedStr, lambda d, v: d.represent_scalar("tag:yaml.org,2002:str", v, style="\""))
+
+          data = {
+              "monitoring": {
+                  "adminPassword": QuotedStr(os.environ["GRAFANA_ADMIN_PASSWORD"]),
+                  "smtpUser": QuotedStr(os.environ["GRAFANA_SMTP_USER"]),
+                  "smtpPassword": QuotedStr(os.environ["GRAFANA_SMTP_PASSWORD"]),
+                  "alertEmails": QuotedStr(os.environ["GRAFANA_ALERT_EMAILS"]),
+              },
+          }
+          yaml.dump(data, sys.stdout, default_flow_style=False)
+          ' > infra/helm/secrets-values.yaml
+
+      # --reuse-values: this deploy only ever touches infra/grafana/* content, never the app's own
+      # secrets or image tags, so it reuses whatever the last full deploy_kubernetes.yml run
+      # already set for those instead of re-supplying them — no mongo/JWT/service-client secrets
+      # or image-values needed here. The monitoring.* fields ARE supplied explicitly above, since
+      # --reuse-values can't be trusted to have them (see the comment on that step). Requires the
+      # release to already exist (first-ever install must go through deploy_kubernetes.yml once).
+      #
+      # Deliberately NOT passing `-f infra/helm/values.yaml` here (unlike deploy_kubernetes.yml) —
+      # confirmed live that combining --reuse-values with an explicit `-f values.yaml` (the chart's
+      # own default values file, already loaded automatically by Helm regardless) causes Helm to
+      # drop the reused release's values entirely, failing on every `required` field the reused
+      # values were supposed to supply (e.g. mongodb.rootUsername). `-f values-prod.yaml` alone
+      # does not trigger this — only the chart's own base values.yaml does.
+      - name: Deploy with Helm
+        run: |
+          helm upgrade ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            --reuse-values \
+            -f infra/helm/values-prod.yaml -f infra/helm/secrets-values.yaml \
+            --wait --timeout 5m
+
+      - name: Diagnose on failure
+        if: failure()
+        run: |
+          echo "::group::Pods"
+          kubectl get pods -n monitoring-rolling-restarts -o wide || true
+          echo "::endgroup::"
+          echo "::group::Recent events"
+          kubectl get events -n monitoring-rolling-restarts --sort-by=.lastTimestamp | tail -40 || true
+          echo "::endgroup::"
+          echo "::group::describe deployment/grafana-lgtm"
+          kubectl describe deployment grafana-lgtm -n monitoring-rolling-restarts 2>/dev/null | sed -n '/Conditions:/,/Events:/p' || true
+          echo "::endgroup::"
+          echo "::group::logs grafana-lgtm (current)"
+          kubectl logs -n monitoring-rolling-restarts -l app=grafana-lgtm --tail=100 2>/dev/null || true
+          echo "::endgroup::"
+          echo "::group::logs grafana-lgtm (previous)"
+          kubectl logs -n monitoring-rolling-restarts -l app=grafana-lgtm --previous --tail=100 2>/dev/null || true
+          echo "::endgroup::"
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/grafana-lgtm -n monitoring-rolling-restarts --timeout=120s
+          echo "grafana-lgtm rolled out successfully."

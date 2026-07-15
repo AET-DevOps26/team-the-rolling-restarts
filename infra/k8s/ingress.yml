@@ -1,3 +1,19 @@
+# An Ingress can only target Services in its own namespace, but grafana-lgtm's real Service lives
+# in monitoring-rolling-restarts — so route /monitoring through this ExternalName alias instead,
+# which just resolves (via cluster DNS) to the real Service in the other namespace. No
+# NetworkPolicy exists in this cluster's manifests to block that cross-namespace path.
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-lgtm-external
+spec:
+  type: ExternalName
+  externalName: grafana-lgtm.monitoring-rolling-restarts.svc.cluster.local
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: 3000
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -15,8 +31,11 @@ spec:
 
   rules:
     # Single host, path-based routing (mirrors the nginx reverse-proxy and the
-    # Helm ingress): /api,/actuator,/swagger-ui,/v3/api-docs -> api-gateway
-    # (the gateway fans /api/ai/** out to gen-ai), everything else -> web client.
+    # Helm ingress): /api,/actuator/health,/swagger-ui,/v3/api-docs -> api-gateway
+    # (the gateway fans /api/ai/** out to gen-ai), /monitoring -> grafana-lgtm (via the
+    # ExternalName Service above), everything else -> web client.
+    # Only /actuator/health is exposed publicly; Prometheus scrapes api-gateway
+    # directly over the internal network, never through this ingress.
     - host: k8s.rolling-restarts.stud.k8s.aet.cit.tum.de
       http:
         paths:
@@ -27,7 +46,7 @@ spec:
                 name: api-gateway
                 port:
                   number: 8080
-          - path: /actuator
+          - path: /actuator/health
             pathType: Prefix
             backend:
               service:
@@ -48,6 +67,16 @@ spec:
                 name: api-gateway
                 port:
                   number: 8080
+          # No trailing slash and pathType Prefix (matches /monitoring and /monitoring/*) —
+          # grafana-lgtm runs with GF_SERVER_SERVE_FROM_SUB_PATH=true (grafana-lgtm-deployment.yml)
+          # and expects to see the /monitoring prefix itself, not have it stripped.
+          - path: /monitoring
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana-lgtm-external
+                port:
+                  number: 3000
           - path: /
             pathType: Prefix
             backend:

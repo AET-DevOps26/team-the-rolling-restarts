@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.monitoring.name }}
+  namespace: {{ .Values.monitoring.namespace }}
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+---
+# Role/RoleBinding deliberately have NO explicit namespace here — a RoleBinding must live in the
+# same namespace as the pods it grants access to, which is the APP namespace (.Release.Namespace,
+# i.e. wherever `helm install/upgrade -n <namespace>` targets), not monitoring.namespace where the
+# ServiceAccount itself lives. The RoleBinding's subject below crosses that namespace boundary —
+# a standard, fully-supported RBAC feature — instead of requiring a ClusterRole/ClusterRoleBinding
+# (this cluster's RBAC does not permit creating those: confirmed via
+# `kubectl auth can-i create clusterrole` returning "no").
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.monitoring.name }}-pod-reader
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.monitoring.name }}-pod-reader
+  labels:
+{{ include "newsGenAI.labels" (dict "name" .Values.monitoring.name "releaseName" $.Release.Name) | indent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.monitoring.name }}
+    namespace: {{ .Values.monitoring.namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Values.monitoring.name }}-pod-reader
+  apiGroup: rbac.authorization.k8s.io

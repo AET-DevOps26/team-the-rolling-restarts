@@ -42,3 +42,9 @@ The three Spring Boot services (`api-gateway`, `user-service`, `content-service`
 - Ansible for VM configuration and deployment: `infra/ansible`
 - End-to-end runbook: `docs/source/azure-vm-deployment.md`
 - Optional helper commands: `Makefile` (`make terraform-plan`, `make deploy-azure`)
+
+## Monitoring
+
+Metrics, dashboards, and alerts run on a bundled Prometheus + Grafana stack
+(`grafana/otel-lgtm`). See [docs/source/monitoring.md](docs/source/monitoring.md) for how to
+access Grafana and what's provisioned in each deployment target.

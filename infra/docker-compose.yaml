@@ -6,12 +6,17 @@ services:
       context: ../web-client
       dockerfile: Dockerfile
       target: production
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ""
     image: ${REGISTRY:-ghcr.io/aet-devops26/team-the-rolling-restarts}/web-client:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Server-side fetches run inside the container; use the internal proxy, not localhost.
+      # Not NEXT_PUBLIC_-prefixed (see web-client/src/lib/api/client.ts) so this is read at
+      # container runtime, not baked into the image at build time — the same image works
+      # correctly across every deployment target this way.
+      API_BASE_URL: http://reverse-proxy
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana-lgtm:4318
+      OTEL_SERVICE_NAME: web-client
     networks:
       - frontend
 
@@ -42,6 +47,12 @@ services:
       CONTENT_SERVICE_URL: http://content-service:8082
       GEN_AI_URL: http://gen-ai:8000
       JWT_ISSUER_URI: http://user-service:8081
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://grafana-lgtm:4318/v1/metrics
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/logs
+      # Comma-separated allowed CORS origins. Declared here so a value set in .env reaches the
+      # container; empty by default (gateway fails closed). The dev override sets '*'.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
     healthcheck:
       test:
         - CMD
@@ -77,6 +88,12 @@ services:
       JWT_RSA_PUBLIC_KEY: ${JWT_RSA_PUBLIC_KEY}
       JWT_RSA_PRIVATE_KEY: ${JWT_RSA_PRIVATE_KEY}
       CONTENT_SERVICE_URL: http://content-service:8082
+      # Secret for the client_credentials token used to call content-service's subscribe/unsubscribe
+      # endpoints (scope source.write). Override SERVICE_CLIENT_SECRET in production.
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET}
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://grafana-lgtm:4318/v1/metrics
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/logs
     healthcheck:
       test:
         - CMD
@@ -106,6 +123,9 @@ services:
       SPRING_DOCKER_COMPOSE_ENABLED: "false"
       SPRING_MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:-secret}@mongodb:27017/content?authSource=admin
       JWT_ISSUER_URI: http://user-service:8081
+      MANAGEMENT_OTLP_METRICS_EXPORT_URL: http://grafana-lgtm:4318/v1/metrics
+      MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/traces
+      MANAGEMENT_OPENTELEMETRY_LOGGING_EXPORT_OTLP_ENDPOINT: http://grafana-lgtm:4318/v1/logs
     healthcheck:
       test:
         - CMD
@@ -134,10 +154,15 @@ services:
     ports:
       - "${GEN_AI_PORT:-8000}:8000"
     environment:
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_PROVIDER: ${LLM_PROVIDER:-logos}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://logos.aet.cit.tum.de/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_MODEL: ${LLM_MODEL:-openai/gpt-oss-120b}
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://api-gateway:8080}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://grafana-lgtm:4318
+      OTEL_SERVICE_NAME: gen-ai
     healthcheck:
       test:
         - CMD
@@ -173,18 +198,100 @@ services:
     networks:
       - backend
 
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - backend
+
+  # One-shot: makes the deployed password the actual source of truth instead of a first-boot-only
+  # default. Compose has no init-container concept, so this is a separate service sharing the same
+  # volume, gated by `condition: service_completed_successfully` below. `grafana cli admin
+  # reset-admin-password` is idempotent either way: on a fresh volume it runs the same migrations
+  # `grafana server` would (creating the default admin/org) then sets the password; on an existing
+  # volume it just resets it. Runs before the main service starts, so there's no live-server
+  # stale-cache race (confirmed live: running the same command via `docker exec` against an
+  # already-running server updated the DB file but the server kept serving the old password until
+  # restarted).
+  grafana-lgtm-set-admin-password:
+    image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
+    restart: "no"
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        cd /otel-lgtm/grafana && \
+        GF_PATHS_HOME=/data/grafana GF_PATHS_DATA=/data/grafana/data GF_PATHS_PLUGINS=/data/grafana/plugins \
+        ./bin/grafana cli admin reset-admin-password "$$GF_SECURITY_ADMIN_PASSWORD"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-lgtm-data:/data
+    networks:
+      - backend
+
   grafana-lgtm:
     image: grafana/otel-lgtm@sha256:10f48eb2f8670134df542177bb19536c55421b089e43f9dfc2a27d4c078204d8
     restart: unless-stopped
+    depends_on:
+      grafana-lgtm-set-admin-password:
+        condition: service_completed_successfully
     ports:
       - "${LGTM_GRAFANA_PORT:-3001}:3000"
       - "${LGTM_OTLP_GRPC_PORT:-4317}:4317"
       - "${LGTM_OTLP_HTTP_PORT:-4318}:4318"
+    environment:
+      # The base grafana/otel-lgtm image's own run-grafana.sh defaults GF_AUTH_ANONYMOUS_ENABLED
+      # to "true" with org role "Admin" — without this override, anyone hitting /monitoring gets
+      # full admin access with no login at all. The admin password itself is set by the
+      # grafana-lgtm-set-admin-password service above, not by GF_SECURITY_ADMIN_USER/PASSWORD here
+      # — those only ever apply at the same first-boot moment that service already handles
+      # idempotently, so they're omitted here to avoid a second, silently-inert mechanism.
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Grafana is reachable both directly (LGTM_GRAFANA_PORT, unchanged) and via the reverse
+      # proxy's /monitoring path (infra/nginx/default.conf). These two make it aware it's also
+      # served from that sub-path so its own asset/API links resolve correctly through the proxy.
+      # ROOT_URL also feeds absolute links Grafana generates itself — notably the "View alert
+      # rule" link in alert emails — so on a real deployment this must be the externally
+      # reachable URL, not localhost, or recipients get a dead link. GRAFANA_ROOT_URL lets each
+      # deployment target (e.g. the Azure VM) override the default local-dev value.
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost/monitoring/}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      # Email alert delivery. GRAFANA_ALERT_EMAILS is read directly by
+      # provisioning/alerting/contactpoints.yaml via Grafana's own $__env{} expansion, not by this
+      # env block — it's listed here only so `docker compose config` and `.env.example` document
+      # every var this stack actually consumes in one place.
+      GF_SMTP_ENABLED: "true"
+      GF_SMTP_HOST: ${GF_SMTP_HOST:-smtp.gmail.com:587}
+      GF_SMTP_USER: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GRAFANA_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GRAFANA_SMTP_USER:-}
+      GF_SMTP_FROM_NAME: Grafana Alerting
+      GRAFANA_ALERT_EMAILS: ${GRAFANA_ALERT_EMAILS:-}
+    volumes:
+      - grafana-lgtm-data:/data
+      - ./grafana/prometheus.yaml:/otel-lgtm/prometheus.yaml:ro
+      - ./grafana/dashboards/service-overview.json:/otel-lgtm/grafana-dashboards-custom/service-overview.json:ro
+      - ./grafana/dashboards/red-metrics-classic.json:/otel-lgtm/grafana-dashboards-custom/red-metrics-classic.json:ro
+      - ./grafana/dashboards/genai-overview.json:/otel-lgtm/grafana-dashboards-custom/genai-overview.json:ro
+      - ./grafana/dashboards/webclient-overview.json:/otel-lgtm/grafana-dashboards-custom/webclient-overview.json:ro
+      - ./grafana/provisioning/dashboards/custom-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/custom-dashboards.yaml:ro
+      - ./grafana/provisioning/dashboards/default-dashboards-override.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/grafana-dashboards.yaml:ro
+      - ./grafana/provisioning/alerting/rules.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/rules.yaml:ro
+      - ./grafana/provisioning/alerting/contactpoints.yaml:/otel-lgtm/grafana/conf/provisioning/alerting/contactpoints.yaml:ro
     networks:
       - backend
+      - frontend
 
 volumes:
   mongodb-data:
+  ollama-models:
+  grafana-lgtm-data:
 
 networks:
   frontend:

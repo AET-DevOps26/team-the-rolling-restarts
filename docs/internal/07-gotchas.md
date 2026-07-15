@@ -1,0 +1,436 @@
+# Gotchas — Read This First
+
+Non-obvious things that file names alone don't tell you. Each has cost real
+investigation time once already; re-verify before repeating that work.
+
+## Frontend is fully backend-integrated (this gotcha is stale — kept as a historical marker)
+
+**No longer true, as of the `feat/web-client-backend-integration` work merged into this branch's
+history.** `web-client/src/lib/mock/` doesn't exist anymore; every page goes through
+`web-client/src/lib/api/client.ts` (`apiFetch`, `"server-only"`) and the generated client
+(`web-client/src/generated/api.ts`). If you're reading an old note (memory, a stale PR comment)
+claiming the frontend is mock-driven, it predates this integration — verify against the code, not
+the note. See [02-web-client.md](02-web-client.md).
+
+```sh
+grep -rln "generated/api\|apiFetch\b" web-client/src --include="*.tsx" --include="*.ts" | wc -l   # should be several, not 0
+```
+
+## GenAI service has real LLM endpoints (this gotcha is stale — kept as a historical marker)
+
+**No longer true.** `services/gen-ai/app/routers/` has `summarize.py`, `explain.py`,
+`sentiment.py`, and `qa.py`, each invoking a real LLM via `app/llm/provider.py` (`ollama` or
+`logos`, see below for the gotcha in *that*), routed through the gateway at `/api/ai/**` (which is
+`permitAll`). Full OTel instrumentation (traces + custom `gen_ai_llm_*` metrics) too. Still no RAG.
+See [03-gen-ai-service.md](03-gen-ai-service.md).
+
+## gen-ai's LLM provider is only ever `ollama` or `logos` — anything else crashes, not falls back
+
+`app/llm/provider.py`'s `get_chat_model()` raises `ValueError(f"Unknown LLM provider: ...")` for
+any other `LLM_PROVIDER` value — there is no generic "openai" provider implemented, despite that
+being a natural-sounding value to configure. Bit twice: a GH Actions variable was set to
+`LLM_PROVIDER=openai` (matching `Makefile`'s own `azure-cicd-help` suggested command, itself
+wrong) and broke every LLM endpoint on the Azure deployment for weeks before being caught live via
+gen-ai's own logs (`ValueError: Unknown LLM provider: 'openai'`). Also: `logos`
+(`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** — it works from the Kubernetes cluster
+(same network) but is unreachable from Azure's public cloud VM, so "just set it to logos
+everywhere" isn't a fix for Azure either. See `docs/internal/06-observability.md`'s incident log
+and `docs/internal/05-ci-cd-workflows.md` for the current (still-unresolved on Azure) state.
+
+```sh
+grep -n "if settings.llm_provider" services/gen-ai/app/llm/provider.py   # only ollama/logos branch
+```
+
+## Articles have no full body; `?q=` search needs Mongo index auto-creation
+
+Two things that cost real debugging during manual testing:
+
+- `RssFetcherService` hard-codes `article.setBody(List.of())` — `Article.body`
+  is **always empty**. The only stored text is `snippet` (the RSS description,
+  HTML-stripped). gen-ai's `get_article_text` therefore falls back to `snippet`
+  when `body` is empty. True full-article text would require page scraping —
+  tracked in issue #88.
+- The article search (`GET /api/content/articles?q=`) uses a Mongo `$text`
+  query against the `@TextIndexed` `headline`/`snippet` fields. Spring Data
+  MongoDB **disables index auto-creation by default**, so without
+  `spring.data.mongodb.auto-index-creation=true` (now set in content-service
+  `application.properties`) the query fails with
+  `IndexNotFound: text index required for $text query` → HTTP 500.
+
+## `services/spring-api/` is dead local clutter, not a 4th service
+
+Gitignored (`**/generated` pattern), untracked, contains
+`openapi-generator`'s generic default templates (`DummyApi`, `TestApi`).
+Left over from an experiment with server-stub generation that the real
+pipeline (`api/scripts/gen-all.sh`) explicitly avoids ("no server stubs are
+generated from the spec"). Ignore it; don't count it as a microservice or
+investigate it as real code.
+
+## `web-client`'s pact/contract test setup is dead config
+
+`web-client/jest.pact.config.js` exists but `jest`/`ts-jest` aren't in
+`package.json` and no `tests/pact/` directory exists. Similarly, CI's
+`contract-test` job in `ci.yml` only checks for `./scripts/run-pact.sh`,
+which doesn't exist — the job always no-ops and passes. **There is currently
+no real consumer-driven contract testing**, despite the scaffolding
+suggesting there is. See [05-ci-cd-workflows.md](05-ci-cd-workflows.md).
+
+## The ≥3-microservices count includes gen-ai, per course clarification — don't assume "Spring-only" from the literal requirement text
+
+`docs/requirements/03-system-architecture.md`'s literal wording ("The server side must be
+implemented in Spring Boot and must consist of at least three microservices") reads as
+Spring-specific on its own. A clarification obtained via Artemis confirmed gen-ai counts toward
+this requirement too, so `user-service` + `content-service` + `gen-ai` already satisfy it — no
+third Spring service is needed. `api-gateway` still doesn't count on its own (routing/JWT
+infrastructure, not a business-domain service). See `docs/requirements/STATUS.md` §03 for the full
+reasoning, and [01-spring-services.md](01-spring-services.md) for the technical breakdown.
+
+## Observability uses OTel + `grafana-lgtm`, not standalone Prometheus
+
+Functionally similar (Mimir inside LGTM is Prometheus-compatible) but the
+course brief's letter says "Prometheus must be used." See
+[06-observability.md](06-observability.md).
+
+## Team is 2 people, not 3
+
+Third member left the project. See `.github/CODEOWNERS` for current
+ownership: `brscn2` (web-client + gen-ai), `YRC99` (services/spring + gen-ai).
+
+## Root README is much thinner than the actual documentation
+
+Substantial docs exist under `docs/source/` (OpenAPI workflow, deployment
+testing, secrets reference, Azure/K8s CD pipelines, per-infra READMEs), but
+none of it is linked from or summarized in the root `README.md` — the first
+thing anyone opens. Quick-start, CI/CD, and monitoring instructions currently
+only live in `docs/source/index.md` and the `Makefile`.
+
+## Deployed instances: both verified live, but neither is fully working
+
+The Kubernetes deployment (`rolling-restarts.stud.k8s.aet.cit.tum.de`, the course's Rancher-managed
+cluster) and the Azure VM deployment (via `deploy-azure.yml`) have both been exercised live and
+end-to-end this branch — this is no longer an unverified-from-a-sandbox assumption. Current
+status: **Kubernetes works fully**, including gen-ai's LLM calls (after fixing a missing
+`LLM_API_KEY` wire-through) and the full monitoring stack, **including alerting notification
+delivery** — the SMTP contact point is wired and confirmed live (a real alert reached both
+configured recipients' inboxes), see `docs/source/monitoring.md`. **The Azure VM**: everything but
+gen-ai's LLM-backed endpoints was confirmed working live; those endpoints had the same `logos`-
+unreachable-from-Azure problem described in the gotcha above, and a fix (self-hosted Ollama in
+`infra/docker-compose.azure.yaml`) has since merged in but **hasn't been live-verified against a
+real Azure deploy yet** — re-check before assuming it's resolved. Don't assume either target's
+*current* state without re-checking; both have moved multiple times in one
+session — most recently, `main`-triggered deploys prune the entire monitoring stack from the
+shared Kubernetes release because `main` doesn't have this branch's Helm chart yet (see the
+"Kubernetes deploy prunes monitoring" gotcha below).
+
+## `NEXT_PUBLIC_`-prefixed env vars get inlined into the image at build time — even in server-only code
+
+Next.js replaces any `process.env.NEXT_PUBLIC_*` reference with a literal string **at build time**,
+in every bundle it touches — including code marked `"server-only"` that never runs in the browser.
+`web-client`'s API base URL used to be `NEXT_PUBLIC_API_BASE_URL` for exactly this reason (habit,
+not necessity), which meant no per-deployment-target runtime override could ever take effect: CI
+baked in a stale Kubernetes hostname, and setting a different value in `docker-compose.yaml`'s
+`environment:` block at deploy time was silently ignored. Fixed by renaming to plain `API_BASE_URL`
+(no prefix) so it's read dynamically at container runtime instead. **Lesson: don't reach for
+`NEXT_PUBLIC_` out of habit — only use it for values that must genuinely reach browser-executed
+code.** See `docs/internal/06-observability.md`'s incident log.
+
+## A cookie's `secure` flag should never be keyed off `NODE_ENV`
+
+`web-client/src/lib/actions/auth.ts` used to set the auth cookie's `secure` flag from
+`process.env.NODE_ENV === "production"`. That's the wrong signal — it conflates "production build"
+with "served over HTTPS," which aren't the same thing on the Azure VM target (production build,
+but plain HTTP, no TLS at all). A browser will accept a `Secure`-flagged cookie over HTTP but never
+send it back on a later request, so every protected route silently bounced back to `/login`
+regardless of a valid session. Now keyed off an explicit `COOKIE_SECURE` env var set per
+deployment target instead (`true` for Kubernetes, which has real TLS; unset/`false` for the Azure
+VM). Tracked as issue #90 for the proper fix (add real TLS to the Azure VM target).
+
+## Two independent Docker-install mechanisms on the Azure VM path can conflict
+
+`make azure-vm-docker` (part of `azure-cicd-setup`, the CI/CD one-time setup) installs Docker via
+`get.docker.com`'s official script (`containerd.io`). The Ansible `docker` role (the *manual*
+`make deploy-azure` path) used to apt-install Ubuntu archive's `docker.io`/`docker-compose-v2`
+instead, which pulls in Ubuntu's own `containerd` package — the two `containerd` packages conflict
+at the package-manager level, so whichever one runs second on a given VM fails outright
+(`containerd.io : Conflicts: containerd`). Both now install Docker the same way. If you ever add a
+third Docker-provisioning path, make it agree with `get.docker.com` too.
+
+## `infra/grafana/` sync to the Azure VM lives in *two* separate, unrelated mechanisms
+
+The Ansible `app` role and the GitHub Actions `deploy-azure.yml` workflow are two independent ways
+to get the app running on the same Azure VM, and **each had to be fixed separately** to actually
+copy `infra/grafana/`'s dashboards/provisioning/prometheus-scrape-config onto the VM —
+`docker-compose.yaml`'s `grafana-lgtm` bind mounts had nothing to mount otherwise, and Docker's
+fallback for a missing bind-mount source (silently auto-creating it as an empty directory) broke
+the container. If you add a *third* way to deploy to that VM, remember this file tree needs
+syncing there too — nothing enforces it generically.
+
+## gen-ai's custom OTel instruments must be created after `setup_observability()`, not before
+
+`app/main.py` used to import the routers (`from app.routers import explain, qa, sentiment,
+summarize`) at module top level, before calling `setup_observability(app)`. Each router
+transitively imports `app/llm/invoke.py`, which creates its tracer/meter and all its instruments
+(`gen_ai.llm.requests`, `.latency`, `.errors`, `.{prompt,completion}_tokens`) **at module import
+time** — so they were binding to OpenTelemetry's default no-op providers instead of the real ones
+`setup_observability()` configures moments later. Confirmed live: `gen_ai_llm_requests_total`
+never reached Prometheus no matter how long you waited or how many LLM calls were made, leaving
+the "GenAI Overview" Grafana dashboard permanently empty — while FastAPI's own auto-instrumented
+spans worked fine the whole time (that instrumentation lives *inside* `setup_observability()`
+itself, so it was never affected). Fixed by moving the router import to after
+`setup_observability(app)` runs. **Still unresolved, but narrowed**: the custom `llm.invoke` trace
+span from the same module doesn't appear even after this fix, unlike the metrics — confirmed via
+direct trace inspection (Tempo). A regression test
+(`tests/test_observability.py::test_invoke_chat_model_emits_llm_invoke_span`) reproduces the span
+creation in-process with an in-memory exporter and shows it's correctly created, named, and
+parented under the request span — ruling out the tracer-binding/import-order explanation that
+fixed the metrics. Since that test can't reach a real collector, it doesn't prove delivery; the
+remaining gap is somewhere downstream of application code (OTLP wire export, collector processing,
+or Tempo ingestion specifically). Doesn't block the dashboard (reads metrics, not traces), but
+worth understanding if anyone relies on trace-level LLM visibility.
+
+```sh
+grep -n "from app.routers import" services/gen-ai/app/main.py   # should be AFTER setup_observability(app)
+```
+
+## Article search is fully implemented but broken live — missing MongoDB text index, not a stub
+
+`web-client`'s search bar (`components/layout/topbar-search.tsx`) and `content-service`'s
+`ArticleController`/`ArticleService` are a real, complete implementation: `@TextIndexed` on
+`Article.headline`/`snippet`, a proper `TextCriteria`/`TextQuery` search combined with
+source/topic filtering, pagination, everything wired end-to-end from the UI down. It fails live
+with `MongoCommandException: text index required for $text query (IndexNotFound)` — Spring Data
+MongoDB's `auto-index-creation` defaults to `false` and nothing in `content-service` overrides it
+or creates the index another way (no migration script, no manual `createIndex` call), so
+`@TextIndexed` alone never actually creates the index on a real deployment. Confirmed live via
+`api-gateway`'s `/api/content/articles?q=...` returning 500. **Fix is small** (enable
+`spring.data.mongodb.auto-index-creation=true`, or create the text index explicitly at startup)
+but not yet done — don't assume this is an intentional gap or a stub feature.
+
+```sh
+grep -rn "auto-index-creation" services/spring/content-service/src/main/resources/   # currently empty
+```
+
+## `web-client` couldn't reach `grafana-lgtm` locally — two separate Docker Compose networks, not an OTel bug
+
+`infra/docker-compose.yaml` declares two bridge networks, `frontend` and `backend`; a service can
+only resolve another by container name if they share at least one. `web-client` was declared only
+on `frontend`, while `grafana-lgtm` (and every other backend service) is only on `backend` —
+`api-gateway` is the sole exception, deliberately dual-homed on both since it's the one frontend
+service that also talks to backend services directly. This meant `web-client`'s OTel exporter could
+never reach `grafana-lgtm:4318` locally: `getaddrinfo ENOTFOUND grafana-lgtm` from inside the
+container, confirmed via a raw Node.js `http.request` test. Everything else about the setup was
+already correct (env vars, `instrumentation.ts`'s `register()` executing and reaching
+`registerOTel()`, `@vercel/otel`'s default OTLP protocol) — it looked like an OTel/Next.js
+configuration problem for a long time before the actual network topology was checked. First fixed
+by adding `web-client` to the `backend` network too — but that gave the one container most exposed
+to untrusted input a direct path to `mongodb` and every other internal service, unnecessarily
+widening its blast radius. Moved the fix to the other side instead: `grafana-lgtm` now sits on
+*both* `frontend` and `backend` (the actual telemetry sink, not the container receiving untrusted
+input), which restores segmentation while still letting every service reach it. **Kubernetes was
+never affected** — there's no equivalent network partitioning between pods/Services there, which is
+why "it worked on k9s before" was a real, confusing signal pointing away from docker-compose-specific
+causes.
+
+```sh
+grep -A2 "networks:" infra/docker-compose.yaml   # grafana-lgtm should list both frontend and backend
+```
+
+## The `grafana/otel-lgtm` base image defaults to anonymous Admin access — no login required
+
+`run-grafana.sh` inside the image sets `GF_AUTH_ANONYMOUS_ENABLED="${GF_AUTH_ANONYMOUS_ENABLED:-true}"`
+and, when anonymous auth is enabled, `GF_AUTH_ANONYMOUS_ORG_ROLE="${GF_AUTH_ANONYMOUS_ORG_ROLE:-Admin}"`.
+Without an explicit override, **anyone who can reach the Grafana port gets full admin access with
+no login at all** — confirmed live: `curl .../monitoring/api/search` returned real dashboard data
+with zero auth before this was set. Setting `GF_SECURITY_ADMIN_PASSWORD` alone does nothing to
+close this — the password is irrelevant if anonymous requests are already treated as an
+authenticated admin. Fixed by explicitly setting `GF_AUTH_ANONYMOUS_ENABLED: "false"` everywhere
+grafana-lgtm is deployed (docker-compose, Helm, raw k8s manifests).
+
+```sh
+grep -rn "GF_AUTH_ANONYMOUS_ENABLED" infra/   # should appear in all three deployment paths, set to "false"
+```
+
+## Grafana's admin password is auto-rotated on every deploy — an initContainer/one-shot service, not just an env var
+
+`GF_SECURITY_ADMIN_PASSWORD` only seeds the `admin` user's password the first time Grafana boots
+against an empty `/data` volume — exactly the same class of gotcha as MongoDB's
+`MONGO_INITDB_ROOT_PASSWORD` (see the rotation note in `secrets-values.example.yaml`). On a
+`grafana-lgtm-data` volume/PVC that already has a previously-initialized instance, changing that
+env var and restarting the container does **nothing** — confirmed live: the new password was
+rejected and the old one kept working. Worse, `grafana cli admin reset-admin-password` run via
+`kubectl exec`/`docker exec` against an **already-running** server updates the on-disk DB file but
+the live process keeps serving the old password from some in-memory/connection-level state until
+it's actually restarted — confirmed live via `grafana.db`'s mtime changing while login still
+failed, then succeeding only after `kubectl rollout restart`.
+
+Fixed by making this automatic instead of a manual runbook step: `grafana cli admin
+reset-admin-password "$GF_SECURITY_ADMIN_PASSWORD"` is idempotent on both a fresh and an existing
+volume (confirmed live: on an empty dir it runs the same migrations `grafana server` would —
+creating the default admin/org — then sets the password; on an existing one it just resets it), so
+it runs unconditionally, before the main Grafana process ever starts:
+
+- **Kubernetes** (Helm `templates/monitoring.yaml` + raw `infra/k8s/deployments/grafana-lgtm-deployment.yml`):
+  an `initContainer` running that command, sharing the `data` volume, before the main container.
+- **docker-compose**: Compose has no init-container concept, so it's a separate one-shot service
+  (`grafana-lgtm-set-admin-password`) sharing the same named volume, gated via `depends_on:
+  condition: service_completed_successfully`.
+
+Two more traps hit getting this actually right, both confirmed live against the real course cluster:
+
+1. **initContainers need their own `resources.limits` too.** This namespace's `ResourceQuota`
+   requires explicit `limits.cpu`/`limits.memory` on *every* container in a pod, including
+   initContainers — omitting them made every single pod creation fail outright (`failed quota:
+   ... must specify limits.cpu for: grafana-lgtm-set-admin-password`), which is a much louder
+   failure than a silently-stale password. Kept deliberately smaller than the main container's
+   limits (`100m`/`128Mi` vs `400m`/`850Mi`) — Kubernetes computes a pod's *effective* quota usage
+   as `max(sum of app containers, largest single initContainer)` per resource (initContainers never
+   run concurrently with app containers), so staying under the main container's limits adds
+   nothing to the pod's quota footprint.
+2. **A pod-template annotation is required to force rotation on Kubernetes specifically.** The
+   password only reaches the initContainer via `secretKeyRef`, never as a literal value in the pod
+   template — so a `helm upgrade` that *only* changes the Secret's underlying value renders an
+   **identical** Deployment YAML, and Kubernetes has no way to know anything changed. Without a
+   `checksum/grafana-admin-password: {{ .Values.monitoring.adminPassword | sha256sum }}` annotation
+   on the pod template (Helm only — the raw-manifest path has no templating engine for this, so
+   rotating the password there still needs a manual `kubectl rollout restart deployment/grafana-lgtm
+   -n monitoring-rolling-restarts` after updating `secrets.yml`), the pod is never recreated and the
+   initContainer never re-runs.
+
+**This second trap is not unique to Grafana** — it applies to every Secret this chart mounts via
+`secretKeyRef` with no checksum annotation (`mongodb-credentials`, `jwt-keys`,
+`service-credentials`, `llm-credentials`). Confirmed live the hard way: rotating
+`mongodb.rootPassword` in `secrets-values.yaml` and running `helm upgrade` updated the
+`mongodb-credentials`/`mongodb-user-credentials` Secrets correctly, but `user-service` and
+`content-service`'s already-running pods kept using the stale password baked into their env at
+container start, failing with `MongoCommandException ... AuthenticationFailed` until manually
+`kubectl rollout restart`ed. If you rotate any of these secrets, restart the consuming
+Deployments explicitly — don't assume `helm upgrade` alone propagates it.
+
+## FIXED — a manually-wiped Kubernetes namespace does not fully self-heal, unless recreated with the right Rancher labels
+
+A **bare** recreated namespace (`kubectl create namespace`, or Helm's own `--create-namespace`)
+does not restore RBAC access — confirmed live: the very next `helm upgrade` after a manual wipe
+failed with `secrets is forbidden ... in the namespace "deployment"`, since this course's cluster
+is Rancher-managed and access is tied to a Keycloak-group/Rancher-project association that a raw
+namespace recreation at the Kubernetes API level doesn't restore. `ResourceQuota` reappearing
+automatically was previously the only part of this that looked self-healing — but that's also
+project-association-dependent (see below), so a namespace recreated without it would have gotten
+a **zero-limit** quota, not a working one, making the RBAC gap moot anyway (nothing could schedule
+regardless).
+
+**Fixed** by giving the recreated namespace the exact same Rancher project association a
+Rancher-created namespace gets: the `field.cattle.io/projectId` label (association) plus a
+`field.cattle.io/resourceQuota` annotation (the per-namespace quota override) —
+`infra/k8s/namespaces/deployment-namespace.yml` and `monitoring-namespace.yml`, applied by
+`.github/workflows/deploy_kubernetes.yml`/`deploy_monitoring.yml` whenever `kubectl get namespace`
+comes back missing. Confirmed live against a throwaway test namespace: creating it with this
+label/annotation shape granted working RBAC (`kubectl auth can-i get secrets` → `yes`)
+**immediately**, no Rancher UI/API call needed, and did trigger Rancher's `default-resource-quota`
+admission controller to provision a real (not just present) `ResourceQuota` — it came back
+zero-limit in that specific test only because the Rancher `Project` object (`p-rjflh`) shows
+`spec.resourceQuota.limit: 4 CPU / 6Gi` (the project's total budget across every namespace in it)
+with `usedLimit` already equal to the same 4/6Gi — exactly matching `deployment` +
+`monitoring-rolling-restarts`'s combined quotas (`3500m+500m` CPU, `5244Mi+900Mi=6Gi` memory), so a
+third namespace genuinely had zero headroom left, not a broken mechanism.
+
+**Not independently verified end-to-end** — doing so would mean deleting the live, in-use
+namespaces to test. The RBAC-grant half is confirmed directly; the "recreating both real
+namespaces gets their full original quota back" half follows from the Project math above but
+hasn't been observed on the real namespaces themselves. Re-verify after any real full-wipe
+recovery. Recovery still needs the Rancher project (`p-rjflh` / `devops26-team-the-rolling-restarts`)
+itself to still exist and this identity to still be a member — if the *project* is deleted too,
+not just the namespaces inside it, this fix doesn't help and recovery does need Rancher
+(`rancher.ase.cit.tum.de`) directly. Full details in `docs/internal/06-observability.md` and
+`docs/internal/04-infra-and-deploy.md`.
+
+## Grafana provisioning files can read env vars directly — `$__env{VAR_NAME}`, not shell/Compose/K8s substitution
+
+`provisioning/alerting/contactpoints.yaml`'s contact point needs a recipient list that's
+per-deployment and per-redeploy, without hardcoding it into a committed file. Grafana itself
+expands `$__env{VAR_NAME}` inside provisioning YAML **when the file is loaded**, reading whatever
+environment variable is actually set in the running container at that moment — this is a distinct
+mechanism from `${VAR}`-style shell/Compose interpolation (which would try to substitute at
+`docker compose config`/apply time, before the file ever reaches the container, and wouldn't work
+for a raw `kubectl apply`/ConfigMap mount at all). Confirmed live: `addresses:
+$__env{GRAFANA_ALERT_EMAILS}` resolved to the real comma-separated address list via Grafana's own
+`/api/v1/provisioning/contact-points` API, on both docker-compose and the real Kubernetes cluster.
+The same mechanism is documented for datasource `secureJsonData`; it isn't obviously advertised for
+alerting provisioning specifically, so it's worth confirming against the actual API response (not
+just assuming it worked) any time this pattern is reused.
+
+```sh
+grep -n '\$__env{' infra/grafana/provisioning/alerting/contactpoints.yaml
+```
+
+## Grafana 13's contact-point test API moved — the old endpoint is `410 Gone`
+
+`POST /api/alertmanager/grafana/config/api/v1/receivers/test` (the long-documented way to send a
+one-off test notification without waiting for a real alert to fire) returns a `410` with a message
+saying the endpoint was removed, pointing at a new `notifications.alerting.grafana.app/v1beta1`
+namespaced API instead, on the `grafana/otel-lgtm` image's bundled Grafana v13.0.1. That replacement
+API wasn't straightforward to call correctly on the first attempt (a naive request body returned an
+"unknown integration type" error). Rather than reverse-engineer the new API's exact schema, verifying
+real notification delivery used a more realistic technique instead: provision a temporary
+always-firing alert rule (`vector(1) > 0`, `for: 0s`) via the ordinary
+`/api/v1/provisioning/alert-rules` endpoint (unchanged), wait for it to reach `firing` state and
+route through the real notification policy, then delete the temporary rule + its folder
+afterward. This exercises the actual rule → alertmanager → policy → contact point path end to end,
+which is arguably a better test than a synthetic one anyway.
+
+## Gmail SMTP requires an App Password, not the account password — and needs 2FA enabled first
+
+Using a Gmail address as `GF_SMTP_USER`/`GF_SMTP_FROM_ADDRESS` with the account's regular login
+password as `GF_SMTP_PASSWORD` fails outright — Google requires an **App Password** for SMTP
+access from non-Google apps, which only exists as an option once 2-Step Verification is enabled on
+that account (generate one at myaccount.google.com/apppasswords, 16 characters, shown with spaces
+for readability but works either with or without them). If alert emails ever start failing
+authentication after previously working, check whether 2FA or the specific App Password was
+revoked/rotated on the Google Account side — nothing in this repo's config would show that as the
+cause, only Grafana's own SMTP error logs would.
+
+## `helm upgrade --reuse-values` combined with an explicit `-f <chart's own values.yaml>` drops the reused values entirely
+
+`deploy_monitoring.yml` runs `helm upgrade --reuse-values -f infra/helm/values-prod.yaml ...`
+— deliberately **not** `-f infra/helm/values.yaml` too, even though Helm always loads the chart's
+own `values.yaml` as its base layer regardless of whether you pass it explicitly. Confirmed live
+(`helm upgrade --dry-run=client`) that ALSO passing `-f infra/helm/values.yaml` alongside
+`--reuse-values` makes Helm drop the previous release's reused values entirely — every `required`
+field the reuse was supposed to supply (e.g. `mongodb.rootUsername`) fails immediately, exactly as
+if `--reuse-values` had never been passed at all. `-f values-prod.yaml` (the override layer, not
+the chart's own base file) does **not** trigger this. This reproduced against the workflow's
+ORIGINAL command, predating this session's changes — `deploy_monitoring.yml`'s `--reuse-values`
+path may never have actually worked before this was found and fixed. If you ever add a new
+`-f <file>` to a `--reuse-values` invocation, test it with `--dry-run=client` first — this
+particular combination is not obvious from Helm's own `--help` text or common usage examples.
+
+```sh
+cd infra/helm && helm upgrade newsgenai . --reuse-values -f values.yaml --dry-run=client   # fails
+cd infra/helm && helm upgrade newsgenai . --reuse-values -f values-prod.yaml --dry-run=client   # works
+```
+
+## A `main`-triggered Kubernetes deploy silently prunes the entire monitoring stack while this branch is unmerged
+
+`deploy_kubernetes.yml` and `deploy_monitoring.yml` both run `helm upgrade` against the *same*
+release (`newsgenai`) in the *same* cluster — they aren't separate deployment targets, just a
+full-values path and a `--reuse-values` fast path over one shared release. `main` does not have
+`infra/helm/templates/monitoring.yaml` (or the `appWorkloads.enabled` gating, or the per-service
+`metricsPath` values) yet — that's all only on this branch. So any ordinary `main`-triggered
+`deploy_kubernetes.yml` run — even one with nothing to do with monitoring — renders `main`'s older
+chart, which has zero grafana-lgtm resources, and Helm prunes everything the *previous* revision
+had that's absent from the new one: the grafana-lgtm Deployment, its PVC (so all Prometheus/
+Loki/Tempo history and Grafana's own saved state), Secrets, ConfigMaps, and RBAC. The
+`monitoring-rolling-restarts` namespace itself survives (Helm never deletes namespaces), and the
+app workloads are untouched — only grafana-lgtm is in the blast radius, because it's the only part
+of the release that exists solely on this unmerged branch.
+
+Confirmed live: a `feat/observability-monitoring`-triggered deploy at 21:49 UTC brought
+grafana-lgtm up; an unrelated `main`-triggered deploy at 23:39 UTC (same day) wiped it — `kubectl
+get pods -n monitoring-rolling-restarts` returned nothing, `helm get manifest` for the live
+revision listed only the 22 app-layer resources, and `helm status` showed no `monitoring:` values
+at all in the reused set. **This will keep happening on every `main` deploy until this branch
+merges.** Recovering it in the meantime means re-running `helm upgrade` from *this* branch's chart
+against the live release — and because the live release's reused values were last computed by
+`main`'s older chart, several newer keys (`appWorkloads.enabled`, the `metricsPath` fields, all of
+`monitoring.*`) are missing from `--reuse-values` and must be supplied explicitly (not via
+`-f values.yaml`, see the gotcha above — that resets every service's image tag to `global.tag:
+latest`, discarding the live SHA-pinned images).

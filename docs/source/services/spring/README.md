@@ -52,7 +52,16 @@ Base `application.properties` contains no default credentials — they must come
 | `JWT_ISSUER_URI` | api-gateway, content-service | OAuth2 token issuer used to validate JWTs (user-service URL) |
 | `USER_SERVICE_URL` | api-gateway | Upstream user-service URL |
 | `CONTENT_SERVICE_URL` | api-gateway, user-service | Upstream content-service URL (user-service uses it for service-to-service subscription-count updates) |
-| `CORS_ALLOWED_ORIGINS` | api-gateway | Comma-separated allowed CORS origins |
+| `SERVICE_CLIENT_SECRET` | user-service | Secret for the `client_credentials` machine token user-service uses to call content-service's subscribe/unsubscribe endpoints (scope `source.write`). If unset, those endpoints are not registered and subscriber-count sync no-ops (the `dev` profile sets a default). |
+| `SERVICE_AUTH_TOKEN_URI` | user-service | Token endpoint user-service calls for the machine token (defaults to its own `http://localhost:8081/oauth2/token`) |
+| `CORS_ALLOWED_ORIGINS` | api-gateway | Comma-separated allowed CORS origins. **No wildcard default** — if unset the gateway fails closed (no cross-origin allowed). Required in production; the `dev` profile sets `*`. |
+
+## Security Model
+
+- **JWT validation.** user-service is the OAuth2 Authorization Server; api-gateway and content-service are resource servers that validate JWTs against its JWKS (`JWT_ISSUER_URI`).
+- **CORS** is configured only on api-gateway and fails closed (see `CORS_ALLOWED_ORIGINS` above).
+- **Service-to-service subscriber counts.** content-service's `POST /sources/{id}/subscribe` and `/unsubscribe` require the `source.write` scope, which only user-service's `client_credentials` token carries — an ordinary end-user JWT cannot mutate the shared count or delete a source. user-service obtains that token from its own token endpoint using `SERVICE_CLIENT_SECRET`.
+- **Outbound SSRF.** content-service validates user-supplied RSS URLs (`UrlSafetyValidator`) against loopback/link-local/site-local/multicast, IPv6 unique-local (`fc00::/7`), and RFC 6598 shared-address space (`100.64.0.0/10`) ranges, both at source creation and again immediately before each fetch. The fetch-time validation also pins the connection to exactly the addresses just validated (`PinnedDnsResolverProvider`, a JVM-wide `InetAddressResolverProvider`, JEP 418), closing a DNS-rebinding TOCTOU gap where the actual HTTP connection would otherwise re-resolve the hostname independently a moment later.
 
 ## OpenAPI (Code-First)
 

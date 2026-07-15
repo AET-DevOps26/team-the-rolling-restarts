@@ -73,7 +73,7 @@ make compose-logs                   # follow logs (Ctrl-C to stop)
 make smoke-test
 ```
 
-Hits health endpoints, content retrieval, registration (valid + invalid), login (valid credentials + wrong password), and the shared-source subscriber lifecycle — two users subscribe to the same source, then unsubscribe one at a time, verifying the source survives until the last subscriber leaves, is then auto-deleted, and disappears from each user's enabled sources. Safe to run repeatedly — uses a unique username per run.
+Hits health endpoints, content retrieval, registration (valid + invalid), login (valid credentials + wrong password), service-scope enforcement (creates a source with a known subscriber count, then hammers the subscribe/unsubscribe endpoints with both unauthenticated and regular-user JWTs and verifies every call is rejected and the subscriber count is unchanged — proving the `source.write` scope gate prevents external abuse), and the shared-source subscriber lifecycle — two users subscribe to the same source, then unsubscribe one at a time, verifying the source survives until the last subscriber leaves, is then auto-deleted, and disappears from each user's enabled sources. Safe to run repeatedly — uses a unique username per run.
 
 ### Integration tests
 
@@ -107,7 +107,7 @@ Images are built and pushed automatically by CI:
 **Manual push** (for testing feature branches or when CI is unavailable):
 
 ```bash
-# Push to the org registry (requires write:packages permission — see GHCR setup below)
+# Push for the host architecture (amd64 on most dev machines)
 make push-images IMAGE_TAG=<tag-name>
 
 # Or push to your personal registry (no extra permissions needed)
@@ -115,6 +115,29 @@ make push-images IMAGE_TAG=<tag-name> REGISTRY=ghcr.io/<github-username>/rolling
 ```
 
 `IMAGE_TAG` defaults to the current commit SHA if not specified.
+
+#### Cross-architecture builds
+
+The Azure VM uses arm64 (`Standard_B2ps_v2`), while the Kubernetes cluster and most dev machines run amd64.
+
+**Multi-arch images (amd64 + arm64) require CI.** The web-client uses Next.js's SWC compiler, which crashes with `SIGILL` under QEMU arm64 emulation, so `make push-images` cannot cross-build it locally. The `upload_images.yml` workflow handles this by building web-client natively on each arch and merging a multi-arch manifest.
+
+For the Spring and GenAI services alone, `PLATFORM` can be passed to cross-build under QEMU:
+
+| Target | Command |
+| ------ | ------- |
+| amd64 only (default) | `make push-images IMAGE_TAG=<tag>` |
+| arm64 only (Spring/GenAI only — no web-client) | `make push-images IMAGE_TAG=<tag> PLATFORM=linux/arm64` |
+| Both arches | push via CI (`upload_images.yml`) |
+
+Cross-building the Spring and GenAI services requires a buildx builder and QEMU. One-time setup:
+
+```bash
+docker run --privileged --rm multiarch/qemu-user-static --reset -p yes
+docker buildx create --name multiarch --use
+```
+
+Cross-building is slower than native builds (QEMU emulates every instruction). Expect 3-5x longer build times, especially for the JVM-based Spring services.
 
 #### GHCR setup (for manual pushes)
 
@@ -250,11 +273,19 @@ make terraform-destroy
 cp infra/helm/secrets-values.example.yaml infra/helm/secrets-values.yaml
 # Edit with real database credentials (auto-detected by Makefile when present)
 
-make helm-deploy                    # install or upgrade
-
-# For production (2 replicas, letsencrypt-prod):
-make helm-deploy ENV=prod
+make helm-deploy                    # dev: deploys to dev.<base-host>, staging TLS
+make helm-deploy ENV=prod           # prod: deploys to <base-host>, letsencrypt-prod, 2 replicas
+make helm-deploy HELM_HOST=custom.example.com  # override the ingress host
 ```
+
+`ENV` controls which values files are layered and which ingress host is used:
+
+| `ENV` | Ingress host | TLS issuer | Replicas |
+| ----- | ------------ | ---------- | -------- |
+| `dev` (default) | `dev.rolling-restarts.stud.k8s.aet.cit.tum.de` | letsencrypt-staging | 1 |
+| `prod` | `rolling-restarts.stud.k8s.aet.cit.tum.de` | letsencrypt-prod | 2 |
+
+`HELM_HOST` overrides the ingress host regardless of `ENV`.
 
 > **Image values are applied automatically.** Every `helm-*` Make target overlays
 > `infra/helm/image-values.yaml` last (`-f values.yaml … -f image-values.yaml`), so you don't pass
@@ -268,10 +299,12 @@ make helm-deploy ENV=prod
 #### K8s smoke test
 
 ```bash
-make smoke-test-k8s
+make smoke-test-k8s                 # dev: tests against dev.<base-host>
+make smoke-test-k8s ENV=prod        # prod: tests against <base-host>
+make smoke-test-k8s K8S_HOST=custom.example.com  # explicit override
 ```
 
-Runs the same checks as `make smoke-test` (health, routing, registration, login, shared-source subscriber lifecycle) against the K8s ingress. Override the host with `make smoke-test-k8s K8S_HOST=your-host.example.com`.
+The smoke test target shares the same `ENV` variable as `helm-deploy`, so `make helm-deploy && make smoke-test-k8s` automatically targets the same host — but only when neither command uses a custom host override. If you deployed with `HELM_HOST=custom.example.com`, you must pass the same value as `K8S_HOST=custom.example.com` to smoke-test-k8s, otherwise the test falls back to the `ENV`-derived default and validates the wrong ingress. Runs health, routing, registration, login, service-scope enforcement, and the shared-source subscriber lifecycle.
 
 #### K8s manual checks
 
@@ -294,6 +327,20 @@ kubectl logs -l app=api-gateway --tail=50
 kubectl logs -l app=user-service --tail=50
 kubectl logs -l app=content-service --tail=50
 ```
+
+The commands above only see the **app namespace**. `grafana-lgtm` (Prometheus/Grafana/Tempo/Loki/
+Pyroscope) runs in its own dedicated namespace (`monitoring-rolling-restarts` by default) with its
+own `ResourceQuota` — it won't show up in the pod list above even though it carries the same
+`app.kubernetes.io/part-of=newsGenAI` label, since that label match is still scoped to whatever
+namespace `kubectl` is currently pointed at:
+
+```bash
+kubectl get pods,svc -n monitoring-rolling-restarts -l app=grafana-lgtm
+```
+
+See [monitoring.md](monitoring.md) for the full port-forward walkthrough (Grafana UI, direct
+Prometheus queries, what's provisioned automatically) — reaching it works the same way as the
+app-namespace port-forwards above, just with `-n monitoring-rolling-restarts` added.
 
 #### Connect MongoDB Compass (K8s)
 
@@ -328,7 +375,10 @@ kubectl describe pod -l app=api-gateway | grep -A3 "Startup:"
 ### Tear down (K8s)
 
 ```bash
-make helm-destroy
+make helm-destroy       # tears down the app workloads (including mongodb's data) only —
+                         # grafana-lgtm's monitoring stack (dashboards, metrics/log/trace history)
+                         # keeps running untouched
+make helm-destroy-all   # full teardown: also removes grafana-lgtm and uninstalls the release
 ```
 
 ---

@@ -59,7 +59,7 @@ cp infra/.env.example infra/.env
 
 Main variables:
 
-- `NEXT_PUBLIC_API_BASE_URL` - API base URL for the web client (defaults to `http://localhost:8080`)
+- `API_BASE_URL` - gateway base URL for the "test" compose profile (defaults to `http://localhost:8080`); `infra/docker-compose.yaml` itself hardcodes the correct value per deployment target directly, not from this file
 - `APP_PORT` - host port for the nginx reverse proxy / single entry point (defaults to `8080`)
 - `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LOG_LEVEL` - GenAI service settings
 - `MONGO_*` - MongoDB credentials and port

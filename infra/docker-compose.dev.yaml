@@ -9,6 +9,9 @@ services:
       then npm ci; fi && npm run dev -- --hostname 0.0.0.0 --port 3000"
     environment:
       NODE_ENV: development
+      # Server-side fetches run inside the container; reach the gateway directly in dev.
+      # Not NEXT_PUBLIC_-prefixed — see web-client/src/lib/api/client.ts.
+      API_BASE_URL: http://api-gateway:8080
       WATCHPACK_POLLING: ${WATCHPACK_POLLING:-false}
     volumes:
       - ../web-client:/app
@@ -27,6 +30,9 @@ services:
       CONTENT_SERVICE_URL: http://content-service:8082
       JWT_ISSUER_URI: http://user-service:8081
       SPRING_DEVTOOLS_RESTART_ENABLED: "true"
+      # Local dev convenience: allow any origin (compose runs no Spring profile, and the base
+      # config now fails closed when CORS_ALLOWED_ORIGINS is unset).
+      CORS_ALLOWED_ORIGINS: "*"
     volumes:
       - ../services/spring:/workspace
       - spring-gradle-cache:/gradle-cache
@@ -81,6 +87,7 @@ services:
         qOIio09BWfoa794j5gqNAa4SP71cmVpsJ9TAe6tP0SLMnaoXUacu7Lv1RMa72xxp
         +MtKDLHcW7CT4ZMd9ho7OD0=
         -----END PRIVATE KEY-----
+      SERVICE_CLIENT_SECRET: ${SERVICE_CLIENT_SECRET:-dev-service-secret}
     volumes:
       - ../services/spring:/workspace
       - spring-gradle-cache:/gradle-cache

@@ -33,7 +33,7 @@ services:
       target: development
     command: sh -c "npm run lint && npm run build"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://api-gateway:8080}
+      API_BASE_URL: ${API_BASE_URL:-http://api-gateway:8080}
     networks:
       - frontend
 

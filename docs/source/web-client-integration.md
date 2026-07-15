@@ -14,7 +14,7 @@ The single `spring-api` has been replaced by:
 | `user-service`    | 8081          | OAuth2 Authorization Server, user profiles/settings |
 | `content-service` | 8082          | RSS feeds, articles, topics                        |
 
-The web client talks to the nginx reverse proxy (`NEXT_PUBLIC_API_BASE_URL`) which
+The web client talks to the nginx reverse proxy (`API_BASE_URL`) which
 forwards to the gateway. Locally the proxy is on port 8080 (`APP_PORT`), on the VM
 it is on port 80. The gateway forwards requests based on path prefix.
 
@@ -23,7 +23,7 @@ it is on port 80. The gateway forwards requests based on path prefix.
 ### User service (via `/api/users/`)
 
 - `POST /api/users/auth/register` — register a new user
-- `POST /api/users/oauth2/token` — OAuth2 token endpoint (login)
+- `POST /api/users/auth/login` — authenticate and obtain a JWT
 - `GET  /api/users/users/me` — current user profile
 - `PUT  /api/users/users/me` — update profile
 - `GET  /api/users/users/me/settings` — user preferences
@@ -41,15 +41,32 @@ it is on port 80. The gateway forwards requests based on path prefix.
 - `GET    /api/content/articles/{id}` — full article
 - `POST   /api/content/articles/saved` — batch-get articles by IDs
 
-## What should be updated in web-client
+### GenAI service (via `/api/ai/`)
 
-- **`web-client/README.md`** — the "Backend integration" section still references
-  placeholder service names (`spring-order`, `py-recommender`). Update it to
-  document the real gateway URL and the API paths listed above.
-- **Mock data** — `src/lib/mock/` can be replaced with real API calls once the
-  services are running.
-- **Auth flow** — wire up login/signup forms to the OAuth2 token endpoint and
-  store the JWT for subsequent requests.
+Public after gateway PR4 (`permitAll` on `/api/ai/**`). The web client does **not**
+call these from the browser directly: `web-client/src/lib/api/client.ts` is
+`server-only`, so interactive widgets use **Next.js Server Actions**
+(`web-client/src/app/(app)/article/[id]/ai-actions.ts`) that delegate to typed
+wrappers in `web-client/src/lib/api/ai.ts` (`auth: false` on each request).
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `POST /api/ai/summarize` | `{ articleId, length? }` → `{ summary, model, provider }` |
+| `POST /api/ai/explain` | `{ articleId, knowledgeLevel? }` → `{ explanation, knowledgeLevel, model, provider }` |
+| `POST /api/ai/sentiment` | `{ articleId }` → `{ sentiment, score, bias, rationale, model, provider }` |
+| `POST /api/ai/qa` | `{ articleId, question }` → `{ answer, model, provider }` |
+
+Article detail page (`web-client/src/app/(app)/article/[id]/page.tsx`) renders
+`ArticleAiPanel` (tabs for summary / explain / sentiment / Q&A). Errors are shown
+inline in each widget; the page still renders if GenAI is unavailable.
+
+## Current state
+
+Backend integration is complete — `web-client/README.md`'s "Backend integration" section
+documents the real gateway URL and API paths, `src/lib/mock/` no longer exists (see
+[02-web-client.md](../internal/02-web-client.md)), and the auth flow is wired to
+`/api/users/auth/login`/`/register` with the JWT stored via `src/lib/api/client.ts`.
+
 - **Generated types** — the API is code-first: `api/openapi.yaml` is generated
   from the Spring controllers, and `web-client/src/generated/api.ts` is generated
   from that contract (`make generate`, or `npx openapi-typescript api/openapi.yaml

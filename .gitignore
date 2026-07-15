@@ -283,3 +283,6 @@ infra/helm/secrets-values.yaml
 
 # Raw k8s manifest secrets (copy from secrets.yml.example)
 infra/k8s/secrets.yml
+
+# Generated security scan SARIF output (make security-scan)
+output/AET-DevOps26/
