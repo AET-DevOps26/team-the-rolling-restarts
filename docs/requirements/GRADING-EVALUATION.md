@@ -221,10 +221,16 @@ surface quick-start, CI/CD summary, or a student-responsibilities section
 
 ## Bonus categories — best-effort read
 
-- **Advanced DevOps** (autoscaling, self-healing): not present — no
-  `HorizontalPodAutoscaler` found in `infra/helm` or `infra/k8s` (only a
-  `PodDisruptionBudget`, which is availability, not autoscaling). Re-verify:
-  `grep -rl "HorizontalPodAutoscaler" infra/`.
+- **Advanced DevOps** (autoscaling, self-healing): **now present** —
+  `infra/helm/templates/hpa.yaml` adds a `HorizontalPodAutoscaler` (CPU-based,
+  `minReplicas: 1`/`maxReplicas: 3`) per app workload, prod-enabled via
+  `global.autoscaling.enabled` in `values-prod.yaml`; dev stays fixed at 1
+  replica (no HPA rendered) per the fair-use policy. Combined with the
+  namespace/RBAC self-heal work (`deploy_kubernetes.yml`/`deploy_monitoring.yml`
+  recreating `{deployment,monitoring}-namespace.yml` after a full wipe) and the
+  existing `PodDisruptionBudget`, this now covers both autoscaling and a real
+  self-healing story, not just availability. Re-verify:
+  `grep -rl "HorizontalPodAutoscaler" infra/helm/templates/`.
 - **Advanced Observability** (tracing, log aggregation, custom metrics): **now
   achieved**, not just partial. Tracing (all 4 services, including web-client
   added this session), log aggregation (Loki, all 4 services, live-verified),

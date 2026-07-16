@@ -12,6 +12,17 @@ global:
   tag: latest
   pullPolicy: Always
   replicas: 1
+  # Disabled by default (dev stays at the fixed `replicas` above, per the AET fair-use policy —
+  # see values-dev.yaml). values-prod.yaml turns this on: the `deployment` namespace's
+  # ResourceQuota is already ~97% claimed at the previous fixed-3-replicas-always baseline (see
+  # docs/source/monitoring.md's "Kubernetes resource budget"), so idling at 1 replica under low
+  # load and only bursting to 3 under real CPU pressure is the efficiency win, not scaling past 3
+  # — there's no quota headroom to go higher without a course-side quota increase.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercent: 80
   probes:
     path: /
   resources:

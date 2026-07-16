@@ -392,8 +392,10 @@ namespaces). Both quotas enforce only `limits.cpu`/`limits.memory`, not `request
 are free to size for realistic steady-state usage without touching either quota.
 
 App-namespace resource limits are sized so that **api-gateway, user-service, content-service,
-gen-ai, and web-client can each run 3 replicas simultaneously** (headroom for a future HPA),
-alongside `mongodb` (`replicas: 1`, not horizontally replicated):
+gen-ai, and web-client can each run 3 replicas simultaneously** — now the live `maxReplicas`
+ceiling each service's `HorizontalPodAutoscaler` scales up to (`global.autoscaling` in
+`infra/helm/values.yaml`, `minReplicas: 1`, prod-enabled via `values-prod.yaml`) — alongside
+`mongodb` (`replicas: 1`, not horizontally replicated):
 
 | Service | Replicas | Request (CPU/Mem) | Limit (CPU/Mem) | ×N limit CPU | ×N limit Mem |
 | --- | --- | --- | --- | --- | --- |
