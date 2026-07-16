@@ -24,6 +24,20 @@ subprojects {
 		implementation 'org.springframework.boot:spring-boot-starter-validation'
 	}
 
+	// Patched versions of transitive deps still pinned to vulnerable ones by Spring Boot 4.0.6's
+	// own dependency management (CVE-2026-41293/43512/43515, CVE-2025-14813) — override here
+	// rather than waiting on the next Boot BOM bump. tomcat is managed by Boot's own
+	// `ext['xyz.version']` override convention (confirmed live — plain resolutionStrategy.force
+	// alone did NOT win against Boot's BOM for tomcat). bouncycastle isn't one of Boot's own
+	// version properties (it's pulled in transitively, not BOM-managed the same way), so it needs
+	// resolutionStrategy.force instead (confirmed live: this one DOES win for bouncycastle).
+	ext['tomcat.version'] = '11.0.22'
+	configurations.all {
+		resolutionStrategy {
+			force 'org.bouncycastle:bcprov-jdk18on:1.81.1'
+		}
+	}
+
 	tasks.named('test') {
 		useJUnitPlatform {
 			if (project.hasProperty('excludeTags')) {
