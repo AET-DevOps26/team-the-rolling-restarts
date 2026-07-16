@@ -63,6 +63,9 @@ services:
     build:
       context: ../services/gen-ai
       dockerfile: Dockerfile
+    # The image's final USER is a non-root appuser (see services/gen-ai/Dockerfile), but the
+    # editable install below needs to write to /app and site-packages, both root-owned.
+    user: "0:0"
     command: sh -c "pip install --no-cache-dir -e '.[dev]' && pytest -q"
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-openai}
