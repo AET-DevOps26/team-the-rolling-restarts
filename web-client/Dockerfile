@@ -21,9 +21,14 @@ RUN npm ci --omit=dev
 FROM node:22-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/package.json /app/package-lock.json /app/next.config.ts ./
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=production-deps /app/node_modules ./node_modules
+# --chown=node:node: node:22-alpine defaults to root (Dockle CIS-DI-0001); `node` is the base
+# image's own built-in non-root user. Ownership matters here (not just USER below) since Next's
+# production server can write to .next/cache at runtime (ISR revalidation) — a bare USER switch
+# with root-owned files would fail on first write.
+COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json /app/next.config.ts ./
+COPY --from=builder --chown=node:node /app/.next ./.next
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=production-deps --chown=node:node /app/node_modules ./node_modules
+USER node
 EXPOSE 3000
 CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]

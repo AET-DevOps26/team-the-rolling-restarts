@@ -13,6 +13,11 @@ COPY . .
 RUN if [ -d generated ]; then pip install --no-cache-dir ./generated; fi
 RUN pip install --no-cache-dir --no-deps .
 
+# python:3.12-slim defaults to root (Dockle CIS-DI-0001); the app never writes to the filesystem
+# (no local files/logs/cache — everything goes to stdout), so a plain non-root user is enough.
+RUN useradd --no-create-home --uid 1000 appuser
+USER appuser
+
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -15,7 +15,10 @@ COPY content-service ./content-service
 
 RUN ./gradlew :content-service:bootJar --no-daemon
 
-FROM gcr.io/distroless/java25-debian13
+# :nonroot (not the bare default variant, which runs as root — confirmed live via a plain
+# build, Spring Boot's own startup log reported "started by root") + digest-pinned, since
+# distroless doesn't publish semver tags for hadolint DL3006 to be satisfied by a tag alone.
+FROM gcr.io/distroless/java25-debian13:nonroot@sha256:9ccf2b8bce700d9f450523e2055afabe4d4ee795e6d69a0647a2dcd6e180e411
 
 WORKDIR /app
 
