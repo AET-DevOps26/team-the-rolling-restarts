@@ -18,10 +18,18 @@ spec:
         prometheus.io/port: "8000"
         prometheus.io/path: /metrics
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: gen-ai
           image: ghcr.io/aet-devops26/team-the-rolling-restarts/gen-ai:wip
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
 
           ports:
             - containerPort: 8000

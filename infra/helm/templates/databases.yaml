@@ -37,6 +37,17 @@ spec:
       containers:
         - name: {{ .Values.mongodb.name }}
           image: {{ .Values.mongodb.image }}
+          # Not runAsNonRoot here (unlike the app workloads in deployment.yaml): the official
+          # mongo entrypoint needs root at container start to chown /data/db to the mongodb user
+          # before dropping privilege itself — untested whether forcing non-root + fsGroup here
+          # would work, and this is the one data-bearing workload, so left alone rather than risk
+          # breaking it. allowPrivilegeEscalation/capabilities are still safe regardless of user.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: {{ .Values.mongodb.port }}
           env:
