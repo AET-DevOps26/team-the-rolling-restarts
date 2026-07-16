@@ -112,6 +112,18 @@ chart's own base values file drops the reused release's values entirely,
 failing every `required` field the reuse was supposed to supply. Only
 `values-prod.yaml` (the override layer) is passed explicitly.
 
+On a genuinely clean cluster (no release yet), the "Deploy with Helm" step
+**soft-skips** the `--reuse-values` failure: because concurrency only
+serializes execution, this workflow can grab the `deploy-k8s` slot before
+`deploy_kubernetes.yml`'s `--install` has created the release, so
+`helm upgrade` fails with `has no deployed releases`. That specific error is
+treated as an expected no-op (logs a `::notice::`, sets a `bootstrapping`
+step output, and skips the "Verify deployment" step) since
+`deploy_kubernetes.yml`'s own run bootstraps the release — including
+`grafana-lgtm`, `monitoring.yaml` is unconditional in the chart — moments
+later. Any *other* Helm error still fails the step. Added in PR #107 (fixes
+the false-red-X this race produced after #105's merge).
+
 ## `deploy-azure.yml` — name: "Deploy to Azure"
 
 Trigger: `push` (see file for path filters), `workflow_dispatch`. Jobs:

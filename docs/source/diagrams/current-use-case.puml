@@ -110,5 +110,14 @@ UC12 <.. UC6  : <<extend>>
 UC12 <.. UC13 : <<extend>>
 UC12 <.. UC7  : <<extend>>
 
-note "Scoped out relative to the initial plan (no backend, or removed):\nRecommendations, Trending Topics (the web-client FeedSort\n\"trending\" option only re-sorts the current page by\nArticle.readingMinutes client-side — no ranking endpoint),\nNotifications (notifications-section.tsx is a disclaimed,\nnon-persisted mock), Auto-tag & Categorize (Article.topicId\nexists and is filterable but RssFetcherService never sets it),\nBookmark Folders (UserSettings.savedArticleIds is a flat list)." as N1
+note as N1
+Scoped out relative to the initial plan (no backend, or removed):
+Recommendations; Trending Topics (the web-client FeedSort
+'trending' option only re-sorts the current page by
+Article.readingMinutes client-side — no ranking endpoint);
+Notifications (notifications-section.tsx is a disclaimed,
+non-persisted mock); Auto-tag & Categorize (Article.topicId
+exists and is filterable but RssFetcherService never sets it);
+Bookmark Folders (UserSettings.savedArticleIds is a flat list).
+end note
 @enduml
