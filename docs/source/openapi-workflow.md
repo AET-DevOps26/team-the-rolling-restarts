@@ -72,7 +72,7 @@ spec, and `merge-openapi.py` carries it into `api/openapi.yaml`.
 The generated contract is linted (in `make generate` and as a `pre-commit` hook on `api/openapi.yaml`):
 
 ```bash
-npx @redocly/cli@2.30.3 lint api/openapi.yaml
+npx @redocly/cli@2.39.0 lint api/openapi.yaml
 ```
 
 Lint rules are configured in `redocly.yaml` at the repo root. The `recommended` ruleset is extended

@@ -150,7 +150,7 @@ jobs:
             services/spring/content-service/build/openapi/content-service.json:/api/content
 
       - name: Lint contract
-        run: npx @redocly/cli@2.30.3 lint api/openapi.yaml
+        run: npx @redocly/cli@2.39.0 lint api/openapi.yaml
 
       - name: Fail if the committed contract is stale
         run: |

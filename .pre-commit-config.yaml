@@ -4,7 +4,7 @@ repos:
       # Validate the generated public contract whenever it changes. Cheap and safe for a hook.
       - id: redocly-lint
         name: Lint OpenAPI spec
-        entry: npx @redocly/cli@2.30.3 lint
+        entry: npx @redocly/cli@2.39.0 lint
         language: system
         files: ^api/openapi\.yaml$
 
