@@ -75,6 +75,18 @@ make smoke-test
 
 Hits health endpoints, content retrieval, registration (valid + invalid), login (valid credentials + wrong password), service-scope enforcement (creates a source with a known subscriber count, then hammers the subscribe/unsubscribe endpoints with both unauthenticated and regular-user JWTs and verifies every call is rejected and the subscriber count is unchanged — proving the `source.write` scope gate prevents external abuse), and the shared-source subscriber lifecycle — two users subscribe to the same source, then unsubscribe one at a time, verifying the source survives until the last subscriber leaves, is then auto-deleted, and disappears from each user's enabled sources. Safe to run repeatedly — uses a unique username per run.
 
+### Demo user
+
+`make compose-up` automatically runs `infra/scripts/seed-demo-data.sh`, which registers a
+fixed demo account (`demo` / `Demo12345!`) and subscribes it to seven working RSS feeds
+(German/US politics + NYT World/Europe/Technology/Science, plus Süddeutsche Zeitung), so
+there's always something ready to log in with and show off — no need to register or add a
+source live during a demo. Idempotent; re-run it standalone any time with:
+
+```bash
+make seed-demo
+```
+
 ### Integration tests
 
 ```bash

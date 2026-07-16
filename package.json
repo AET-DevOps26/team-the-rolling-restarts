@@ -1,6 +1,6 @@
 {
   "devDependencies": {
-    "@redocly/cli": "2.30.3",
+    "@redocly/cli": "2.39.0",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.9.3"
   }

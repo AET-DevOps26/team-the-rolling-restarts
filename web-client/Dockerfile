@@ -1,4 +1,4 @@
-FROM node:22-alpine AS base
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -18,12 +18,21 @@ FROM base AS production-deps
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:22-alpine AS production
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS production
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/package.json /app/package-lock.json /app/next.config.ts ./
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/public ./public
-COPY --from=production-deps /app/node_modules ./node_modules
+# --chown=node:node: node:22-alpine defaults to root (Dockle CIS-DI-0001); `node` is the base
+# image's own built-in non-root user. Ownership matters here (not just USER below) since Next's
+# production server can write to .next/cache at runtime (ISR revalidation) — a bare USER switch
+# with root-owned files would fail on first write.
+COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json /app/next.config.ts ./
+COPY --from=builder --chown=node:node /app/.next ./.next
+COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=production-deps --chown=node:node /app/node_modules ./node_modules
+# USER is the numeric UID (node:22-alpine's built-in "node" user, confirmed uid=1000), not the
+# name: Kubernetes' runAsNonRoot admission check can't resolve a named user against the image's
+# /etc/passwd (it deliberately doesn't inspect image contents) and refuses to start the
+# container with "cannot verify user is non-root" — confirmed live.
+USER 1000
 EXPOSE 3000
 CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]

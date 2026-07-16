@@ -284,7 +284,7 @@ genAi:
 # Database services
 mongodb:
   name: mongodb
-  image: mongo:8
+  image: mongo:8@sha256:b8806ee8207318a30316eca72257da4c146025a80fdcdb4c597e596af9233ee3
   port: 27017
   database: content
   # Credentials: no defaults committed. Provide both at deploy time via secrets-values.yaml

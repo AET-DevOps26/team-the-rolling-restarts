@@ -1,4 +1,4 @@
-FROM gradle:jdk-25-and-25 AS deps
+FROM gradle:jdk-25-and-25@sha256:57c4bd434ea3b77a41796375c4f95a74b3ad6693a6f33595fd6129a74a3d7044 AS deps
 
 WORKDIR /app
 
@@ -15,7 +15,10 @@ COPY api-gateway ./api-gateway
 
 RUN ./gradlew :api-gateway:bootJar --no-daemon
 
-FROM gcr.io/distroless/java25-debian13
+# :nonroot (not the bare default variant, which runs as root — confirmed live via a plain
+# build, Spring Boot's own startup log reported "started by root") + digest-pinned, since
+# distroless doesn't publish semver tags for hadolint DL3006 to be satisfied by a tag alone.
+FROM gcr.io/distroless/java25-debian13:nonroot@sha256:9ccf2b8bce700d9f450523e2055afabe4d4ee795e6d69a0647a2dcd6e180e411
 
 WORKDIR /app
 

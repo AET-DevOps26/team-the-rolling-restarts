@@ -7,6 +7,12 @@ registry_user: ""
 registry_token: ""
 image_tag: latest
 
+# Demo account seeded after deploy — a known login for demonstrations, not sensitive by
+# design. Already default to demo/Demo12345! in roles/app/defaults/main.yml; only set these
+# if you actually want different demo credentials.
+# demo_username: demo
+# demo_password: "Demo12345!"
+
 app_env:
   SPRING_PROFILES_ACTIVE: "production"
   CORS_ALLOWED_ORIGINS: "https://your-domain.example.com"

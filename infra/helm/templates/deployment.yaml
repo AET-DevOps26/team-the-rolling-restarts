@@ -46,10 +46,22 @@ spec:
       imagePullSecrets:
 {{ toYaml . | nindent 8 }}
       {{- end }}
+      # runAsNonRoot is safe for all 5 of these — the Spring Dockerfiles now use distroless's
+      # :nonroot variant (the bare default variant runs as root; confirmed live via a plain
+      # build before switching), and web-client/gen-ai's Dockerfiles now set a non-root USER
+      # explicitly. All 5 verified live: still start and serve correctly under their new user.
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: {{ $cfg.name }}
           image: {{ include "newsGenAI.image" (dict "global" $.Values.global "app" $cfg) }}
           imagePullPolicy: {{ default $.Values.global.pullPolicy $cfg.imagePullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: {{ $cfg.port }}
           env:

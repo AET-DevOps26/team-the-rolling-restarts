@@ -14,10 +14,18 @@ spec:
       labels:
         app: web-client
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: web-client
           image: ghcr.io/aet-devops26/team-the-rolling-restarts/web-client:wip
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: 3000
 

@@ -51,6 +51,8 @@ Safe to leave at defaults for local dev. Override as needed.
 | `LGTM_OTLP_HTTP_PORT` | `4318` | Host port for OTLP HTTP |
 | `GF_SMTP_HOST` | `smtp.gmail.com:587` | SMTP relay host:port for alert email delivery — any provider works, Gmail is the default |
 | `WATCHPACK_POLLING` | `false` | Set `true` on some Linux setups for file watching |
+| `DEMO_USERNAME` | `demo` | Username for the demo account `make compose-up` auto-seeds (`infra/scripts/seed-demo-data.sh`) — a known login with sources already subscribed, ready for a live demo. Not sensitive by design; the Azure/K8s targets source the same default from the `DEMO_USERNAME`/`DEMO_PASSWORD` repo secrets. |
+| `DEMO_PASSWORD` | `Demo12345!` | Password for the demo account. |
 
 ### Example `infra/.env` (dev)
 
@@ -103,6 +105,8 @@ All the same variables as Docker Compose, passed via `app_env`. The Ansible play
 | `image_tag` | `latest` | Image tag (overridden by `make ansible-deploy IMAGE_TAG=...`) |
 | `registry_user` | `""` | GHCR username (for private registries) |
 | `registry_token` | `""` | GHCR PAT with `read:packages` (for private registries) |
+| `demo_username` | `demo` | Username for the demo account seeded after every deploy (`infra/ansible/roles/app/tasks/main.yml`'s "Seed demo user" tasks). Not sensitive by design; defaults live in `roles/app/defaults/main.yml`, not this file — only set here to use different demo credentials. |
+| `demo_password` | `Demo12345!` | Password for the demo account. |
 
 ### Example `infra/ansible/group_vars/all.yml` (prod)
 

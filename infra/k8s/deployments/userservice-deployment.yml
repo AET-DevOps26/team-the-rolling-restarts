@@ -18,10 +18,18 @@ spec:
         prometheus.io/port: "8081"
         prometheus.io/path: /actuator/prometheus
     spec:
+      securityContext:
+        runAsNonRoot: true
       containers:
         - name: user-service
           image: ghcr.io/aet-devops26/team-the-rolling-restarts/user-service:wip
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
 
           ports:
             - containerPort: 8081
