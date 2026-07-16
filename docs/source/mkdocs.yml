@@ -11,6 +11,7 @@ nav:
   - Initial Backlog: INITIAL_BACKLOG.md
   - Problem Statement: PROBLEM_STATEMENT.md
   - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
+  - PlantUML Build Test (throwaway): plantuml-build-test.md
   - API Docs: api.html
   - Services:
     - Spring Microservices: services/spring/README.md

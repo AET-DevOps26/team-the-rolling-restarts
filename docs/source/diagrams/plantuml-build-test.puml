@@ -1,0 +1,7 @@
+@startuml PlantUmlBuildTest
+' Throwaway diagram used only to verify the "Generate PlantUML diagrams" step
+' in .github/workflows/publish_docs.yml actually renders .puml -> .png.
+' Not meant to be merged — see docs/source/plantuml-build-test.md.
+Alice -> Bob: does the docs pipeline render this?
+Bob --> Alice: if you can see this PNG, yes
+@enduml
