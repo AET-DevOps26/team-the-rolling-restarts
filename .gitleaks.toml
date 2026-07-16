@@ -2,4 +2,18 @@
 useDefault = true
 
 [allowlist]
-paths = ['''output/.*''']
+paths = [
+  '''output/.*''',
+  # .example files are templates with placeholder values by design (e.g.
+  # infra/k8s/secrets.yml.example's "<PASTE jwt-private.pem CONTENTS HERE>" — not a real key).
+  '''.*\.example(\..*)?$''',
+]
+regexes = [
+  # The shared dev-only JWT signing keypair (CLAUDE.md: "dev profile has default credentials").
+  # Appears in infra/docker-compose.dev.yaml, a Java test fixture
+  # (AuthorizationServerConfigTest), and one historical commit of infra/helm/values.yaml (before
+  # it was refactored to require secrets-values.yaml) — confirmed byte-identical across all of
+  # them, never used in production. Matched by regex, not path, so this doesn't blind the scanner
+  # to a genuinely different secret ever added to those same files.
+  '''MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDDxMgiuZZnYwBa''',
+]

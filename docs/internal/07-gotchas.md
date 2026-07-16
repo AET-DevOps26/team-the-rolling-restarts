@@ -28,14 +28,38 @@ See [03-gen-ai-service.md](03-gen-ai-service.md).
 
 `app/llm/provider.py`'s `get_chat_model()` raises `ValueError(f"Unknown LLM provider: ...")` for
 any other `LLM_PROVIDER` value — there is no generic "openai" provider implemented, despite that
-being a natural-sounding value to configure. Bit twice: a GH Actions variable was set to
-`LLM_PROVIDER=openai` (matching `Makefile`'s own `azure-cicd-help` suggested command, itself
-wrong) and broke every LLM endpoint on the Azure deployment for weeks before being caught live via
-gen-ai's own logs (`ValueError: Unknown LLM provider: 'openai'`). Also: `logos`
-(`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** — it works from the Kubernetes cluster
-(same network) but is unreachable from Azure's public cloud VM, so "just set it to logos
-everywhere" isn't a fix for Azure either. See `docs/internal/06-observability.md`'s incident log
-and `docs/internal/05-ci-cd-workflows.md` for the current (still-unresolved on Azure) state.
+being a natural-sounding value to configure. Bit **twice**, both times via the same mechanism —
+a stale GH Actions repo variable silently shadowing a correct default:
+
+1. A GH Actions variable was set to `LLM_PROVIDER=openai` (matching `Makefile`'s own
+   `azure-cicd-help` suggested command, itself wrong at the time) and broke every LLM endpoint on
+   the Azure deployment for weeks before being caught live via gen-ai's own logs
+   (`ValueError: Unknown LLM provider: 'openai'`).
+2. Commits `3d64455`/`6d3ab7f` (2026-07-07) fixed the *code's* fallback (`deploy-azure.yml`'s
+   `${LLM_PROVIDER:-ollama}`) and added the self-hosted Ollama container, but never touched the
+   repo variables `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini` themselves (set 2026-06-22,
+   predating the fix). Since `${VAR:-default}` only falls back when `VAR` is unset, those stale
+   values kept silently overriding the corrected default on every Azure deploy — `OLLAMA_MODEL`
+   ended up `gpt-4o-mini` (not an Ollama model at all), so `ollama pull` failed instantly with a
+   misleading `pull model manifest: file does not exist` (looks like a network error; it isn't
+   — verify with `curl -4` vs `curl -6` to the registry before chasing IPv6 theories, both
+   succeed/fail the same way here since the real issue is the model name).
+
+**Fixed 2026-07-16**: `deploy-azure.yml` now hardcodes `LLM_PROVIDER=ollama` for Azure instead of
+reading any repo variable (there's no second valid choice — Azure can never reach Logos, so a
+variable here is a footgun, not a convenience), and the model is sourced from its own dedicated
+`AZURE_OLLAMA_MODEL` repo variable (default `llama3.2:1b`) instead of the shared `LLM_MODEL` —
+changing `LLM_MODEL`/`LLM_PROVIDER` for Logos-backed environments (e.g. k8s) can no longer affect
+Azure. The old `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini` repo variables were left in place
+(nothing reads them anymore) rather than deleted, in case a future environment wants them.
+
+Also: `logos` (`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** — it works from the
+Kubernetes cluster (same network) but is unreachable from Azure's public cloud VM, so "just set it
+to logos everywhere" isn't a fix for Azure either. See `docs/internal/06-observability.md`'s
+incident log and `docs/internal/05-ci-cd-workflows.md`. **Live-verified 2026-07-16**: a fresh
+Azure deploy came up fully healthy (`ollama`, `gen-ai`, and everything else) and the AI endpoints
+(summarize/explain/sentiment/qa) plus Grafana monitoring were manually exercised and confirmed
+working.
 
 ```sh
 grep -n "if settings.llm_provider" services/gen-ai/app/llm/provider.py   # only ollama/logos branch
@@ -434,3 +458,41 @@ against the live release — and because the live release's reused values were l
 `monitoring.*`) are missing from `--reuse-values` and must be supplied explicitly (not via
 `-f values.yaml`, see the gotcha above — that resets every service's image tag to `global.tag:
 latest`, discarding the live SHA-pinned images).
+
+## `GRAFANA_ROOT_URL` used to be a repo variable on Azure — it silently went stale, now it's computed
+
+The Azure VM's public IP is `"Static"` (`azurerm_public_ip` in `infra/terraform/azure-vm/main.tf`)
+— but that only means the IP doesn't change *while that specific IP resource exists*. A full
+VM/resource-group recreation (destroy + apply — happened 3 times in one session, e.g. via
+`azure-nuke` or a manual `terraform destroy`) allocates a **brand new** static IP. `deploy-azure.yml`
+used to read `GRAFANA_ROOT_URL` from a GitHub repo variable that had to be manually kept in sync
+with the current IP — nobody did, so it silently fell back to `docker-compose.yaml`'s
+`http://localhost/monitoring/` default. Confirmed live: `GF_SERVER_ROOT_URL` on a real Azure
+deploy came back as `http://localhost/monitoring/` via a custom Grafana notification template's
+`{{ .ExternalURL }}` — every alert-email link (View alert rule, Silence, Dashboard, Panel) was
+dead for anyone not literally on the VM.
+
+**Fixed**: `deploy-azure.yml`'s "Look up VM" step queries the VM's current public IP via
+`az vm list-ip-addresses` on every run and builds `GRAFANA_ROOT_URL` from that directly — the
+GitHub variable is gone, so this can't go stale again. A separate `NEXT_PUBLIC_API_BASE_URL` repo
+variable was also found stale (an old VM IP) during this investigation but turned out to be
+**dead/unused config** — the actual consumed var is `API_BASE_URL` (no `NEXT_PUBLIC_` prefix,
+read at container runtime, hardcoded per-target: `http://reverse-proxy` for Compose/Azure,
+`http://api-gateway:8080` for K8s — see the gotcha above on `NEXT_PUBLIC_` vars). Deleted
+(`gh variable delete NEXT_PUBLIC_API_BASE_URL`), along with 6 other confirmed-orphaned repo
+variables/secrets found the same way (`POSTGRES_*` from before the Mongo migration,
+`AZURE_VM_HOST`/`SSH_PRIVATE_KEY`/`USER` from before `az vm run-command` replaced SSH-based
+deploys) — backed up locally first where values were retrievable (secrets are write-only, so
+only their existence/dates could be recorded, not their values).
+
+**Confirmed live end-to-end (2026-07-16)**: a real "Deploy to Azure" GitHub Actions run picked up
+the new "Look up VM" step correctly, and the resulting alert-email links now resolve to the VM's
+actual public IP instead of `localhost`.
+
+**Kubernetes was never affected** by the same bug: `GF_SERVER_ROOT_URL` there is built from
+`.Values.host` — a fixed DNS hostname committed in `infra/helm/values.yaml`/`values-dev.yaml`, not
+an ephemeral IP or a separately-set variable that could be forgotten. Confirmed live:
+`kubectl exec` into the running `grafana-lgtm` pod shows
+`GF_SERVER_ROOT_URL=https://dev.rolling-restarts.stud.k8s.aet.cit.tum.de/monitoring/`, and that
+URL is genuinely reachable (`curl -k` returns `200`; a plain `curl` TLS failure was a local
+CA-trust-store gap, not a real problem).

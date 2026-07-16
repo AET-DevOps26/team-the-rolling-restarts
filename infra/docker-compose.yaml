@@ -21,7 +21,7 @@ services:
       - frontend
 
   reverse-proxy:
-    image: nginx:alpine
+    image: nginx:alpine@sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8080}:80"
@@ -177,7 +177,7 @@ services:
       - backend
 
   mongodb:
-    image: mongo:8
+    image: mongo:8@sha256:b8806ee8207318a30316eca72257da4c146025a80fdcdb4c597e596af9233ee3
     restart: unless-stopped
     ports:
       - "${MONGO_PORT:-27017}:27017"
@@ -199,7 +199,9 @@ services:
       - backend
 
   ollama:
-    image: ollama/ollama:latest
+    # Pinned to a specific version + digest, not :latest (a floating tag here would silently
+    # change the served model runtime on every fresh pull, unnoticed).
+    image: ollama/ollama:0.32.0@sha256:57f573b47f1f71ebb445789f279fe3e596a8beab182f7cf486db9205bad87c5a
     profiles: ["local-llm"]
     restart: unless-stopped
     ports:

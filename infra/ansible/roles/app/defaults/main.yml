@@ -11,3 +11,11 @@ registry: ghcr.io/aet-devops26/team-the-rolling-restarts
 registry_user: ""
 registry_token: ""
 image_tag: latest
+
+# Demo account seeded after deploy (see the "Seed demo user" tasks below) — a known login
+# for demonstrations, not sensitive by design. Real (not placeholder) defaults on purpose:
+# override in group_vars/all.yml only if you actually want different demo credentials, not
+# because these need "replacing" first — matches the DEMO_USERNAME/DEMO_PASSWORD repo
+# secrets used for the GitHub Actions-driven deploys.
+demo_username: demo
+demo_password: "Demo12345!"

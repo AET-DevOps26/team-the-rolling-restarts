@@ -72,22 +72,24 @@ jobs:
       registry_base: ${{ steps.meta.outputs.registry_base }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5
         with:
           distribution: temurin
           java-version: "25"
@@ -101,7 +103,7 @@ jobs:
           ./api/scripts/gen-all.sh
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -117,10 +119,10 @@ jobs:
           echo "registry_base=$REGISTRY_BASE" >> "$GITHUB_OUTPUT"
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
       - name: Build & push web-client
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./web-client
           file: ./web-client/Dockerfile
@@ -136,7 +138,7 @@ jobs:
       # services, each with its own Dockerfile under services/spring/. The build
       # context is the shared services/spring/ root so the modules can resolve.
       - name: Build & push api-gateway
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./services/spring
           file: ./services/spring/api-gateway/Dockerfile
@@ -148,7 +150,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=api-gateway
 
       - name: Build & push user-service
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./services/spring
           file: ./services/spring/user-service/Dockerfile
@@ -160,7 +162,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=user-service
 
       - name: Build & push content-service
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./services/spring
           file: ./services/spring/content-service/Dockerfile
@@ -172,7 +174,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=content-service
 
       - name: Build & push gen-ai
-        uses: docker/build-push-action@v7.2.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: ./services/gen-ai
           file: ./services/gen-ai/Dockerfile
@@ -194,10 +196,12 @@ jobs:
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
 
       - name: Azure login
-        uses: azure/login@v2
+        uses: azure/login@1384c340ab2dda50fed2bee3041d1d87018aa5e8 # v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
@@ -208,10 +212,30 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+      # The VM's public IP is looked up fresh every run rather than stored as a GitHub variable
+      # — the "Static" Azure public IP only stays constant while that specific IP *resource*
+      # exists; a full VM/resource-group recreation allocates a new one, which silently went
+      # stale in a GRAFANA_ROOT_URL repo variable before (dead links in alert emails).
+      - name: Look up VM
+        id: vm
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          VM_NAME="$(az vm list -g "$RG" --query "[0].name" -o tsv)"
+          VM_IP="$(az vm list-ip-addresses -g "$RG" -n "$VM_NAME" \
+            --query "[0].virtualMachine.network.publicIpAddresses[0].ipAddress" -o tsv)"
+          test -n "$VM_NAME" && test -n "$VM_IP"
+          echo "name=$VM_NAME" >> "$GITHUB_OUTPUT"
+          echo "ip=$VM_IP" >> "$GITHUB_OUTPUT"
+
       - name: Generate deployment .env
         env:
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          # Azure always runs self-hosted Ollama (it can't reach Logos — see the .env heredoc
+          # below), so this is its own variable rather than the shared LLM_PROVIDER/LLM_MODEL
+          # (those configure Logos-backed environments like the in-TUM k8s cluster; reusing them
+          # here previously caused Azure to silently break whenever they changed for k8s's sake).
+          AZURE_OLLAMA_MODEL: ${{ vars.AZURE_OLLAMA_MODEL }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           MONGO_DATABASE: ${{ vars.MONGO_DATABASE }}
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
@@ -223,10 +247,9 @@ jobs:
           GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
           GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
           GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
-          # Public URL of the VM, e.g. http://<vm-public-ip>/monitoring/. Optional — the compose
-          # file falls back to http://localhost/monitoring/ if unset, which still works locally
-          # but produces dead links in alert emails sent from this deployment target.
-          GRAFANA_ROOT_URL: ${{ vars.GRAFANA_ROOT_URL }}
+          # Computed from the "Look up VM" step above, not a repo variable — see that step's
+          # comment for why (stale IPs after VM recreation).
+          GRAFANA_ROOT_URL: http://${{ steps.vm.outputs.ip }}/monitoring/
         run: |
           umask 077
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
@@ -255,12 +278,15 @@ jobs:
           APP_PORT=80
           GEN_AI_PORT=8000
           # The Azure VM is NOT on the TUM network, so Logos is unreachable here. GenAI runs
-          # against the self-hosted Ollama defined in docker-compose.azure.yaml. OLLAMA_MODEL
-          # tells that container which model to pull; keep it in sync with LLM_MODEL. Override
-          # via repo vars only if the VM can reach a different endpoint.
-          LLM_PROVIDER=${LLM_PROVIDER:-ollama}
-          LLM_MODEL=${LLM_MODEL:-llama3.2:1b}
-          OLLAMA_MODEL=${LLM_MODEL:-llama3.2:1b}
+          # against the self-hosted Ollama defined in docker-compose.azure.yaml — hardcoded, not
+          # sourced from the shared LLM_PROVIDER var, since ollama is the only provider Azure can
+          # ever reach. OLLAMA_MODEL tells that container which model to pull; LLM_MODEL is what
+          # gen-ai actually requests from it, so both must match. Change AZURE_OLLAMA_MODEL (repo
+          # variable) to switch models — not the shared LLM_MODEL, which is for Logos-backed
+          # environments (e.g. the in-TUM k8s cluster) and uses incompatible model names.
+          LLM_PROVIDER=ollama
+          LLM_MODEL=${AZURE_OLLAMA_MODEL:-llama3.2:1b}
+          OLLAMA_MODEL=${AZURE_OLLAMA_MODEL:-llama3.2:1b}
           LLM_API_KEY=${LLM_API_KEY}
           LOG_LEVEL=INFO
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}
@@ -285,6 +311,13 @@ jobs:
         env:
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
           ACR_TOKEN: ${{ steps.acr.outputs.token }}
+          # Demo account seeded after deploy — a known login for demonstrations, not
+          # sensitive by design. Not app runtime config (nothing reads these as env vars),
+          # so they're injected here rather than into deploy.env. Falls back to the same
+          # defaults as infra/scripts/seed-demo-data.sh / the Ansible role if the secrets
+          # aren't set.
+          DEMO_USERNAME: ${{ secrets.DEMO_USERNAME }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
         run: |
           umask 077
           COMPOSE_B64="$(base64 -w0 infra/docker-compose.yaml)"
@@ -305,6 +338,8 @@ jobs:
           DEPLOY_DIR="${DEPLOY_DIR}"
           ACR_LOGIN_SERVER="${ACR_LOGIN_SERVER}"
           ACR_TOKEN="${ACR_TOKEN}"
+          DEMO_USERNAME=$(printf '%q' "${DEMO_USERNAME:-demo}")
+          DEMO_PASSWORD=$(printf '%q' "${DEMO_PASSWORD:-Demo12345!}")
           COMPOSE_B64="${COMPOSE_B64}"
           OVERRIDE_B64="${OVERRIDE_B64}"
           NGINX_B64="${NGINX_B64}"
@@ -336,21 +371,60 @@ jobs:
           docker image prune -f >/dev/null 2>&1 || true
           for i in $(seq 1 12); do
             if curl -fsS "http://127.0.0.1/" >/dev/null 2>&1; then
-              echo "DEPLOY_OK reverse-proxy healthy"
-              exit 0
+              break
             fi
             echo "waiting for reverse-proxy ($i/12)..."
             sleep 10
           done
-          echo "HEALTH_FAILED"; compose ps; exit 1
+          if ! curl -fsS "http://127.0.0.1/" >/dev/null 2>&1; then
+            echo "HEALTH_FAILED"; compose ps; exit 1
+          fi
+          # Idempotent: 409 (already registered) is expected on every redeploy after the
+          # first. Keep these credentials and sources in sync with
+          # infra/scripts/seed-demo-data.sh and infra/ansible/roles/app/tasks/main.yml's
+          # equivalent tasks. No jq on this VM, so a small grep/sed extractor stands in for
+          # it — good enough for the flat, single-value fields these responses actually have.
+          json_field() {
+            grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -n1 | sed -E 's/.*:[[:space:]]*"([^"]*)"$/\1/'
+          }
+          seed_code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1/api/users/auth/register" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$DEMO_USERNAME\",\"email\":\"$DEMO_USERNAME@example.com\",\"password\":\"$DEMO_PASSWORD\",\"name\":\"Demo User\"}")
+          if [ "$seed_code" != "201" ] && [ "$seed_code" != "409" ]; then
+            echo "SEED_FAILED (http $seed_code)"; exit 1
+          fi
+          demo_token=$(curl -s -X POST "http://127.0.0.1/api/users/auth/login" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$DEMO_USERNAME\",\"password\":\"$DEMO_PASSWORD\"}" | json_field token)
+          if [ -n "$demo_token" ]; then
+            for pair in \
+              "Süddeutsche Zeitung|https://rss.sueddeutsche.de/alles" \
+              "Die Linke Presse|https://www.die-linke.de/start/presse/feed.rss" \
+              "Fox News Politics|https://moxie.foxnews.com/google-publisher/politics.xml" \
+              "NYT World|https://rss.nytimes.com/services/xml/rss/nyt/World.xml" \
+              "NYT Europe|https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml" \
+              "NYT Technology|https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml" \
+              "NYT Science|https://rss.nytimes.com/services/xml/rss/nyt/Science.xml"; do
+              src_name="${pair%%|*}"
+              src_url="${pair#*|}"
+              src_id=$(curl -s -X POST "http://127.0.0.1/api/content/sources" \
+                -H 'Content-Type: application/json' -H "Authorization: Bearer $demo_token" \
+                -d "{\"name\":\"$src_name\",\"rssUrl\":\"$src_url\"}" | json_field id)
+              if [ -n "$src_id" ]; then
+                curl -s -o /dev/null -X POST "http://127.0.0.1/api/users/users/me/subscriptions/$src_id" \
+                  -H "Authorization: Bearer $demo_token"
+              fi
+            done
+          fi
+          echo "DEPLOY_OK reverse-proxy healthy, demo user seeded (http $seed_code)"
           EOF
 
       - name: Deploy via az vm run-command
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          VM_NAME: ${{ steps.vm.outputs.name }}
         run: |
           set -euo pipefail
-          VM_NAME="$(az vm list -g "$RG" --query "[0].name" -o tsv)"
           echo "Deploying to VM: $VM_NAME (resource group: $RG)"
           az vm run-command invoke \
             --resource-group "$RG" \

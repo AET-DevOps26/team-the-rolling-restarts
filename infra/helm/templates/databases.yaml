@@ -37,6 +37,24 @@ spec:
       containers:
         - name: {{ .Values.mongodb.name }}
           image: {{ .Values.mongodb.image }}
+          # Not runAsNonRoot here (unlike the app workloads in deployment.yaml): the official
+          # mongo entrypoint needs root at container start to chown /data/db to the mongodb user
+          # before dropping privilege itself — untested whether forcing non-root + fsGroup here
+          # would work, and this is the one data-bearing workload, so left alone rather than risk
+          # breaking it. capabilities.drop: ["ALL"] is NOT safe regardless of user here (unlike
+          # the app workloads) — it strips CAP_CHOWN/SETUID/SETGID, which the entrypoint needs for
+          # that same chown-then-drop-to-mongodb-user sequence. Confirmed live against a fresh
+          # volume: `docker run --cap-drop=ALL` fails with "chown: ... Operation not permitted",
+          # then fails again at the privilege-drop step even with just CHOWN added back
+          # ("failed switching to 'mongodb': operation not permitted"); this exact set of three
+          # is the minimal one that starts cleanly.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["CHOWN", "SETUID", "SETGID"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - containerPort: {{ .Values.mongodb.port }}
           env:
