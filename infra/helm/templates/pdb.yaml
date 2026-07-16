@@ -11,7 +11,7 @@
 {{- range $index, $app := $apps }}
 {{- $cfg := $app.cfg -}}
 {{- $replicas := default $.Values.global.replicas $cfg.replicas -}}
-{{- if gt (int $replicas) 1 }}
+{{- if or (gt (int $replicas) 1) $.Values.global.autoscaling.enabled }}
 {{- if not $first }}
 ---
 {{- end }}

@@ -374,7 +374,8 @@ The services use separate databases: `users` (user-service) and `content` (conte
 ### Verify Helm-specific resources
 
 ```bash
-# PDBs should exist when replicas > 1 (prod)
+# PDBs should exist when replicas > 1 OR autoscaling is enabled (prod runs autoscaling
+# with replicas defaulting to 1, so it's the autoscaling.enabled branch that renders these)
 kubectl get pdb
 
 # HPAs should exist in prod only (global.autoscaling.enabled) — CURRENT column shows
