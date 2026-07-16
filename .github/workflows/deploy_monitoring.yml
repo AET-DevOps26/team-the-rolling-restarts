@@ -130,12 +130,35 @@ jobs:
       # drop the reused release's values entirely, failing on every `required` field the reused
       # values were supposed to supply (e.g. mongodb.rootUsername). `-f values-prod.yaml` alone
       # does not trigger this — only the chart's own base values.yaml does.
+      #
+      # On a genuinely clean cluster (no release yet), this step can lose the race against
+      # deploy_kubernetes.yml: that workflow only starts once build-and-package finishes (several
+      # minutes), while this one fires immediately on push and can grab the shared `deploy-k8s`
+      # concurrency slot first. Confirmed live (2026-07-16): this step failed fast with "has no
+      # deployed releases" while deploy_kubernetes.yml's own --install run, moments later,
+      # bootstrapped the release fine — including grafana-lgtm, since monitoring.yaml is
+      # unconditional in the chart. That specific error means "the real bootstrap is still coming
+      # via deploy_kubernetes.yml", not "the deploy actually broke", so it's treated as a no-op
+      # here instead of a red X; any other Helm failure still fails the step normally.
       - name: Deploy with Helm
+        id: deploy
         run: |
-          helm upgrade ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+          set +e
+          OUTPUT=$(helm upgrade ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             --reuse-values \
             -f infra/helm/values-prod.yaml -f infra/helm/secrets-values.yaml \
-            --wait --timeout 5m
+            --wait --timeout 5m 2>&1)
+          STATUS=$?
+          echo "$OUTPUT"
+          set -e
+          if [ $STATUS -ne 0 ]; then
+            if echo "$OUTPUT" | grep -q "has no deployed releases"; then
+              echo "::notice::No existing '${{ env.HELM_RELEASE }}' release yet — this is the clean-cluster bootstrap race against deploy_kubernetes.yml's --install (which installs monitoring too). Deferring to that run; nothing to verify here."
+              echo "bootstrapping=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            exit $STATUS
+          fi
 
       - name: Diagnose on failure
         if: failure()
@@ -156,7 +179,10 @@ jobs:
           kubectl logs -n monitoring-rolling-restarts -l app=grafana-lgtm --previous --tail=100 2>/dev/null || true
           echo "::endgroup::"
 
+      # Skipped on the clean-cluster bootstrap race (see "Deploy with Helm" above) — grafana-lgtm
+      # won't exist yet in that case, and deploy_kubernetes.yml's own run verifies it instead.
       - name: Verify deployment
+        if: steps.deploy.outputs.bootstrapping != 'true'
         run: |
           kubectl rollout status deployment/grafana-lgtm -n monitoring-rolling-restarts --timeout=120s
           echo "grafana-lgtm rolled out successfully."
