@@ -121,14 +121,20 @@ fresh VM, and Docker's fallback (auto-creating the missing source as an
 empty directory) broke the container outright. Same class of fix as the
 Ansible `app` role's equivalent (`docs/internal/06-observability.md`).
 
-**Fix merged, not yet live-verified**: gen-ai's `logos` provider
+**Fix merged, partially live-verified (2026-07-16)**: gen-ai's `logos` provider
 (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only and unreachable
 from Azure's public cloud, so this deployment target's LLM calls used to
-fail outright. `infra/docker-compose.azure.yaml` now runs a self-hosted
-Ollama container (`llama3.2:1b`) and `deploy-azure.yml` defaults
-`LLM_PROVIDER=ollama` for this target instead — implemented, but not yet
-exercised against a real Azure deploy. Everything else on this target
-(signup/login, dashboards, mongodb, grafana-lgtm) works.
+fail outright. `infra/docker-compose.azure.yaml` runs a self-hosted
+Ollama container (`llama3.2:1b`) and `deploy-azure.yml` hardcodes
+`LLM_PROVIDER=ollama` for this target instead. First real deploy attempt hit a
+second, unrelated config bug — a stale `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini`
+repo variable pair (set weeks earlier, before the ollama work) was silently
+shadowing the intended default and got fed to `ollama pull` as the model name,
+which obviously doesn't exist. Fixed by giving Azure its own `AZURE_OLLAMA_MODEL`
+repo variable and hardcoding the provider — see `docs/internal/07-gotchas.md`.
+Everything else on this target (signup/login, dashboards, mongodb, grafana-lgtm)
+was confirmed healthy on that same deploy; the ollama/gen-ai fix itself still
+needs a fresh deploy to confirm end-to-end.
 
 ## `destroy-azure.yml` — name: "Destroy Azure resources"
 

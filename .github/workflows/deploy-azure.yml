@@ -210,8 +210,11 @@ jobs:
 
       - name: Generate deployment .env
         env:
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          # Azure always runs self-hosted Ollama (it can't reach Logos — see the .env heredoc
+          # below), so this is its own variable rather than the shared LLM_PROVIDER/LLM_MODEL
+          # (those configure Logos-backed environments like the in-TUM k8s cluster; reusing them
+          # here previously caused Azure to silently break whenever they changed for k8s's sake).
+          AZURE_OLLAMA_MODEL: ${{ vars.AZURE_OLLAMA_MODEL }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           MONGO_DATABASE: ${{ vars.MONGO_DATABASE }}
           MONGO_ROOT_USERNAME: ${{ secrets.MONGO_ROOT_USERNAME }}
@@ -255,12 +258,15 @@ jobs:
           APP_PORT=80
           GEN_AI_PORT=8000
           # The Azure VM is NOT on the TUM network, so Logos is unreachable here. GenAI runs
-          # against the self-hosted Ollama defined in docker-compose.azure.yaml. OLLAMA_MODEL
-          # tells that container which model to pull; keep it in sync with LLM_MODEL. Override
-          # via repo vars only if the VM can reach a different endpoint.
-          LLM_PROVIDER=${LLM_PROVIDER:-ollama}
-          LLM_MODEL=${LLM_MODEL:-llama3.2:1b}
-          OLLAMA_MODEL=${LLM_MODEL:-llama3.2:1b}
+          # against the self-hosted Ollama defined in docker-compose.azure.yaml — hardcoded, not
+          # sourced from the shared LLM_PROVIDER var, since ollama is the only provider Azure can
+          # ever reach. OLLAMA_MODEL tells that container which model to pull; LLM_MODEL is what
+          # gen-ai actually requests from it, so both must match. Change AZURE_OLLAMA_MODEL (repo
+          # variable) to switch models — not the shared LLM_MODEL, which is for Logos-backed
+          # environments (e.g. the in-TUM k8s cluster) and uses incompatible model names.
+          LLM_PROVIDER=ollama
+          LLM_MODEL=${AZURE_OLLAMA_MODEL:-llama3.2:1b}
+          OLLAMA_MODEL=${AZURE_OLLAMA_MODEL:-llama3.2:1b}
           LLM_API_KEY=${LLM_API_KEY}
           LOG_LEVEL=INFO
           MONGO_DATABASE=${MONGO_DATABASE:-mydatabase}

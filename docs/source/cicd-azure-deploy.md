@@ -137,7 +137,7 @@ They are sensitive and are masked in logs.
 | Secret | Description |
 | --- | --- |
 | `AZURE_CREDENTIALS` | Service-principal JSON (`clientId`/`clientSecret`/`subscriptionId`/`tenantId`) used by `azure/login`. |
-| `LLM_API_KEY` | _Optional._ API key for a cloud LLM provider. **Not needed for the default Azure setup** — the VM is off the TUM network so Logos is unreachable, and GenAI runs against a self-hosted Ollama on the VM instead (see below). Only set this if you point `LLM_PROVIDER` at a cloud endpoint the VM can actually reach. |
+| `LLM_API_KEY` | _Optional, currently unused by this target._ GenAI on Azure always runs against the self-hosted Ollama (see below), which needs no API key. Only relevant if `LLM_PROVIDER=ollama` is manually changed to `logos` in `deploy-azure.yml` for a VM that can actually reach `https://logos.aet.cit.tum.de/v1`. |
 | `MONGO_ROOT_USERNAME` | MongoDB root username. |
 | `MONGO_ROOT_PASSWORD` | MongoDB root password. |
 | `JWT_RSA_PUBLIC_KEY` | RSA public key (PEM) the user-service auth server publishes via JWKS. Stored as a single-line PEM (newlines stripped). If unset, user-service generates an ephemeral key that is lost on every restart, invalidating all issued tokens. |
@@ -162,8 +162,7 @@ They are non-sensitive configuration.
 | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). Stable across destroy/recreate. |
 | `DEPLOY_DIR` | `/opt/rolling-restarts` | Directory on the VM the stack is deployed to. |
 | `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group of the VM (deploy looks up the VM here; also used by the teardown workflow). |
-| `LLM_PROVIDER` | `ollama` | GenAI provider. Defaults to `ollama` on the VM (Logos is unreachable off the TUM network). |
-| `LLM_MODEL` | `llama3.2:1b` | GenAI model. For `ollama` this is the Ollama model tag pulled on the VM; keep it small to fit the VM. |
+| `AZURE_OLLAMA_MODEL` | `llama3.2:1b` | Ollama model tag pulled and served on the VM; keep it small to fit the VM. This is the only LLM-related variable for this target — `LLM_PROVIDER` is hardcoded to `ollama` in `deploy-azure.yml` (Logos is unreachable off the TUM network, so there's no second valid choice), and the shared `LLM_PROVIDER`/`LLM_MODEL` variables (used by Logos-backed targets like the in-TUM k8s cluster) are intentionally _not_ read here — reusing them previously broke this deployment silently, see `docs/internal/07-gotchas.md`. |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB database name. |
 | `GRAFANA_ROOT_URL` | `http://<vm-public-ip>/monitoring/` | _Optional._ Externally reachable URL Grafana uses for absolute links it generates itself (e.g. the "View alert rule" link in alert emails). Falls back to `http://localhost/monitoring/` if unset — still functional locally, but alert email links are dead for recipients. |
 
@@ -174,17 +173,22 @@ from it. The Azure override (`infra/docker-compose.azure.yaml`) therefore runs a
 local **Ollama** container as part of the stack:
 
 - It starts unconditionally (the base compose gates `ollama` behind the
-  `local-llm` profile; the Azure override clears that), pulls `OLLAMA_MODEL`
-  (default `llama3.2:1b`) on first boot into a persistent volume, and only
-  reports healthy once the model is present.
-- `gen-ai` waits for Ollama to be healthy and is configured with
-  `LLM_PROVIDER=ollama` / `LLM_MODEL=<the same tag>`.
+  `local-llm` profile; the Azure override clears that), pulls the model named
+  by the `AZURE_OLLAMA_MODEL` repo variable (default `llama3.2:1b`) on first
+  boot into a persistent volume, and only reports healthy once the model is
+  present.
+- `gen-ai` waits for Ollama to be healthy. `deploy-azure.yml` hardcodes
+  `LLM_PROVIDER=ollama` and sets `LLM_MODEL`/`OLLAMA_MODEL` to the same
+  `AZURE_OLLAMA_MODEL` value, so gen-ai always requests the exact model Ollama
+  pulled.
 
 **Resource caveat:** an LLM is memory- and CPU-hungry. On a small VM
 (e.g. `Standard_B2ps_v2`) stick to a small model like `llama3.2:1b`; larger
-models may OOM or make the whole stack sluggish. To use a cloud provider instead
-(only if the VM can reach it), set the `LLM_PROVIDER`/`LLM_MODEL` variables and
-`LLM_API_KEY` secret accordingly.
+models may OOM or make the whole stack sluggish. To point this target at a
+cloud provider instead (only if the VM can reach it), edit `deploy-azure.yml`
+directly — `LLM_PROVIDER` is hardcoded, not variable-driven, specifically so a
+config change elsewhere can't silently break it again (see
+`docs/internal/07-gotchas.md`).
 
 ## Security notes
 

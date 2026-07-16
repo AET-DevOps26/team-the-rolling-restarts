@@ -41,8 +41,12 @@ confirmed working against the real cluster this session. Two things keep this
 short of a clean Excellent: (1) the Azure VM deployment target's gen-ai LLM
 calls have a code-level fix merged (self-hosted Ollama in
 `infra/docker-compose.azure.yaml`, since `logos` is TUM-network-only and
-unreachable from Azure) but it hasn't been live-verified against a real Azure
-deploy yet — re-verify before treating this as closed; (2) the article
+unreachable from Azure). A first real deploy attempt (2026-07-16) got
+everything else on that target healthy but hit a second config bug — a stale
+repo variable pair silently overriding the ollama default and breaking the
+model pull, fixed by giving Azure its own `AZURE_OLLAMA_MODEL` variable — so
+it still hasn't been live-verified end-to-end; re-verify before treating this
+as closed; (2) the article
 search feature (`?q=` on the dashboard) is fully implemented but fails live
 with a MongoDB `IndexNotFound` error (`auto-index-creation` defaults to
 `false`, no text index is ever actually created) — confirmed via a live 500

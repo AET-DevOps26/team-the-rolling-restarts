@@ -28,14 +28,38 @@ See [03-gen-ai-service.md](03-gen-ai-service.md).
 
 `app/llm/provider.py`'s `get_chat_model()` raises `ValueError(f"Unknown LLM provider: ...")` for
 any other `LLM_PROVIDER` value — there is no generic "openai" provider implemented, despite that
-being a natural-sounding value to configure. Bit twice: a GH Actions variable was set to
-`LLM_PROVIDER=openai` (matching `Makefile`'s own `azure-cicd-help` suggested command, itself
-wrong) and broke every LLM endpoint on the Azure deployment for weeks before being caught live via
-gen-ai's own logs (`ValueError: Unknown LLM provider: 'openai'`). Also: `logos`
-(`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** — it works from the Kubernetes cluster
-(same network) but is unreachable from Azure's public cloud VM, so "just set it to logos
-everywhere" isn't a fix for Azure either. See `docs/internal/06-observability.md`'s incident log
-and `docs/internal/05-ci-cd-workflows.md` for the current (still-unresolved on Azure) state.
+being a natural-sounding value to configure. Bit **twice**, both times via the same mechanism —
+a stale GH Actions repo variable silently shadowing a correct default:
+
+1. A GH Actions variable was set to `LLM_PROVIDER=openai` (matching `Makefile`'s own
+   `azure-cicd-help` suggested command, itself wrong at the time) and broke every LLM endpoint on
+   the Azure deployment for weeks before being caught live via gen-ai's own logs
+   (`ValueError: Unknown LLM provider: 'openai'`).
+2. Commits `3d64455`/`6d3ab7f` (2026-07-07) fixed the *code's* fallback (`deploy-azure.yml`'s
+   `${LLM_PROVIDER:-ollama}`) and added the self-hosted Ollama container, but never touched the
+   repo variables `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini` themselves (set 2026-06-22,
+   predating the fix). Since `${VAR:-default}` only falls back when `VAR` is unset, those stale
+   values kept silently overriding the corrected default on every Azure deploy — `OLLAMA_MODEL`
+   ended up `gpt-4o-mini` (not an Ollama model at all), so `ollama pull` failed instantly with a
+   misleading `pull model manifest: file does not exist` (looks like a network error; it isn't
+   — verify with `curl -4` vs `curl -6` to the registry before chasing IPv6 theories, both
+   succeed/fail the same way here since the real issue is the model name).
+
+**Fixed 2026-07-16**: `deploy-azure.yml` now hardcodes `LLM_PROVIDER=ollama` for Azure instead of
+reading any repo variable (there's no second valid choice — Azure can never reach Logos, so a
+variable here is a footgun, not a convenience), and the model is sourced from its own dedicated
+`AZURE_OLLAMA_MODEL` repo variable (default `llama3.2:1b`) instead of the shared `LLM_MODEL` —
+changing `LLM_MODEL`/`LLM_PROVIDER` for Logos-backed environments (e.g. k8s) can no longer affect
+Azure. The old `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini` repo variables were left in place
+(nothing reads them anymore) rather than deleted, in case a future environment wants them.
+
+Also: `logos` (`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** — it works from the
+Kubernetes cluster (same network) but is unreachable from Azure's public cloud VM, so "just set it
+to logos everywhere" isn't a fix for Azure either. See `docs/internal/06-observability.md`'s
+incident log and `docs/internal/05-ci-cd-workflows.md`. **Not yet live-verified**: the config fix
+above hasn't been confirmed against a full fresh Azure deploy (mongo/user-service/etc. were
+verified healthy first, but the ollama fix landed after — re-check `ollama`/`gen-ai` container
+health on the next deploy before assuming this is fully resolved).
 
 ```sh
 grep -n "if settings.llm_provider" services/gen-ai/app/llm/provider.py   # only ollama/logos branch
