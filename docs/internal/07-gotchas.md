@@ -478,9 +478,16 @@ GitHub variable is gone, so this can't go stale again. A separate `NEXT_PUBLIC_A
 variable was also found stale (an old VM IP) during this investigation but turned out to be
 **dead/unused config** — the actual consumed var is `API_BASE_URL` (no `NEXT_PUBLIC_` prefix,
 read at container runtime, hardcoded per-target: `http://reverse-proxy` for Compose/Azure,
-`http://api-gateway:8080` for K8s — see the gotcha above on `NEXT_PUBLIC_` vars). Not fixed:
-`NEXT_PUBLIC_API_BASE_URL` should probably just be deleted (`gh variable delete`), it isn't
-referenced anywhere.
+`http://api-gateway:8080` for K8s — see the gotcha above on `NEXT_PUBLIC_` vars). Deleted
+(`gh variable delete NEXT_PUBLIC_API_BASE_URL`), along with 6 other confirmed-orphaned repo
+variables/secrets found the same way (`POSTGRES_*` from before the Mongo migration,
+`AZURE_VM_HOST`/`SSH_PRIVATE_KEY`/`USER` from before `az vm run-command` replaced SSH-based
+deploys) — backed up locally first where values were retrievable (secrets are write-only, so
+only their existence/dates could be recorded, not their values).
+
+**Confirmed live end-to-end (2026-07-16)**: a real "Deploy to Azure" GitHub Actions run picked up
+the new "Look up VM" step correctly, and the resulting alert-email links now resolve to the VM's
+actual public IP instead of `localhost`.
 
 **Kubernetes was never affected** by the same bug: `GF_SERVER_ROOT_URL` there is built from
 `.Values.host` — a fixed DNS hostname committed in `infra/helm/values.yaml`/`values-dev.yaml`, not
