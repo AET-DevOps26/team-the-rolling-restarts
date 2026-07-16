@@ -35,22 +35,22 @@ actor "End User" as EndUser
 
 ' ── Presentation ─────────────────────────────────────
 rectangle "Presentation" #FFF8E1 {
-  [Web Client\n(Next.js, React 19)] as WebClient
+  [web-client\n(Next.js 16, React 19)] as WebClient
 }
 
-' ── Backend ──────────────────────────────────────────
+' ── Backend (Spring Boot 4, Java 25; gen-ai is Python) ─
 rectangle "Backend" #E3F2FD {
-  [API Gateway\n(Spring Cloud Gateway)]     as ApiGateway
-  [User Service\n(Spring Boot,\nOAuth2 Authorization Server)] as UserService
-  [Content Service\n(Spring Boot)]          as ContentService
-  [News Ingestion Scheduler\n(inside Content Service)] as Scheduler
-  [GenAI Service\n(Python, FastAPI + LangChain)] as GenAiService
+  [api-gateway\n(Spring Cloud Gateway MVC)\nStripPrefix=2 routing] as ApiGateway
+  [user-service\n(OAuth2 Authorization Server)\nAuthController, UserController] as UserService
+  [content-service\n(Spring Data MongoDB)\nArticleController, SourceController, TopicController] as ContentService
+  [RssFetcherService\n(@Scheduled, inside content-service)] as Scheduler
+  [gen-ai\n(FastAPI + LangChain)\n/summarize /explain /sentiment /qa] as GenAiService
 }
 
 ' ── Data ─────────────────────────────────────────────
 rectangle "Data" #E8F5E9 {
-  database "MongoDB\n(users database)"   as UsersDb
-  database "MongoDB\n(content database)" as ContentDb
+  database "MongoDB (mongo:8)\nusers db: users" as UsersDb
+  database "MongoDB (mongo:8)\ncontent db: articles,\nsources, topics" as ContentDb
 }
 
 ' ── Third-party integrations ─────────────────────────
@@ -59,47 +59,48 @@ rectangle "Data Sources" #FBE9E7 {
 }
 
 rectangle "AI Provider" #F3E5F5 {
-  [LLM Provider\n(Logos cloud / local Ollama)] as AiProvider
+  [LLM Provider\n(Logos cloud / local Ollama,\nvia LLM_PROVIDER)] as AiProvider
 }
 
 rectangle "Observability" #FFF3E0 {
-  [grafana-lgtm\n(Prometheus-compatible Mimir,\nGrafana, Tempo, Loki)] as Monitoring
+  [grafana-lgtm\n(Grafana + Prometheus-compatible\nMimir + Tempo + Loki)] as Monitoring
 }
 
 ' ── Connections ──────────────────────────────────────
 EndUser    --> WebClient  : <<HTTPS>>
-WebClient  --> ApiGateway : REST API\n<<JWT Bearer, except\npublic routes>>
+WebClient  --> ApiGateway : REST\n<<JWT Bearer, except\npublic routes>>
 
-ApiGateway --> UserService    : route /api/users/**\n<<REST, JWT validated>>
-ApiGateway --> ContentService : route /api/content/**\n<<REST, JWT validated>>
-ApiGateway --> GenAiService   : route /api/ai/**\n<<REST, public — no JWT>>
+ApiGateway --> UserService    : /api/users/**\n<<StripPrefix=2, JWT validated>>
+ApiGateway --> ContentService : /api/content/**\n<<StripPrefix=2, JWT validated>>
+ApiGateway --> GenAiService   : /api/ai/**\n<<StripPrefix=2, public — no JWT>>
 
-UserService --> UsersDb : read / write
-ContentService --> ContentDb : read / write
+UserService --> UsersDb : Spring Data MongoDB
+ContentService --> ContentDb : Spring Data MongoDB
 
 ' Service-to-service call for subscribe/unsubscribe, using a dedicated
-' client_credentials machine token (scope source.write) instead of forwarding
-' the end user's JWT.
-UserService --> ContentService : subscribe/unsubscribe source\n<<REST, client_credentials,\nscope source.write>>
+' client_credentials machine token (scope source.write), not the end user's JWT.
+UserService --> ContentService : POST /sources/{id}/(un)subscribe\n<<client_credentials,\nscope source.write>>
 
-GenAiService --> AiProvider : summarise / explain /\nanalyse sentiment / answer\n<<HTTPS>>
-GenAiService ..> ContentService : fetch article text\nwhen articleId given\n<<REST>>
+GenAiService --> AiProvider : chat completions\n<<HTTPS>>
+GenAiService ..> ContentService : GET article text when\narticleId supplied\n<<REST>>
 
 ' Ingestion is async / scheduled – not on the user request path
-Scheduler .down.> NewsFeeds  : poll active sources\n<<async>>
-Scheduler .down.> ContentDb  : store new articles,\ndedupe by externalUrl\n<<async>>
+Scheduler .down.> NewsFeeds  : poll Source.rssUrl\nwhere active\n<<async>>
+Scheduler .down.> ContentDb  : upsert Article,\ndedupe by externalUrl\n<<async>>
 
-WebClient .down.> Monitoring : traces (OTel)\n<<async>>
-ApiGateway .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
-UserService .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
-ContentService .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
-GenAiService .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
+WebClient .down.> Monitoring : traces (@vercel/otel)\n<<OTLP>>
+ApiGateway .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+UserService .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+ContentService .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+GenAiService .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
 
 note bottom of Monitoring
-  Not present in the initial component diagram.
-  Runs in its own namespace in Kubernetes, its
-  own network in Docker Compose.
+  Not in the initial component diagram. Runs in its own
+  namespace (monitoring-rolling-restarts) in Kubernetes,
+  its own network in Docker Compose. web-client exports
+  traces only (no scrapable metrics endpoint) — its RED
+  metrics come from Tempo's metrics-generator.
 end note
 
-note "Not implemented (present in the initial\ncomponent diagram, not in the current build):\nNotification Provider (push/email) — the\nsettings UI has a disclaimed, non-persisted\nmock only." as N2
+note "Not implemented (in the initial component diagram, not in\nthe current build): a Notification Provider (push/email) —\nthe settings UI has a disclaimed, non-persisted mock only." as N2
 @enduml

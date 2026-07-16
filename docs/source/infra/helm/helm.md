@@ -133,8 +133,8 @@ read at server runtime via `API_BASE_URL` (`infra/helm/values.yaml`'s `webClient
 argument. `web-client/src/lib/api/client.ts` (the only place that reads it) is `"server-only"`
 and deliberately doesn't use the `NEXT_PUBLIC_` prefix, since that would get inlined into the
 compiled bundle at build time and couldn't be overridden per deployment target afterward — which
-is exactly the bug this convention exists to avoid (see `docs/internal/`'s observability/CI notes
-for the incident where a stale build-time value broke web-client's API calls in production).
+is exactly the bug this convention exists to avoid (a stale build-time value would otherwise break
+web-client's API calls in production).
 
 ## Notes
 

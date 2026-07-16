@@ -42,8 +42,7 @@ web-client/
 ## Routes
 
 Backend-integrated — real auth and API calls, not placeholders (see
-[Backend integration](#backend-integration) below and
-[docs/internal/02-web-client.md](../../internal/02-web-client.md)).
+[Backend integration](#backend-integration) below).
 
 | Path               | Purpose                                                                                 |
 |--------------------|-----------------------------------------------------------------------------------------|

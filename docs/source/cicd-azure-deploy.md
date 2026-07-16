@@ -164,7 +164,7 @@ They are non-sensitive configuration.
 | `ACR_LOGIN_SERVER` | `myregistry.azurecr.io` | ACR login server (`terraform output acr_login_server`). Stable across destroy/recreate. |
 | `DEPLOY_DIR` | `/opt/rolling-restarts` | Directory on the VM the stack is deployed to. |
 | `AZURE_RESOURCE_GROUP` | `rg-rolling-restarts-dev` | Resource group of the VM (deploy looks up the VM here; also used by the teardown workflow). |
-| `AZURE_OLLAMA_MODEL` | `llama3.2:1b` | Ollama model tag pulled and served on the VM; keep it small to fit the VM. This is the only LLM-related variable for this target — `LLM_PROVIDER` is hardcoded to `ollama` in `deploy-azure.yml` (Logos is unreachable off the TUM network, so there's no second valid choice), and the shared `LLM_PROVIDER`/`LLM_MODEL` variables (used by Logos-backed targets like the in-TUM k8s cluster) are intentionally _not_ read here — reusing them previously broke this deployment silently, see `docs/internal/07-gotchas.md`. |
+| `AZURE_OLLAMA_MODEL` | `llama3.2:1b` | Ollama model tag pulled and served on the VM; keep it small to fit the VM. This is the only LLM-related variable for this target — `LLM_PROVIDER` is hardcoded to `ollama` in `deploy-azure.yml` (Logos is unreachable off the TUM network, so there's no second valid choice), and the shared `LLM_PROVIDER`/`LLM_MODEL` variables (used by Logos-backed targets like the in-TUM k8s cluster) are intentionally _not_ read here — reusing them previously broke this deployment silently. |
 | `MONGO_DATABASE` | `mydatabase` | MongoDB database name. |
 
 > **`GRAFANA_ROOT_URL` is not a variable here** — the externally reachable URL Grafana uses for
@@ -172,7 +172,7 @@ They are non-sensitive configuration.
 > up fresh on every run from the VM's current public IP (the "Look up VM" step in
 > `deploy-azure.yml`), not stored as a GitHub variable. It used to be, and silently went stale
 > whenever the VM was recreated (a new "Static" IP is allocated each time the underlying resource
-> is destroyed and recreated) — see `docs/internal/07-gotchas.md`.
+> is destroyed and recreated).
 
 ## GenAI on the Azure VM (self-hosted Ollama)
 
@@ -195,8 +195,7 @@ local **Ollama** container as part of the stack:
 models may OOM or make the whole stack sluggish. To point this target at a
 cloud provider instead (only if the VM can reach it), edit `deploy-azure.yml`
 directly — `LLM_PROVIDER` is hardcoded, not variable-driven, specifically so a
-config change elsewhere can't silently break it again (see
-`docs/internal/07-gotchas.md`).
+config change elsewhere can't silently break it again.
 
 ## Security notes
 

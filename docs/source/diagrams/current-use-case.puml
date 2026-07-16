@@ -46,42 +46,47 @@ Visitor <|-- User
 
 rectangle "News Aggregator System" {
 
-  ' --- Account Management ---
-  usecase "Register Account" as UC11a
-  usecase "Log In"           as UC11b
+  ' Use case labels carry the real gateway-facing endpoint (all routes go through
+  ' api-gateway, which StripPrefix=2 forwards to the backing service).
 
-  ' --- Core Content Interaction ---
-  usecase "Browse Personalized Feed"    as UC1
-  usecase "View Article"                as UC12
-  usecase "Search & Filter Articles"    as UC5
+  ' --- Account Management (AuthController) ---
+  usecase "Register Account\nPOST /api/users/auth/register" as UC11a
+  usecase "Log In\nPOST /api/users/auth/login"              as UC11b
 
-  ' --- Article Enhancements (GenAI, all real endpoints) ---
-  usecase "View AI Summary"           as UC2
-  usecase "Get Concept Explanation"   as UC3
-  usecase "View Sentiment & Bias"     as UC6
-  usecase "Ask AI a Question (Q&A)"   as UC13
+  ' --- Core Content Interaction (ArticleController) ---
+  usecase "Browse Personalized Feed\nGET /api/content/articles" as UC1
+  usecase "View Article\nGET /api/content/articles/{id}"        as UC12
+  usecase "Search & Filter Articles\nGET /api/content/articles?q=&sourceId=&topicId=" as UC5
 
-  ' --- User Library ---
-  usecase "Save/Bookmark Article"  as UC7
-  usecase "View Saved Articles"    as UC7b
+  ' --- Article Enhancements (gen-ai, all real endpoints) ---
+  usecase "View AI Summary\nPOST /api/ai/summarize"           as UC2
+  usecase "Get Concept Explanation\nPOST /api/ai/explain"     as UC3
+  usecase "View Sentiment & Bias\nPOST /api/ai/sentiment"     as UC6
+  usecase "Ask AI a Question (Q&A)\nPOST /api/ai/qa"          as UC13
 
-  ' --- Preferences ---
-  usecase "Manage Topic Preferences"      as UC14
-  usecase "Subscribe/Unsubscribe Source"  as UC15
+  ' --- User Library (UserController + ArticleController) ---
+  usecase "Save/Unsave Article\nPOST|DELETE /api/users/users/me/saved-articles/{articleId}" as UC7
+  usecase "View Saved Articles\nPOST /api/content/articles/saved"                            as UC7b
+
+  ' --- Preferences (UserController) ---
+  usecase "Manage Topic Preferences\nPUT /api/users/users/me/settings"                    as UC14
+  usecase "Subscribe/Unsubscribe Source\nPOST|DELETE /api/users/users/me/subscriptions/{sourceId}" as UC15
 
 }
 
 note right of UC15
-  Sources are shared: subscriberCount is
-  tracked server-side and a source is
-  auto-removed once its last subscriber
-  leaves.
+  Sources are shared: Source.subscriberCount is
+  tracked server-side; user-service calls
+  content-service's /sources/{id}/subscribe with a
+  client_credentials token (scope source.write), and
+  a source is auto-removed once subscriberCount hits 0.
 end note
 
 note bottom of UC6
-  "Bias" is a categorical label
-  (left | center | right | unclear),
-  not a numeric bias score.
+  SentimentResponse.bias is a categorical label
+  (left | center | right | unclear), not a numeric
+  score; the numeric SentimentResponse.score is
+  sentiment polarity, not bias.
 end note
 
 ' --- Actor Connections ---
@@ -105,5 +110,5 @@ UC12 <.. UC6  : <<extend>>
 UC12 <.. UC13 : <<extend>>
 UC12 <.. UC7  : <<extend>>
 
-note "Scoped out relative to the initial plan\n(no backend, or removed): Recommendations,\nTrending Topics (client-side re-sort of the\ncurrent page only, not a real ranking),\nNotifications (frontend-only mock, disclaimed\nin the UI), Auto-tag & Categorize (topicId\nexists but nothing ever sets it), Bookmark\nFolders (flat list only)." as N1
+note "Scoped out relative to the initial plan (no backend, or removed):\nRecommendations, Trending Topics (the web-client FeedSort\n\"trending\" option only re-sorts the current page by\nArticle.readingMinutes client-side — no ranking endpoint),\nNotifications (notifications-section.tsx is a disclaimed,\nnon-persisted mock), Auto-tag & Categorize (Article.topicId\nexists and is filterable but RssFetcherService never sets it),\nBookmark Folders (UserSettings.savedArticleIds is a flat list)." as N1
 @enduml

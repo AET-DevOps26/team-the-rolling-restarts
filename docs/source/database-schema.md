@@ -120,8 +120,7 @@ against the combined `headline`+`snippet` text index above, further filtered by 
 `spring.data.mongodb.auto-index-creation=true` so this text index (and the other `@Indexed`
 fields on this page) actually get created on startup — Spring Data MongoDB disables index
 auto-creation by default, and without this the text search fails outright with
-`MongoCommandException: text index required for $text query (IndexNotFound)`. See
-[docs/internal/07-gotchas.md](../internal/07-gotchas.md) for the incident this was found from.
+`MongoCommandException: text index required for $text query (IndexNotFound)`.
 
 ## Cross-collection relationship summary
 
