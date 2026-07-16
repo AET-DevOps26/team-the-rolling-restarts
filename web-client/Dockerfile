@@ -29,6 +29,10 @@ COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json /
 COPY --from=builder --chown=node:node /app/.next ./.next
 COPY --from=builder --chown=node:node /app/public ./public
 COPY --from=production-deps --chown=node:node /app/node_modules ./node_modules
-USER node
+# USER is the numeric UID (node:22-alpine's built-in "node" user, confirmed uid=1000), not the
+# name: Kubernetes' runAsNonRoot admission check can't resolve a named user against the image's
+# /etc/passwd (it deliberately doesn't inspect image contents) and refuses to start the
+# container with "cannot verify user is non-root" — confirmed live.
+USER 1000
 EXPOSE 3000
 CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]
