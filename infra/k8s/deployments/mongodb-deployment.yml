@@ -34,10 +34,14 @@ spec:
           # root at container start to chown /data/db to the mongodb user before dropping
           # privilege itself; untested whether forcing non-root + fsGroup here would work, and
           # this is the one data-bearing workload, so left alone rather than risk breaking it.
+          # capabilities.drop: ["ALL"] alone breaks that same chown-then-drop-to-mongodb-user
+          # sequence even as root — see the matching comment in
+          # infra/helm/templates/databases.yaml for the confirmed-live repro and minimal fix.
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+              add: ["CHOWN", "SETUID", "SETGID"]
             seccompProfile:
               type: RuntimeDefault
           ports:

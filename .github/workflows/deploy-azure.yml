@@ -338,8 +338,8 @@ jobs:
           DEPLOY_DIR="${DEPLOY_DIR}"
           ACR_LOGIN_SERVER="${ACR_LOGIN_SERVER}"
           ACR_TOKEN="${ACR_TOKEN}"
-          DEMO_USERNAME="${DEMO_USERNAME:-demo}"
-          DEMO_PASSWORD="${DEMO_PASSWORD:-Demo12345!}"
+          DEMO_USERNAME=$(printf '%q' "${DEMO_USERNAME:-demo}")
+          DEMO_PASSWORD=$(printf '%q' "${DEMO_PASSWORD:-Demo12345!}")
           COMPOSE_B64="${COMPOSE_B64}"
           OVERRIDE_B64="${OVERRIDE_B64}"
           NGINX_B64="${NGINX_B64}"

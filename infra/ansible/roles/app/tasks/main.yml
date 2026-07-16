@@ -166,6 +166,13 @@
       name: Demo User
     status_code: [201, 409]
     timeout: 30
+  # The preceding health check only confirms nginx/the reverse proxy is up, which happens
+  # well before user-service finishes starting — retry with the same budget so this doesn't
+  # fail on a 502/connection-refused during that gap.
+  register: demo_user_seed
+  retries: "{{ health_check_retries }}"
+  delay: "{{ health_check_delay }}"
+  until: demo_user_seed is success
   tags: [app, deploy, verify]
 
 - name: Log in as demo user to seed their subscriptions

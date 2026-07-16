@@ -123,7 +123,7 @@ preflight: generate spring-build helm-lint terraform-validate
 compose-up:
 	@test -f $(COMPOSE_ENV) || { echo "Error: $(COMPOSE_ENV) not found. Run: cp infra/.env.example infra/.env"; exit 1; }
 	docker compose --env-file $(COMPOSE_ENV) $(COMPOSE_FILES) up --build -d
-	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	@DEMO_USERNAME="$(DEMO_USERNAME)" DEMO_PASSWORD="$(DEMO_PASSWORD)" \
 	  infra/scripts/seed-demo-data.sh "http://localhost:$(or $(APP_PORT),8080)"
 
 compose-down:
@@ -155,7 +155,7 @@ smoke-test:
 	@infra/scripts/smoke-test.sh "http://localhost:$(or $(APP_PORT),8080)"
 
 seed-demo:
-	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	@DEMO_USERNAME="$(DEMO_USERNAME)" DEMO_PASSWORD="$(DEMO_PASSWORD)" \
 	  infra/scripts/seed-demo-data.sh "http://localhost:$(or $(APP_PORT),8080)"
 
 security-scan:
@@ -182,7 +182,7 @@ seed-demo-vm:
 	@if [ -z "$(VM_IP)" ]; then echo "Error: could not determine VM IP. Run make terraform-apply first."; exit 1; fi
 	@echo "Targeting VM at $(VM_IP)"
 	@echo ""
-	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	@DEMO_USERNAME="$(DEMO_USERNAME)" DEMO_PASSWORD="$(DEMO_PASSWORD)" \
 	  infra/scripts/seed-demo-data.sh "http://$(VM_IP)$(if $(filter-out 80,$(or $(APP_PORT),8080)),:$(APP_PORT),)"
 
 K8S_BASE_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
@@ -201,7 +201,7 @@ smoke-test-k8s:
 seed-demo-k8s:
 	@echo "Targeting K8s ingress at $(K8S_HOST)"
 	@echo ""
-	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	@DEMO_USERNAME="$(DEMO_USERNAME)" DEMO_PASSWORD="$(DEMO_PASSWORD)" \
 	  infra/scripts/seed-demo-data.sh --insecure "https://$(K8S_HOST)"
 
 # --- Images ---
