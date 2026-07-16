@@ -458,3 +458,34 @@ against the live release — and because the live release's reused values were l
 `monitoring.*`) are missing from `--reuse-values` and must be supplied explicitly (not via
 `-f values.yaml`, see the gotcha above — that resets every service's image tag to `global.tag:
 latest`, discarding the live SHA-pinned images).
+
+## `GRAFANA_ROOT_URL` used to be a repo variable on Azure — it silently went stale, now it's computed
+
+The Azure VM's public IP is `"Static"` (`azurerm_public_ip` in `infra/terraform/azure-vm/main.tf`)
+— but that only means the IP doesn't change *while that specific IP resource exists*. A full
+VM/resource-group recreation (destroy + apply — happened 3 times in one session, e.g. via
+`azure-nuke` or a manual `terraform destroy`) allocates a **brand new** static IP. `deploy-azure.yml`
+used to read `GRAFANA_ROOT_URL` from a GitHub repo variable that had to be manually kept in sync
+with the current IP — nobody did, so it silently fell back to `docker-compose.yaml`'s
+`http://localhost/monitoring/` default. Confirmed live: `GF_SERVER_ROOT_URL` on a real Azure
+deploy came back as `http://localhost/monitoring/` via a custom Grafana notification template's
+`{{ .ExternalURL }}` — every alert-email link (View alert rule, Silence, Dashboard, Panel) was
+dead for anyone not literally on the VM.
+
+**Fixed**: `deploy-azure.yml`'s "Look up VM" step queries the VM's current public IP via
+`az vm list-ip-addresses` on every run and builds `GRAFANA_ROOT_URL` from that directly — the
+GitHub variable is gone, so this can't go stale again. A separate `NEXT_PUBLIC_API_BASE_URL` repo
+variable was also found stale (an old VM IP) during this investigation but turned out to be
+**dead/unused config** — the actual consumed var is `API_BASE_URL` (no `NEXT_PUBLIC_` prefix,
+read at container runtime, hardcoded per-target: `http://reverse-proxy` for Compose/Azure,
+`http://api-gateway:8080` for K8s — see the gotcha above on `NEXT_PUBLIC_` vars). Not fixed:
+`NEXT_PUBLIC_API_BASE_URL` should probably just be deleted (`gh variable delete`), it isn't
+referenced anywhere.
+
+**Kubernetes was never affected** by the same bug: `GF_SERVER_ROOT_URL` there is built from
+`.Values.host` — a fixed DNS hostname committed in `infra/helm/values.yaml`/`values-dev.yaml`, not
+an ephemeral IP or a separately-set variable that could be forgotten. Confirmed live:
+`kubectl exec` into the running `grafana-lgtm` pod shows
+`GF_SERVER_ROOT_URL=https://dev.rolling-restarts.stud.k8s.aet.cit.tum.de/monitoring/`, and that
+URL is genuinely reachable (`curl -k` returns `200`; a plain `curl` TLS failure was a local
+CA-trust-store gap, not a real problem).

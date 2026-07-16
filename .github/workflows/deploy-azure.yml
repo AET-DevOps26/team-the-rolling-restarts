@@ -212,6 +212,23 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
+      # The VM's public IP is looked up fresh every run rather than stored as a GitHub variable
+      # — the "Static" Azure public IP only stays constant while that specific IP *resource*
+      # exists; a full VM/resource-group recreation allocates a new one, which silently went
+      # stale in a GRAFANA_ROOT_URL repo variable before (dead links in alert emails).
+      - name: Look up VM
+        id: vm
+        env:
+          RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+        run: |
+          set -euo pipefail
+          VM_NAME="$(az vm list -g "$RG" --query "[0].name" -o tsv)"
+          VM_IP="$(az vm list-ip-addresses -g "$RG" -n "$VM_NAME" \
+            --query "[0].virtualMachine.network.publicIpAddresses[0].ipAddress" -o tsv)"
+          test -n "$VM_NAME" && test -n "$VM_IP"
+          echo "name=$VM_NAME" >> "$GITHUB_OUTPUT"
+          echo "ip=$VM_IP" >> "$GITHUB_OUTPUT"
+
       - name: Generate deployment .env
         env:
           # Azure always runs self-hosted Ollama (it can't reach Logos — see the .env heredoc
@@ -230,10 +247,9 @@ jobs:
           GRAFANA_SMTP_USER: ${{ secrets.GRAFANA_SMTP_USER }}
           GRAFANA_SMTP_PASSWORD: ${{ secrets.GRAFANA_SMTP_PASSWORD }}
           GRAFANA_ALERT_EMAILS: ${{ secrets.GRAFANA_ALERT_EMAILS }}
-          # Public URL of the VM, e.g. http://<vm-public-ip>/monitoring/. Optional — the compose
-          # file falls back to http://localhost/monitoring/ if unset, which still works locally
-          # but produces dead links in alert emails sent from this deployment target.
-          GRAFANA_ROOT_URL: ${{ vars.GRAFANA_ROOT_URL }}
+          # Computed from the "Look up VM" step above, not a repo variable — see that step's
+          # comment for why (stale IPs after VM recreation).
+          GRAFANA_ROOT_URL: http://${{ steps.vm.outputs.ip }}/monitoring/
         run: |
           umask 077
           if [ -z "${SERVICE_CLIENT_SECRET:-}" ]; then
@@ -406,9 +422,9 @@ jobs:
       - name: Deploy via az vm run-command
         env:
           RG: ${{ vars.AZURE_RESOURCE_GROUP }}
+          VM_NAME: ${{ steps.vm.outputs.name }}
         run: |
           set -euo pipefail
-          VM_NAME="$(az vm list -g "$RG" --query "[0].name" -o tsv)"
           echo "Deploying to VM: $VM_NAME (resource group: $RG)"
           az vm run-command invoke \
             --resource-group "$RG" \
