@@ -1,4 +1,4 @@
-FROM gradle:jdk-25-and-25 AS deps
+FROM gradle:jdk-25-and-25@sha256:57c4bd434ea3b77a41796375c4f95a74b3ad6693a6f33595fd6129a74a3d7044 AS deps
 
 WORKDIR /app
 

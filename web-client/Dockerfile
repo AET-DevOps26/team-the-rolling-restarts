@@ -1,4 +1,4 @@
-FROM node:22-alpine AS base
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -18,7 +18,7 @@ FROM base AS production-deps
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:22-alpine AS production
+FROM node:22-alpine@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS production
 WORKDIR /app
 ENV NODE_ENV=production
 # --chown=node:node: node:22-alpine defaults to root (Dockle CIS-DI-0001); `node` is the base

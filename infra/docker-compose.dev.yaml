@@ -19,7 +19,7 @@ services:
 
   api-gateway:
     build: !reset null
-    image: gradle:jdk-25-and-25
+    image: gradle:jdk-25-and-25@sha256:57c4bd434ea3b77a41796375c4f95a74b3ad6693a6f33595fd6129a74a3d7044
 
     working_dir: /workspace
     command: ./gradlew :api-gateway:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
@@ -39,7 +39,7 @@ services:
 
   user-service:
     build: !reset null
-    image: gradle:jdk-25-and-25
+    image: gradle:jdk-25-and-25@sha256:57c4bd434ea3b77a41796375c4f95a74b3ad6693a6f33595fd6129a74a3d7044
 
     working_dir: /workspace
     command: ./gradlew :user-service:bootRun --no-daemon --project-cache-dir /tmp/gradle-project
@@ -94,7 +94,7 @@ services:
 
   content-service:
     build: !reset null
-    image: gradle:jdk-25-and-25
+    image: gradle:jdk-25-and-25@sha256:57c4bd434ea3b77a41796375c4f95a74b3ad6693a6f33595fd6129a74a3d7044
 
     working_dir: /workspace
     command: ./gradlew :content-service:bootRun --no-daemon --project-cache-dir /tmp/gradle-project

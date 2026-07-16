@@ -39,7 +39,7 @@ services:
 
   spring-test:
     profiles: ["test"]
-    image: gradle:jdk-25-and-25
+    image: gradle:jdk-25-and-25@sha256:57c4bd434ea3b77a41796375c4f95a74b3ad6693a6f33595fd6129a74a3d7044
     working_dir: /workspace
     command: >-
       sh -c "./gradlew test --no-daemon -PexcludeTags=smoke;
