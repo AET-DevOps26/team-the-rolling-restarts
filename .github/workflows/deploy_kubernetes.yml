@@ -266,3 +266,56 @@ jobs:
           kubectl rollout status deployment/web-client --timeout=120s
           kubectl rollout status deployment/gen-ai --timeout=120s
           echo "All deployments rolled out successfully."
+
+      # Idempotent: 409 (already registered) is expected on every redeploy after the
+      # first. Keep these credentials and sources in sync with
+      # infra/scripts/seed-demo-data.sh, infra/ansible/roles/app/tasks/main.yml, and
+      # deploy-azure.yml's equivalent steps. Runs an ephemeral pod hitting the in-cluster
+      # api-gateway Service directly, so it doesn't depend on the external ingress
+      # hostname/TLS being ready yet. curlimages/curl has no jq, hence the grep/sed
+      # extractor — fine for the flat, single-value fields these responses actually have.
+      - name: Seed demo user
+        env:
+          # Demo account seeded after deploy — a known login for demonstrations, not
+          # sensitive by design. Falls back to the same defaults as
+          # infra/scripts/seed-demo-data.sh / the Ansible role if the secrets aren't set.
+          DEMO_USERNAME: ${{ secrets.DEMO_USERNAME }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+        run: |
+          kubectl run seed-demo-user --rm -i --restart=Never \
+            --image=curlimages/curl@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69 \
+            --env="DEMO_USERNAME=${DEMO_USERNAME:-demo}" \
+            --env="DEMO_PASSWORD=${DEMO_PASSWORD:-Demo12345!}" \
+            --command -- sh -c '
+              json_field() {
+                grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -n1 | sed -E "s/.*:[[:space:]]*\"([^\"]*)\"\$/\1/"
+              }
+              code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://api-gateway:8080/api/users/auth/register \
+                -H "Content-Type: application/json" \
+                -d "{\"username\":\"$DEMO_USERNAME\",\"email\":\"$DEMO_USERNAME@example.com\",\"password\":\"$DEMO_PASSWORD\",\"name\":\"Demo User\"}")
+              echo "register response: $code"
+              if [ "$code" != "201" ] && [ "$code" != "409" ]; then exit 1; fi
+              token=$(curl -s -X POST http://api-gateway:8080/api/users/auth/login \
+                -H "Content-Type: application/json" \
+                -d "{\"username\":\"$DEMO_USERNAME\",\"password\":\"$DEMO_PASSWORD\"}" | json_field token)
+              if [ -n "$token" ]; then
+                for pair in \
+                  "Süddeutsche Zeitung|https://rss.sueddeutsche.de/alles" \
+                  "Die Linke Presse|https://www.die-linke.de/start/presse/feed.rss" \
+                  "Fox News Politics|https://moxie.foxnews.com/google-publisher/politics.xml" \
+                  "NYT World|https://rss.nytimes.com/services/xml/rss/nyt/World.xml" \
+                  "NYT Europe|https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml" \
+                  "NYT Technology|https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml" \
+                  "NYT Science|https://rss.nytimes.com/services/xml/rss/nyt/Science.xml"; do
+                  src_name="${pair%%|*}"
+                  src_url="${pair#*|}"
+                  src_id=$(curl -s -X POST http://api-gateway:8080/api/content/sources \
+                    -H "Content-Type: application/json" -H "Authorization: Bearer $token" \
+                    -d "{\"name\":\"$src_name\",\"rssUrl\":\"$src_url\"}" | json_field id)
+                  if [ -n "$src_id" ]; then
+                    curl -s -o /dev/null -X POST "http://api-gateway:8080/api/users/users/me/subscriptions/$src_id" \
+                      -H "Authorization: Bearer $token"
+                  fi
+                done
+              fi
+            '

@@ -1,5 +1,6 @@
 .PHONY: help clean generate spring-build spring-openapi-docs install-hooks preflight \
-       compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s push-images \
+       compose-up compose-down compose-ps compose-logs compose-test smoke-test smoke-test-vm smoke-test-k8s \
+       seed-demo seed-demo-vm seed-demo-k8s push-images \
        terraform-init terraform-plan terraform-apply terraform-destroy terraform-validate \
        ansible-inventory ansible-deploy deploy-azure azure-stop azure-start azure-nuke \
        azure-cicd-setup azure-provider-register azure-vm-docker azure-gh-vars azure-cicd-help \
@@ -39,10 +40,12 @@ help:
 	  '  make compose-logs      - follow container logs' \
 	  '  make compose-test      - run integration tests via Docker Compose' \
 	  '  make smoke-test        - run endpoint smoke tests against localhost' \
+	  '  make seed-demo         - (re-)seed the demo account against localhost (compose-up already does this)' \
 	  '  make push-images       - build+push all images to REGISTRY (PLATFORM=... for multi-arch); writes infra/helm/image-values.yaml' \
 	  '' \
 	  'Azure VM:' \
 	  '  make smoke-test-vm     - run smoke tests against the Azure VM' \
+	  '  make seed-demo-vm      - (re-)seed the demo account against the Azure VM (deploy-azure already does this)' \
 	  '  make terraform-apply   - provision Azure VM' \
 	  '  make ansible-deploy    - configure VM and deploy app' \
 	  '  make deploy-azure      - full Azure deploy (terraform + ansible)' \
@@ -62,6 +65,7 @@ help:
 	  '  make helm-destroy      - tear down the app workloads only (grafana-lgtm survives)' \
 	  '  make helm-destroy-all  - tear down everything, including grafana-lgtm; uninstalls the release' \
 	  '  make smoke-test-k8s    - run smoke tests against the K8s ingress' \
+	  '  make seed-demo-k8s     - (re-)seed the demo account against the K8s ingress (the deploy workflow already does this)' \
 	  '' \
 	  'Documentation:' \
 	  '  make docs-serve        - serve MkDocs locally at http://localhost:8000' \
@@ -88,7 +92,7 @@ generate:
 	python -m pip install --upgrade pip
 	python -m pip install openapi-python-client
 	./api/scripts/gen-all.sh
-	npx @redocly/cli@2.30.3 lint api/openapi.yaml
+	npx @redocly/cli@2.39.0 lint api/openapi.yaml
 
 spring-build:
 	cd services/spring && ./gradlew build
@@ -119,6 +123,8 @@ preflight: generate spring-build helm-lint terraform-validate
 compose-up:
 	@test -f $(COMPOSE_ENV) || { echo "Error: $(COMPOSE_ENV) not found. Run: cp infra/.env.example infra/.env"; exit 1; }
 	docker compose --env-file $(COMPOSE_ENV) $(COMPOSE_FILES) up --build -d
+	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	  infra/scripts/seed-demo-data.sh "http://localhost:$(or $(APP_PORT),8080)"
 
 compose-down:
 	docker compose --env-file $(COMPOSE_ENV) $(COMPOSE_FILES) down -v
@@ -148,6 +154,10 @@ compose-test:
 smoke-test:
 	@infra/scripts/smoke-test.sh "http://localhost:$(or $(APP_PORT),8080)"
 
+seed-demo:
+	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	  infra/scripts/seed-demo-data.sh "http://localhost:$(or $(APP_PORT),8080)"
+
 security-scan:
 	@infra/scripts/security-scan.sh
 
@@ -168,6 +178,13 @@ smoke-test-vm:
 	@echo ""
 	@infra/scripts/smoke-test.sh "http://$(VM_IP)$(if $(filter-out 80,$(or $(APP_PORT),8080)),:$(APP_PORT),)"
 
+seed-demo-vm:
+	@if [ -z "$(VM_IP)" ]; then echo "Error: could not determine VM IP. Run make terraform-apply first."; exit 1; fi
+	@echo "Targeting VM at $(VM_IP)"
+	@echo ""
+	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	  infra/scripts/seed-demo-data.sh "http://$(VM_IP)$(if $(filter-out 80,$(or $(APP_PORT),8080)),:$(APP_PORT),)"
+
 K8S_BASE_HOST ?= rolling-restarts.stud.k8s.aet.cit.tum.de
 ENV ?= dev
 ifeq ($(ENV),prod)
@@ -180,6 +197,12 @@ smoke-test-k8s:
 	@echo "Targeting K8s ingress at $(K8S_HOST)"
 	@echo ""
 	@infra/scripts/smoke-test.sh --insecure "https://$(K8S_HOST)"
+
+seed-demo-k8s:
+	@echo "Targeting K8s ingress at $(K8S_HOST)"
+	@echo ""
+	@DEMO_USERNAME=$(DEMO_USERNAME) DEMO_PASSWORD=$(DEMO_PASSWORD) \
+	  infra/scripts/seed-demo-data.sh --insecure "https://$(K8S_HOST)"
 
 # --- Images ---
 

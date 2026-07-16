@@ -148,3 +148,80 @@
   delay: "{{ health_check_delay }}"
   until: web_health.status == 200
   tags: [app, deploy, verify]
+
+# Idempotent: 409 (already registered) is expected on every redeploy after the first.
+# Keep these credentials and sources in sync with infra/scripts/seed-demo-data.sh and
+# .github/workflows/deploy-azure.yml's remote-deploy.sh — this is the Ansible-native
+# equivalent of that same script, run via the uri module (executes on this host, so no
+# curl/jq dependency on the VM) rather than shelling out to it.
+- name: Seed demo user
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_env.APP_PORT | default('8080') }}/api/users/auth/register"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ demo_username }}"
+      email: "{{ demo_username }}@example.com"
+      password: "{{ demo_password }}"
+      name: Demo User
+    status_code: [201, 409]
+    timeout: 30
+  tags: [app, deploy, verify]
+
+- name: Log in as demo user to seed their subscriptions
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_env.APP_PORT | default('8080') }}/api/users/auth/login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ demo_username }}"
+      password: "{{ demo_password }}"
+    status_code: [200]
+    timeout: 30
+  register: demo_login
+  tags: [app, deploy, verify]
+
+# All feeds verified reachable (HTTP 200, XML content-type) before adding. Source create
+# is idempotent by design (200 if it already exists, returning the existing one; 201 if
+# newly created). ignore_errors: these are third-party feeds outside our control (rate
+# limiting, geo-blocking, a feed moving) — one being temporarily unreachable is a demo-data
+# nicety missing, not a reason to fail an otherwise-successful deployment.
+- name: Seed demo sources
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_env.APP_PORT | default('8080') }}/api/content/sources"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ demo_login.json.token }}"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      rssUrl: "{{ item.rss_url }}"
+    status_code: [200, 201]
+    timeout: 30
+  loop:
+    - { name: "Süddeutsche Zeitung", rss_url: "https://rss.sueddeutsche.de/alles" }
+    - { name: "Die Linke Presse", rss_url: "https://www.die-linke.de/start/presse/feed.rss" }
+    - { name: "Fox News Politics", rss_url: "https://moxie.foxnews.com/google-publisher/politics.xml" }
+    - { name: "NYT World", rss_url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" }
+    - { name: "NYT Europe", rss_url: "https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml" }
+    - { name: "NYT Technology", rss_url: "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml" }
+    - { name: "NYT Science", rss_url: "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml" }
+  register: demo_sources
+  ignore_errors: true
+  tags: [app, deploy, verify]
+
+# Always 200 and idempotent server-side (does not double-count an existing subscription).
+# Same ignore_errors reasoning as above; guards against items that failed (and so lack a
+# parsed .json.id) in the loop this depends on.
+- name: Subscribe demo user to seeded sources
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ app_env.APP_PORT | default('8080') }}/api/users/users/me/subscriptions/{{ item.json.id }}"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ demo_login.json.token }}"
+    status_code: [200]
+    timeout: 30
+  loop: "{{ demo_sources.results }}"
+  when: item.json is defined and item.json.id is defined
+  ignore_errors: true
+  tags: [app, deploy, verify]

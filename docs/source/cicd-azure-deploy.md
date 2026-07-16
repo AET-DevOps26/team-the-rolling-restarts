@@ -147,6 +147,8 @@ They are sensitive and are masked in logs.
 | `GRAFANA_SMTP_USER` | Sending email address for alert notifications (Gmail: the account itself). The deploy workflow fails fast if this, `GRAFANA_SMTP_PASSWORD`, or `GRAFANA_ALERT_EMAILS` is unset. |
 | `GRAFANA_SMTP_PASSWORD` | SMTP auth password. Gmail: an App Password, NOT the account password — requires 2FA on that account, generate at myaccount.google.com/apppasswords. |
 | `GRAFANA_ALERT_EMAILS` | Comma-separated recipient list for the `email-alerts` contact point. |
+| `DEMO_USERNAME` | _Optional, not sensitive._ Username for the demo account seeded after every deploy (see [Demo user](deployment-testing.md#demo-user)). Falls back to `demo` if unset. |
+| `DEMO_PASSWORD` | _Optional, not sensitive._ Password for the demo account. Falls back to `Demo12345!` if unset. Not a real secret by design — it's a public login for demonstrations — but repo-secret-controlled anyway rather than hardcoded, so it can be changed without a code edit. |
 
 The VM is targeted by name (looked up from `AZURE_RESOURCE_GROUP`) over the
 Azure control plane, so no host/user/SSH-key secrets are needed.

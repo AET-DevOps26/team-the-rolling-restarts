@@ -295,6 +295,13 @@ jobs:
         env:
           ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
           ACR_TOKEN: ${{ steps.acr.outputs.token }}
+          # Demo account seeded after deploy — a known login for demonstrations, not
+          # sensitive by design. Not app runtime config (nothing reads these as env vars),
+          # so they're injected here rather than into deploy.env. Falls back to the same
+          # defaults as infra/scripts/seed-demo-data.sh / the Ansible role if the secrets
+          # aren't set.
+          DEMO_USERNAME: ${{ secrets.DEMO_USERNAME }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
         run: |
           umask 077
           COMPOSE_B64="$(base64 -w0 infra/docker-compose.yaml)"
@@ -315,6 +322,8 @@ jobs:
           DEPLOY_DIR="${DEPLOY_DIR}"
           ACR_LOGIN_SERVER="${ACR_LOGIN_SERVER}"
           ACR_TOKEN="${ACR_TOKEN}"
+          DEMO_USERNAME="${DEMO_USERNAME:-demo}"
+          DEMO_PASSWORD="${DEMO_PASSWORD:-Demo12345!}"
           COMPOSE_B64="${COMPOSE_B64}"
           OVERRIDE_B64="${OVERRIDE_B64}"
           NGINX_B64="${NGINX_B64}"
@@ -346,13 +355,52 @@ jobs:
           docker image prune -f >/dev/null 2>&1 || true
           for i in $(seq 1 12); do
             if curl -fsS "http://127.0.0.1/" >/dev/null 2>&1; then
-              echo "DEPLOY_OK reverse-proxy healthy"
-              exit 0
+              break
             fi
             echo "waiting for reverse-proxy ($i/12)..."
             sleep 10
           done
-          echo "HEALTH_FAILED"; compose ps; exit 1
+          if ! curl -fsS "http://127.0.0.1/" >/dev/null 2>&1; then
+            echo "HEALTH_FAILED"; compose ps; exit 1
+          fi
+          # Idempotent: 409 (already registered) is expected on every redeploy after the
+          # first. Keep these credentials and sources in sync with
+          # infra/scripts/seed-demo-data.sh and infra/ansible/roles/app/tasks/main.yml's
+          # equivalent tasks. No jq on this VM, so a small grep/sed extractor stands in for
+          # it — good enough for the flat, single-value fields these responses actually have.
+          json_field() {
+            grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" | head -n1 | sed -E 's/.*:[[:space:]]*"([^"]*)"$/\1/'
+          }
+          seed_code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1/api/users/auth/register" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$DEMO_USERNAME\",\"email\":\"$DEMO_USERNAME@example.com\",\"password\":\"$DEMO_PASSWORD\",\"name\":\"Demo User\"}")
+          if [ "$seed_code" != "201" ] && [ "$seed_code" != "409" ]; then
+            echo "SEED_FAILED (http $seed_code)"; exit 1
+          fi
+          demo_token=$(curl -s -X POST "http://127.0.0.1/api/users/auth/login" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"$DEMO_USERNAME\",\"password\":\"$DEMO_PASSWORD\"}" | json_field token)
+          if [ -n "$demo_token" ]; then
+            for pair in \
+              "Süddeutsche Zeitung|https://rss.sueddeutsche.de/alles" \
+              "Die Linke Presse|https://www.die-linke.de/start/presse/feed.rss" \
+              "Fox News Politics|https://moxie.foxnews.com/google-publisher/politics.xml" \
+              "NYT World|https://rss.nytimes.com/services/xml/rss/nyt/World.xml" \
+              "NYT Europe|https://rss.nytimes.com/services/xml/rss/nyt/Europe.xml" \
+              "NYT Technology|https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml" \
+              "NYT Science|https://rss.nytimes.com/services/xml/rss/nyt/Science.xml"; do
+              src_name="${pair%%|*}"
+              src_url="${pair#*|}"
+              src_id=$(curl -s -X POST "http://127.0.0.1/api/content/sources" \
+                -H 'Content-Type: application/json' -H "Authorization: Bearer $demo_token" \
+                -d "{\"name\":\"$src_name\",\"rssUrl\":\"$src_url\"}" | json_field id)
+              if [ -n "$src_id" ]; then
+                curl -s -o /dev/null -X POST "http://127.0.0.1/api/users/users/me/subscriptions/$src_id" \
+                  -H "Authorization: Bearer $demo_token"
+              fi
+            done
+          fi
+          echo "DEPLOY_OK reverse-proxy healthy, demo user seeded (http $seed_code)"
           EOF
 
       - name: Deploy via az vm run-command
