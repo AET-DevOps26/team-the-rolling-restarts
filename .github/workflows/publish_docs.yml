@@ -30,11 +30,18 @@ jobs:
           rm -rf "$OUT"
           mkdir -p "$OUT"
 
+          # --entrypoint bash is required: the image's own ENTRYPOINT is
+          # ["java", "-jar", "/opt/plantuml.jar"], so without this override the "bash -lc '...'"
+          # below is passed as arguments to that entrypoint instead of being executed as a shell
+          # script — the find/while loop silently never runs and PlantUML just prints "No diagram
+          # found". Confirmed live (2026-07-16): every previous run of this step was a no-op; the
+          # site has only ever served the .png files already committed to docs/source/diagrams/.
           docker run --rm \
+            --entrypoint bash \
             -v "$PWD:/workspace" \
             -w /workspace \
             plantuml/plantuml:1.2026.1 \
-            bash -lc 'set -euo pipefail; find docs/source/diagrams -name "*.puml" -print0 | while IFS= read -r -d "" f; do echo "Generating: $f"; java -jar /opt/plantuml.jar -tpng "$f"; done'
+            -lc 'set -euo pipefail; find docs/source/diagrams -name "*.puml" -print0 | while IFS= read -r -d "" f; do echo "Generating: $f"; java -jar /opt/plantuml.jar -tpng "$f"; done'
 
           find docs/source/diagrams -name '*.png' -print0 | while IFS= read -r -d '' p; do
             dest="$OUT/${p#./}"
