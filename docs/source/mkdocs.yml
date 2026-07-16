@@ -19,6 +19,7 @@ nav:
   - Guides:
     - OpenAPI Workflow: openapi-workflow.md
     - Web Client Integration: web-client-integration.md
+    - Database Schema: database-schema.md
     - Deployment Testing: deployment-testing.md
     - Monitoring: monitoring.md
     - Secrets & Environment Variables: secrets-reference.md

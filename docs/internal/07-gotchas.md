@@ -120,13 +120,15 @@ course brief's letter says "Prometheus must be used." See
 Third member left the project. See `.github/CODEOWNERS` for current
 ownership: `brscn2` (web-client + gen-ai), `YRC99` (services/spring + gen-ai).
 
-## Root README is much thinner than the actual documentation
+## Root README now surfaces quick-start/API/CI-CD/responsibilities (was thin)
 
 Substantial docs exist under `docs/source/` (OpenAPI workflow, deployment
-testing, secrets reference, Azure/K8s CD pipelines, per-infra READMEs), but
-none of it is linked from or summarized in the root `README.md` — the first
-thing anyone opens. Quick-start, CI/CD, and monitoring instructions currently
-only live in `docs/source/index.md` and the `Makefile`.
+testing, secrets reference, Azure/K8s CD pipelines, per-infra READMEs). For a
+while none of it was linked from or summarized in the root `README.md` — the
+first thing anyone opens; only an architecture table and a monitoring section
+had been pulled up into it. Fixed: `README.md` now also has Quick start, API
+documentation, CI/CD, and Team & responsibilities sections, each linking back
+to the relevant `docs/source/*.md` guide for detail.
 
 ## Deployed instances: both verified live, but neither is fully working
 
@@ -216,22 +218,23 @@ worth understanding if anyone relies on trace-level LLM visibility.
 grep -n "from app.routers import" services/gen-ai/app/main.py   # should be AFTER setup_observability(app)
 ```
 
-## Article search is fully implemented but broken live — missing MongoDB text index, not a stub
+## Article search was broken live — missing MongoDB text index (fixed)
 
 `web-client`'s search bar (`components/layout/topbar-search.tsx`) and `content-service`'s
 `ArticleController`/`ArticleService` are a real, complete implementation: `@TextIndexed` on
 `Article.headline`/`snippet`, a proper `TextCriteria`/`TextQuery` search combined with
-source/topic filtering, pagination, everything wired end-to-end from the UI down. It fails live
-with `MongoCommandException: text index required for $text query (IndexNotFound)` — Spring Data
-MongoDB's `auto-index-creation` defaults to `false` and nothing in `content-service` overrides it
-or creates the index another way (no migration script, no manual `createIndex` call), so
-`@TextIndexed` alone never actually creates the index on a real deployment. Confirmed live via
-`api-gateway`'s `/api/content/articles?q=...` returning 500. **Fix is small** (enable
-`spring.data.mongodb.auto-index-creation=true`, or create the text index explicitly at startup)
-but not yet done — don't assume this is an intentional gap or a stub feature.
+source/topic filtering, pagination, everything wired end-to-end from the UI down. It used to fail
+live with `MongoCommandException: text index required for $text query (IndexNotFound)` — Spring
+Data MongoDB's `auto-index-creation` defaults to `false`, and `@TextIndexed` alone never actually
+creates the index on a real deployment without it. **Fixed**: `content-service`'s
+`application.properties` now sets `spring.data.mongodb.auto-index-creation=true` (landed via the
+`dev` branch, merged in #104), so the text index — and the other `@Indexed` fields on `Article`/
+`Source`/`User` — get created on startup. See [Database Schema](../source/database-schema.md) for
+the full current index reference, including a related, still-open gap: `user-service` doesn't set
+this property at all, so its `username`/`email` unique indexes aren't guaranteed to exist either.
 
 ```sh
-grep -rn "auto-index-creation" services/spring/content-service/src/main/resources/   # currently empty
+grep -rn "auto-index-creation" services/spring/*/src/main/resources/
 ```
 
 ## `web-client` couldn't reach `grafana-lgtm` locally — two separate Docker Compose networks, not an OTel bug

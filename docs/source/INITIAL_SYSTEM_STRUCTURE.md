@@ -43,11 +43,11 @@ All three Spring Boot services share a Gradle multi-module project at `services/
 - **Talks to**: Receives requests from the API Server. Sends prompts to an external LLM provider over HTTPS. Does not access PostgreSQL directly; the API Server passes in any required context and persists results.
 - **Why a separate deployable**: The Python ML ecosystem (LangChain, tokenizers, embedding clients) lives most comfortably outside the JVM. Prompt iteration, model swaps, and dependency churn can happen without redeploying the API. Scaling is also different — GenAI calls are slow and concurrency-bound, so this service can scale horizontally on its own.
 
-### 2.6 Database (PostgreSQL & MongoDB)
+### 2.6 Database (MongoDB)
 
-- **Stack**: PostgreSQL (user-service) and MongoDB (content-service). Optional `pgvector` extension if/when we move semantic article search in-house.
-- **Responsibilities**: PostgreSQL is the source of truth for users, settings, and auth state. MongoDB (database: `content`) stores articles, RSS sources, and topics.
-- **Talks to**: PostgreSQL is accessed only by user-service. MongoDB is accessed only by content-service. The Web Client and GenAI Service never connect directly.
+- **Stack**: MongoDB, shared instance, one logical database per service (`users` for user-service, `content` for content-service). Originally planned as PostgreSQL for user-service; the team standardised on MongoDB for both instead — see [Database Schema](database-schema.md) for the current, code-verified collection/field/index reference.
+- **Responsibilities**: user-service's `users` database is the source of truth for users, settings, and auth state. content-service's `content` database stores articles, RSS sources, and topics.
+- **Talks to**: Each database is accessed only by its owning service. The Web Client and GenAI Service never connect directly.
 - **Why a separate deployable**: Standard managed-database concerns — backups, point-in-time recovery, connection pooling — and a clean enforcement boundary that the only writers are services we control.
 
 ### 2.7 Supporting Components

@@ -184,7 +184,7 @@ by anything automated.
 - **Evidence:** `docs/source/diagrams/{architecture-component-diagram,use-case,analysis-object-model}.puml`
 - **Re-verify:** open the three `.puml` files and diff their described components against the current `services/spring/settings.gradle` + `services/gen-ai` + `web-client` + `infra/helm` structure.
 
-### Documentation — **Good**
+### Documentation — **Good, trending Excellent**
 
 The underlying content is more thorough than it first appears, and grew
 substantially this session — `docs/internal/` (agent-facing repo map) had
@@ -193,13 +193,21 @@ describing a state from before the backend-integration work, a wrong
 `LLM_PROVIDER` env-var table in `docs/source/gen-ai-service.md` that plausibly
 *caused* a real production incident) and are now corrected; `docs/source/`
 gained updated guides for the Azure VM runbook, both CD pipelines, monitoring,
-and secrets reference reflecting this session's fixes. The persistent gap is
-unchanged: the root `README.md` — the actual entry point — still doesn't
-surface quick-start, CI/CD summary, or a student-responsibilities section
-(only the monitoring section has been pulled up into it so far).
+and secrets reference reflecting this session's fixes. **Update (2026-07-16):**
+the persistent root-`README.md` gap is resolved — it now has Quick start, API
+documentation, CI/CD, Monitoring, and Team & responsibilities sections, each
+linking back to the relevant `docs/source/*.md` guide for detail. A dedicated
+`docs/source/database-schema.md` was also added, closing the `03-system-
+architecture.md` "database must have a documented schema" requirement (was
+⚠️ in `STATUS.md`, MongoDB collection/field/index reference verified directly
+against the entity classes). Remaining gap: `INITIAL_SYSTEM_STRUCTURE.md`'s
+analysis-object-model diagram is explicitly conceptual/analysis-level and
+broader than the current implementation (by design, per its own file header)
+— diagram/code consistency still isn't enforced by anything automated, same
+caveat as the Engineering Artefacts rating above.
 
-- **Evidence:** `docs/source/*.md` (guide inventory); `docs/internal/*.md` (this session's corrections); `README.md` (50 lines, monitoring section present, no responsibilities/CI-CD sections)
-- **Re-verify:** `wc -l README.md`; `grep -n "Responsibilit\|CI/CD\|Monitoring\|Prometheus\|Grafana" README.md`.
+- **Evidence:** `docs/source/*.md` (guide inventory, now including `database-schema.md`); `docs/internal/*.md`; `README.md` (Quick start / API documentation / CI/CD / Monitoring / Team & responsibilities sections present)
+- **Re-verify:** `wc -l README.md`; `grep -n "^## " README.md`; `grep -n "auto-index-creation" services/spring/*/src/main/resources/application.properties`.
 
 ---
 

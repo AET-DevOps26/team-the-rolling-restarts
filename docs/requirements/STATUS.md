@@ -15,7 +15,11 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Client/server/DB/GenAI separation — `web-client/`, `services/spring/*`, MongoDB, `services/gen-ai/`
 - ✅ ≥3 microservices with distinct responsibilities — `user-service` (auth/profiles), `content-service` (RSS/articles), and `services/gen-ai` (summarize/explain/sentiment/qa) count as the three, **per course clarification obtained via Artemis** confirming gen-ai counts toward this even though it isn't Spring Boot. `api-gateway` remains routing/JWT-validation infrastructure, not a business-domain service, and still doesn't count on its own. Note: the literal text in `03-system-architecture.md` ("The server side must be implemented in Spring Boot and must consist of at least three microservices") reads as Spring-specific taken alone — this clarification resolves that ambiguity in our favor; re-verify if it's ever challenged. No third Spring service is needed as a result — the previously-planned Interaction/Bookmarks service (see below) is no longer required.
 - ✅ Documented API contract — `api/openapi.yaml`, generated code-first (`docs/source/openapi-workflow.md`)
-- ⚠️ Documented DB schema — MongoDB is schemaless; no dedicated schema doc beyond entity classes, no migration tool
+- ✅ Documented DB schema — `docs/source/database-schema.md`: every `@Document` collection, field,
+  type, and index, cross-referenced against the actual entity classes (MongoDB is schemaless, so
+  no migration tool is applicable). Surfaced one still-open gap while writing it: `user-service`
+  doesn't set `spring.data.mongodb.auto-index-creation`, so its `username`/`email` unique indexes
+  aren't guaranteed to exist on a fresh deployment (unlike `content-service`, which sets this).
 
 ## 04 — GenAI Component
 
@@ -112,10 +116,11 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 ## 10 — Deliverables (README completeness)
 
 - ✅ Architecture info in root `README.md` (service table + project layout)
-- ⚠️ Setup/quick-start instructions — exist in `docs/source/index.md` and the `Makefile`, but are **not surfaced in root `README.md`** itself
-- ❌ CI/CD instructions in README — not present (exists implicitly in workflow files only)
+- ✅ Setup/quick-start instructions — now surfaced directly in root `README.md` (`## Quick start`), pulled up from `docs/source/index.md`/`Makefile`
+- ✅ API documentation references in README — `## API documentation` section: Swagger UI, raw OpenAPI spec, and the published static reference
+- ✅ CI/CD instructions in README — `## CI/CD` section: workflow table (trigger → what it does) plus links to the two CD pipeline guides
 - ✅ Monitoring instructions in README — `## Monitoring` section added, links to `docs/source/monitoring.md`
-- ❌ Student/contributor responsibilities section in README — team ownership rules live in `docs/requirements/01-team-and-collaboration.md` but aren't reflected in `README.md`
+- ✅ Student/contributor responsibilities section in README — `## Team & responsibilities` section: 2-member team, CODEOWNERS-backed ownership table, link to `docs/requirements/01-team-and-collaboration.md`
 
 ## Team & Process (01, 02) — not verifiable from code
 
@@ -165,11 +170,12 @@ activity rather than this file.
    until fixed with an explicit `COOKIE_SECURE` env var (see `docs/internal/06-observability.md`);
    real TLS (tracked as issue #90) would let that resolve more cleanly and match Kubernetes, which
    already has TLS via cert-manager.
-8. **Root README is thin** — quick-start, CI/CD, and responsibilities sections should still be
-   pulled up from docs/Makefile into `README.md` itself. A monitoring section has since been
-   added (see §10 below).
-9. **Article search is broken live** — fully implemented (real MongoDB `@TextIndexed` fields,
-   `TextCriteria` query, full frontend wiring), but fails with `text index required for $text
-   query (IndexNotFound)` since Spring Data MongoDB's `auto-index-creation` defaults to `false`
-   and nothing creates the index another way. Small fix, not yet done — see
-   `docs/internal/07-gotchas.md`.
+8. ~~**Root README is thin**~~ — resolved: `README.md` now has Quick start, API documentation,
+   CI/CD, Monitoring, and Team & responsibilities sections, each pulled up from and linking back
+   to the relevant `docs/source/*.md` guide (see §10 below).
+9. ~~**Article search is broken live**~~ — resolved: `content-service`'s `application.properties`
+   sets `spring.data.mongodb.auto-index-creation=true` (landed via `dev`, merged in #104), so the
+   `@TextIndexed` text index actually gets created on startup. **Related, still-open gap found
+   while documenting this**: `user-service` doesn't set the same property, so its `username`/
+   `email` unique indexes aren't guaranteed to exist on a fresh deployment either — see
+   `docs/source/database-schema.md` and `docs/internal/07-gotchas.md`.
