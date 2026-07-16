@@ -168,21 +168,31 @@ failures").
 - **Evidence:** `services/spring/*/src/test/java/**`; `services/gen-ai/tests/test_*.py`; `web-client/package.json` (`"test": "vitest run"`); `web-client/src/lib/{api/client.test.ts,format/*.test.ts}`
 - **Re-verify:** `find services/gen-ai/tests -name "test_*.py" | wc -l`; `grep -n '"test"' web-client/package.json`; `find web-client -iname "*.test.*" -not -path "*/node_modules/*" | wc -l`.
 
-### Engineering Artefacts — **Good**
+### Engineering Artefacts — **Good** (was previously overstated as "largely moot" — corrected)
 
 All three mandatory UML diagrams exist as PlantUML source with rendered PNGs,
-regenerated in CI on every publish. The previous pass's drift concern
-("diagrams might already show a 3rd microservice that doesn't exist, or omit
-one that does") is largely moot now — since the "3rd microservice" resolution
-was a *recognition* (gen-ai counts) rather than new code, no new component
-needs adding to the diagrams on that front. Still not directly verified this
-pass: whether the diagrams accurately reflect the *current* service
-boundaries and data flows (e.g. web-client's new OTel instrumentation, the
-monitoring namespace split) — diagram/code consistency still isn't enforced
-by anything automated.
+regenerated in CI on every publish. **Correction (2026-07-16):** the previous
+pass's drift concern was dismissed too quickly — it only checked the
+"3rd microservice" question, not whether the diagrams as a whole still
+matched the implementation. Directly diffing the initial diagrams against the
+code found substantial drift: the analysis object model includes 8 entities
+(`Tag`, `Publisher`, `Folder`, `Bookmark` as its own entity, `Interaction`,
+`Recommendation`, `Notification`, `TrendingTopic`) that were never
+implemented; the component diagram shows one monolithic "API Service" backed
+by PostgreSQL, when the actual system is 3 separate Spring services (plus
+GenAI) backed by 2 MongoDB databases, with no monitoring stack shown at all;
+the use case diagram includes 4 use cases with no backend (recommendations,
+real trending-topic ranking, notifications, auto-tagging) and is missing a
+real one (the Q&A GenAI endpoint). Since 09's requirement text explicitly
+says artefacts "must reflect the actual implementation," the initial set
+alone no longer satisfied it on a strict reading. Fixed by adding a second,
+current-state set of all three diagram types, verified directly against the
+code (entity classes, controllers, actual frontend routes) — kept alongside
+the initial set rather than replacing it, since the initial set has its own
+value as the original design record.
 
-- **Evidence:** `docs/source/diagrams/{architecture-component-diagram,use-case,analysis-object-model}.puml`
-- **Re-verify:** open the three `.puml` files and diff their described components against the current `services/spring/settings.gradle` + `services/gen-ai` + `web-client` + `infra/helm` structure.
+- **Evidence:** `docs/source/diagrams/{architecture-component-diagram,use-case,analysis-object-model}.puml` (initial); `docs/source/diagrams/current-{architecture-component-diagram,use-case,object-model}.puml` (current); `docs/source/CURRENT_SYSTEM_STRUCTURE.md`
+- **Re-verify:** open the current-state `.puml` files and diff their described components against `services/spring/*/src/main/java/**/model/`, `**/controller/`, and `web-client/src/app/`.
 
 ### Documentation — **Good, trending Excellent**
 

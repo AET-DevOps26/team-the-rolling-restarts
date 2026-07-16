@@ -3,10 +3,11 @@
 MongoDB is document-oriented and schemaless at the database level, but every collection has a
 concrete, enforced-in-code shape via Spring Data MongoDB `@Document` entities. This page is that
 schema, kept in sync with `services/spring/{user,content}-service/.../model/`. See also the
-[Analysis Object Model](INITIAL_SYSTEM_STRUCTURE.md#31-analysis-object-model) diagram
-(`docs/source/diagrams/analysis-object-model.puml`) — a conceptual, analysis-level model of the
-problem domain (broader than what's implemented so far); this page documents the concrete schema
-as actually implemented today.
+[Analysis Object Model](INITIAL_SYSTEM_STRUCTURE.md#31-analysis-object-model) diagram — a
+conceptual, analysis-level model of the original problem domain (broader than what's implemented
+so far) — and the [Current Object Model](CURRENT_SYSTEM_STRUCTURE.md#current-object-model), a UML
+class diagram of exactly the collections documented below. This page is the field-level detail
+underneath that current-state diagram.
 
 ## Databases
 

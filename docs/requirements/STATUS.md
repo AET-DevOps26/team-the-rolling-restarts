@@ -34,7 +34,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Every component has its own Dockerfile — `services/spring/{api-gateway,user-service,content-service}/Dockerfile`, `services/gen-ai/Dockerfile`, `web-client/Dockerfile`
 - ✅ Database via official image (no custom Dockerfile needed) — `mongo:8` in `infra/docker-compose.yaml`
 - ✅ `docker-compose.yaml` + `docker-compose.dev.yaml` wire up all components end-to-end
-- ✅ ≤3-command local setup with sane defaults — `cp infra/.env.example infra/.env` + `make compose-up` (documented in `docs/source/index.md`; **not yet mirrored in root `README.md`**)
+- ✅ ≤3-command local setup with sane defaults — `cp infra/.env.example infra/.env` + `make compose-up` (documented in `docs/source/index.md` and now also root `README.md`'s `## Quick start`)
 - ✅ Kubernetes deployable via Helm — `infra/helm/` real chart (`Chart.yaml` + `templates/`)
 - ✅ Kubernetes deployable via raw manifests too — `infra/k8s/deployments/*.yml`, `infra/k8s/services/*.yml`
 - ✅ Cloud environment (Azure) — `infra/terraform/azure-vm/`, `infra/ansible/`, `.github/workflows/deploy-azure.yml`
@@ -108,10 +108,18 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 
 ## 09 — Engineering Artefacts
 
-- ✅ Subsystem Decomposition diagram — `docs/source/diagrams/architecture-component-diagram.puml` (+ rendered PNG)
-- ✅ Use Case diagram — `docs/source/diagrams/use-case.puml` (+ rendered PNG)
-- ✅ Analysis Object Model — `docs/source/diagrams/analysis-object-model.puml` (+ rendered PNG)
+- ✅ Subsystem Decomposition diagram — `docs/source/diagrams/architecture-component-diagram.puml` (initial design; + rendered PNG)
+- ✅ Use Case diagram — `docs/source/diagrams/use-case.puml` (initial design; + rendered PNG)
+- ✅ Analysis Object Model — `docs/source/diagrams/analysis-object-model.puml` (initial design; + rendered PNG)
 - ✅ OpenAPI/Swagger UI exposed — `springdoc-openapi-starter-webmvc-ui` in all 3 Spring services; api-gateway aggregates all specs via `springdoc.swagger-ui.urls[...]`
+- ✅ Diagrams reflect the *actual implementation* (09's explicit requirement, previously unmet by
+  the three above alone — they're the *initial* design and had drifted substantially from what's
+  built, e.g. the object model includes 8 entities that were never implemented, the component
+  diagram shows one monolithic "API Service" + PostgreSQL instead of 3 Spring services + 2 MongoDB
+  databases). Fixed by adding a second, current-state set —
+  `docs/source/diagrams/current-{object-model,use-case,architecture-component-diagram}.puml` —
+  verified directly against the code (entity classes, controllers, actual frontend routes), kept
+  alongside the initial set rather than replacing it. See `docs/source/CURRENT_SYSTEM_STRUCTURE.md`.
 
 ## 10 — Deliverables (README completeness)
 

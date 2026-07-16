@@ -1,5 +1,9 @@
 # Initial System Structure
 
+> This page documents the *original* design intent. See
+> [Current System Structure](CURRENT_SYSTEM_STRUCTURE.md) for the same three diagram types
+> redrawn against the system as actually implemented today, and what changed along the way.
+
 ## 1. Overview
 
 The Personalised News Aggregator lets users follow topics and consume articles enriched by GenAI (summaries, plain-language explanations, sentiment, recommendations). The system is split into six primary deployable units — a web client, an API gateway, a user service, a content service, a GenAI microservice, and backing databases — plus a small set of supporting components and third-party integrations. Each primary unit is owned by a different layer of the request path so that scaling, debugging, and model iteration can happen independently.

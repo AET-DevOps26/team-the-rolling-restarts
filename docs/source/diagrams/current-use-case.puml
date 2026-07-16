@@ -1,0 +1,109 @@
+@startuml CurrentUseCase
+title Personalised News Aggregator - Current Use Cases (as implemented)
+left to right direction
+
+' ── Styling — matches use-case.puml for visual consistency ─────────────
+skinparam DefaultFontName         "Segoe UI"
+skinparam DefaultFontSize         12
+
+skinparam Actor {
+  BorderColor                     #1A252F
+  BackgroundColor                 #D5E8D4
+  FontStyle                       bold
+  FontSize                        13
+}
+
+skinparam Usecase {
+  BorderColor                     #1F618D
+  BackgroundColor                 #EBF5FB
+  BorderThickness                 1.5
+  FontSize                        12
+}
+
+skinparam Rectangle {
+  BorderColor                     #1A252F
+  BorderThickness                 2
+  BackgroundColor                 #FDFEFE
+  FontStyle                       bold
+  FontSize                        14
+}
+
+skinparam Arrow {
+  Color                           #2C3E50
+  FontSize                        11
+  FontStyle                       italic
+}
+
+skinparam Note {
+  BackgroundColor                 #FEF9E7
+  BorderColor                     #F0B27A
+}
+' ────────────────────────────────────────────────────────
+
+actor "Visitor" as Visitor
+actor "User"    as User
+Visitor <|-- User
+
+rectangle "News Aggregator System" {
+
+  ' --- Account Management ---
+  usecase "Register Account" as UC11a
+  usecase "Log In"           as UC11b
+
+  ' --- Core Content Interaction ---
+  usecase "Browse Personalized Feed"    as UC1
+  usecase "View Article"                as UC12
+  usecase "Search & Filter Articles"    as UC5
+
+  ' --- Article Enhancements (GenAI, all real endpoints) ---
+  usecase "View AI Summary"           as UC2
+  usecase "Get Concept Explanation"   as UC3
+  usecase "View Sentiment & Bias"     as UC6
+  usecase "Ask AI a Question (Q&A)"   as UC13
+
+  ' --- User Library ---
+  usecase "Save/Bookmark Article"  as UC7
+  usecase "View Saved Articles"    as UC7b
+
+  ' --- Preferences ---
+  usecase "Manage Topic Preferences"      as UC14
+  usecase "Subscribe/Unsubscribe Source"  as UC15
+
+}
+
+note right of UC15
+  Sources are shared: subscriberCount is
+  tracked server-side and a source is
+  auto-removed once its last subscriber
+  leaves.
+end note
+
+note bottom of UC6
+  "Bias" is a categorical label
+  (left | center | right | unclear),
+  not a numeric bias score.
+end note
+
+' --- Actor Connections ---
+Visitor --> UC11a
+Visitor --> UC11b
+
+User --> UC1
+User --> UC5
+User --> UC12
+User --> UC7b
+User --> UC14
+User --> UC15
+
+' --- Use Case Relationships ---
+UC1 --> UC12  : <<include>>
+UC5 --> UC12  : <<include>>
+
+UC12 <.. UC2  : <<extend>>
+UC12 <.. UC3  : <<extend>>
+UC12 <.. UC6  : <<extend>>
+UC12 <.. UC13 : <<extend>>
+UC12 <.. UC7  : <<extend>>
+
+note "Scoped out relative to the initial plan\n(no backend, or removed): Recommendations,\nTrending Topics (client-side re-sort of the\ncurrent page only, not a real ranking),\nNotifications (frontend-only mock, disclaimed\nin the UI), Auto-tag & Categorize (topicId\nexists but nothing ever sets it), Bookmark\nFolders (flat list only)." as N1
+@enduml

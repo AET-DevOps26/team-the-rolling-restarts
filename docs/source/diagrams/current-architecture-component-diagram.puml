@@ -1,0 +1,105 @@
+@startuml CurrentArchitectureComponentDiagram
+title Personalised News Aggregator - Current Component Diagram (as implemented)
+
+top to bottom direction
+
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam nodesep 45
+skinparam ranksep 60
+skinparam ArrowColor #555555
+skinparam ArrowFontSize 10
+skinparam ArrowFontColor #444444
+
+skinparam rectangle {
+  BorderColor #444444
+  FontStyle bold
+  FontSize 12
+}
+
+skinparam component {
+  BackgroundColor #DDEEFF
+  BorderColor #336699
+  FontColor #003366
+}
+
+skinparam database {
+  BackgroundColor #E8F5E9
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+
+' ── Actors ───────────────────────────────────────────
+actor "End User" as EndUser
+
+' ── Presentation ─────────────────────────────────────
+rectangle "Presentation" #FFF8E1 {
+  [Web Client\n(Next.js, React 19)] as WebClient
+}
+
+' ── Backend ──────────────────────────────────────────
+rectangle "Backend" #E3F2FD {
+  [API Gateway\n(Spring Cloud Gateway)]     as ApiGateway
+  [User Service\n(Spring Boot,\nOAuth2 Authorization Server)] as UserService
+  [Content Service\n(Spring Boot)]          as ContentService
+  [News Ingestion Scheduler\n(inside Content Service)] as Scheduler
+  [GenAI Service\n(Python, FastAPI + LangChain)] as GenAiService
+}
+
+' ── Data ─────────────────────────────────────────────
+rectangle "Data" #E8F5E9 {
+  database "MongoDB\n(users database)"   as UsersDb
+  database "MongoDB\n(content database)" as ContentDb
+}
+
+' ── Third-party integrations ─────────────────────────
+rectangle "Data Sources" #FBE9E7 {
+  [RSS Feeds] as NewsFeeds
+}
+
+rectangle "AI Provider" #F3E5F5 {
+  [LLM Provider\n(Logos cloud / local Ollama)] as AiProvider
+}
+
+rectangle "Observability" #FFF3E0 {
+  [grafana-lgtm\n(Prometheus-compatible Mimir,\nGrafana, Tempo, Loki)] as Monitoring
+}
+
+' ── Connections ──────────────────────────────────────
+EndUser    --> WebClient  : <<HTTPS>>
+WebClient  --> ApiGateway : REST API\n<<JWT Bearer, except\npublic routes>>
+
+ApiGateway --> UserService    : route /api/users/**\n<<REST, JWT validated>>
+ApiGateway --> ContentService : route /api/content/**\n<<REST, JWT validated>>
+ApiGateway --> GenAiService   : route /api/ai/**\n<<REST, public — no JWT>>
+
+UserService --> UsersDb : read / write
+ContentService --> ContentDb : read / write
+
+' Service-to-service call for subscribe/unsubscribe, using a dedicated
+' client_credentials machine token (scope source.write) instead of forwarding
+' the end user's JWT.
+UserService --> ContentService : subscribe/unsubscribe source\n<<REST, client_credentials,\nscope source.write>>
+
+GenAiService --> AiProvider : summarise / explain /\nanalyse sentiment / answer\n<<HTTPS>>
+GenAiService ..> ContentService : fetch article text\nwhen articleId given\n<<REST>>
+
+' Ingestion is async / scheduled – not on the user request path
+Scheduler .down.> NewsFeeds  : poll active sources\n<<async>>
+Scheduler .down.> ContentDb  : store new articles,\ndedupe by externalUrl\n<<async>>
+
+WebClient .down.> Monitoring : traces (OTel)\n<<async>>
+ApiGateway .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
+UserService .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
+ContentService .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
+GenAiService .down.> Monitoring : metrics/traces/logs (OTel)\n<<async>>
+
+note bottom of Monitoring
+  Not present in the initial component diagram.
+  Runs in its own namespace in Kubernetes, its
+  own network in Docker Compose.
+end note
+
+note "Not implemented (present in the initial\ncomponent diagram, not in the current build):\nNotification Provider (push/email) — the\nsettings UI has a disclaimed, non-persisted\nmock only." as N2
+@enduml

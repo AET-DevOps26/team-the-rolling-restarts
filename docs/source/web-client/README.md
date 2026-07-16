@@ -69,12 +69,13 @@ npm run dev          # http://localhost:3000
 
 ## Scripts
 
-| Command         | Purpose                                  |
-| --------------- | ---------------------------------------- |
-| `npm run dev`   | Start dev server (Turbopack, hot reload) |
-| `npm run build` | Production build                         |
-| `npm run start` | Run the production build                 |
-| `npm run lint`  | ESLint                                   |
+| Command         | Purpose                                                    |
+| --------------- | ---------------------------------------------------------- |
+| `npm run dev`   | Start dev server (Turbopack, hot reload)                   |
+| `npm run build` | Production build                                           |
+| `npm run start` | Run the production build                                   |
+| `npm run lint`  | ESLint                                                     |
+| `npm run test`  | Vitest — utility/data-layer tests (`src/lib/**/*.test.ts`) |
 
 ## Adding shadcn components
 
