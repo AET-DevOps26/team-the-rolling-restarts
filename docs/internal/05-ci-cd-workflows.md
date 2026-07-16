@@ -121,7 +121,7 @@ fresh VM, and Docker's fallback (auto-creating the missing source as an
 empty directory) broke the container outright. Same class of fix as the
 Ansible `app` role's equivalent (`docs/internal/06-observability.md`).
 
-**Fix merged, partially live-verified (2026-07-16)**: gen-ai's `logos` provider
+**Fix merged and live-verified (2026-07-16)**: gen-ai's `logos` provider
 (`https://logos.aet.cit.tum.de/v1`) is TUM-network-only and unreachable
 from Azure's public cloud, so this deployment target's LLM calls used to
 fail outright. `infra/docker-compose.azure.yaml` runs a self-hosted
@@ -133,8 +133,9 @@ shadowing the intended default and got fed to `ollama pull` as the model name,
 which obviously doesn't exist. Fixed by giving Azure its own `AZURE_OLLAMA_MODEL`
 repo variable and hardcoding the provider — see `docs/internal/07-gotchas.md`.
 Everything else on this target (signup/login, dashboards, mongodb, grafana-lgtm)
-was confirmed healthy on that same deploy; the ollama/gen-ai fix itself still
-needs a fresh deploy to confirm end-to-end.
+was confirmed healthy on that same deploy. A subsequent fresh deploy with the fix
+confirmed `ollama`/`gen-ai` healthy too, with the AI endpoints and Grafana
+monitoring manually exercised and working end-to-end.
 
 ## `destroy-azure.yml` — name: "Destroy Azure resources"
 

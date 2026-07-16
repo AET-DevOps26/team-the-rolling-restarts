@@ -22,7 +22,7 @@ Legend: ✅ Done · ⚠️ Partial · ❌ Missing
 - ✅ Separate Python service, containerised — `services/gen-ai/` (FastAPI, LangChain), own `Dockerfile`
 - ✅ Real user-facing use case — `POST /summarize`, `/explain`, `/sentiment`, `/qa` implemented (gateway: `/api/ai/*`); fetches article text from content-service when `articleId` is supplied; **web client article page** exposes Summary / Explain / Sentiment / Q&A widgets calling `/api/ai/*` via server actions (end-to-end user flow)
 - ⚠️ Gateway exposes `/api/ai/**` publicly (`permitAll` in `SecurityConfig`) so the web client can call GenAI without JWT; Swagger UI aggregates gen-ai's `/openapi.json` at `/api/ai/openapi.json`. **Follow-up:** no rate limit or request-size cap on these routes yet — they front a paid Logos LLM; add gateway throttling and/or auth before production abuse.
-- ⚠️ Cloud + local model support — code supports both (`get_chat_model()` branches on `LLM_PROVIDER=logos|ollama`). **Confirmed live on Kubernetes**: `logos` (`https://logos.aet.cit.tum.de/v1`, TUM-network-only) works there; gen-ai's LLM endpoints (`/summarize`, `/explain`, `/sentiment`, `/qa`) all work end-to-end. **Azure VM**: `logos` is unreachable off the TUM network, so `infra/docker-compose.azure.yaml` now runs a self-hosted Ollama (model from the `AZURE_OLLAMA_MODEL` repo variable, default `llama3.2:1b`) and `deploy-azure.yml` hardcodes `LLM_PROVIDER=ollama` there instead — implemented, hit and fixed a stale-repo-variable config bug on first live attempt (2026-07-16), but **still not live-verified end-to-end against a real Azure deploy**. See `docs/internal/07-gotchas.md` and `docs/internal/06-observability.md`.
+- ⚠️ Cloud + local model support — code supports both (`get_chat_model()` branches on `LLM_PROVIDER=logos|ollama`). **Confirmed live on Kubernetes**: `logos` (`https://logos.aet.cit.tum.de/v1`, TUM-network-only) works there; gen-ai's LLM endpoints (`/summarize`, `/explain`, `/sentiment`, `/qa`) all work end-to-end. **Azure VM**: `logos` is unreachable off the TUM network, so `infra/docker-compose.azure.yaml` now runs a self-hosted Ollama (model from the `AZURE_OLLAMA_MODEL` repo variable, default `llama3.2:1b`) and `deploy-azure.yml` hardcodes `LLM_PROVIDER=ollama` there instead — hit and fixed a stale-repo-variable config bug on first live attempt (2026-07-16), then **confirmed live end-to-end on a fresh deploy** (AI endpoints and Grafana monitoring manually exercised and working). See `docs/internal/07-gotchas.md` and `docs/internal/06-observability.md`.
 - ❌ RAG / vector DB (optional bonus) — not started
 
 ## 05 — Environment & Deployment
@@ -155,9 +155,9 @@ activity rather than this file.
    (2026-07-16) got everything else healthy (mongo, user-service, content-service, api-gateway,
    web-client) but hit a second config bug: a stale `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini`
    repo variable pair was silently shadowing the intended ollama default and broke the model pull.
-   Fixed by decoupling Azure onto its own `AZURE_OLLAMA_MODEL` variable. **Still not live-verified
-   end-to-end** — re-verify gen-ai's endpoints against the next fresh Azure deploy before relying
-   on this. Kubernetes continues to work fully (same network as Logos). See
+   Fixed by decoupling Azure onto its own `AZURE_OLLAMA_MODEL` variable, then **confirmed live
+   end-to-end on a fresh Azure deploy** — gen-ai's AI endpoints and Grafana monitoring manually
+   exercised and working. Kubernetes continues to work fully (same network as Logos). See
    `docs/internal/07-gotchas.md`.
 7. **No TLS on the Azure VM** — the auth cookie's `Secure` flag broke login persistence there
    until fixed with an explicit `COOKIE_SECURE` env var (see `docs/internal/06-observability.md`);

@@ -56,10 +56,10 @@ Azure. The old `LLM_PROVIDER=openai`/`LLM_MODEL=gpt-4o-mini` repo variables were
 Also: `logos` (`https://logos.aet.cit.tum.de/v1`) is **TUM-network-only** — it works from the
 Kubernetes cluster (same network) but is unreachable from Azure's public cloud VM, so "just set it
 to logos everywhere" isn't a fix for Azure either. See `docs/internal/06-observability.md`'s
-incident log and `docs/internal/05-ci-cd-workflows.md`. **Not yet live-verified**: the config fix
-above hasn't been confirmed against a full fresh Azure deploy (mongo/user-service/etc. were
-verified healthy first, but the ollama fix landed after — re-check `ollama`/`gen-ai` container
-health on the next deploy before assuming this is fully resolved).
+incident log and `docs/internal/05-ci-cd-workflows.md`. **Live-verified 2026-07-16**: a fresh
+Azure deploy came up fully healthy (`ollama`, `gen-ai`, and everything else) and the AI endpoints
+(summarize/explain/sentiment/qa) plus Grafana monitoring were manually exercised and confirmed
+working.
 
 ```sh
 grep -n "if settings.llm_provider" services/gen-ai/app/llm/provider.py   # only ollama/logos branch

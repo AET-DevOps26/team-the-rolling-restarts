@@ -35,25 +35,22 @@ rubric's categories rather than the requirement chunks.
 Backend services, web client, and gen-ai are fully integrated — no mock data
 anywhere, all four GenAI endpoints (`/summarize`, `/explain`, `/sentiment`,
 `/qa`) implemented and wired to the article page's AI widgets via server
-actions. **Verified live end-to-end on the Kubernetes deployment**: signup,
-login, dashboards, article AI widgets, and the full monitoring stack all
-confirmed working against the real cluster this session. Two things keep this
-short of a clean Excellent: (1) the Azure VM deployment target's gen-ai LLM
-calls have a code-level fix merged (self-hosted Ollama in
-`infra/docker-compose.azure.yaml`, since `logos` is TUM-network-only and
-unreachable from Azure). A first real deploy attempt (2026-07-16) got
-everything else on that target healthy but hit a second config bug — a stale
-repo variable pair silently overriding the ollama default and breaking the
-model pull, fixed by giving Azure its own `AZURE_OLLAMA_MODEL` variable — so
-it still hasn't been live-verified end-to-end; re-verify before treating this
-as closed; (2) the article
+actions. **Verified live end-to-end on both deployment targets**: Kubernetes
+(signup, login, dashboards, article AI widgets, full monitoring stack) and,
+as of 2026-07-16, Azure (same checklist plus Grafana monitoring) both confirmed
+working against real deployments. Azure's gen-ai LLM calls needed two fixes
+first — a self-hosted Ollama container (`infra/docker-compose.azure.yaml`,
+since `logos` is TUM-network-only and unreachable from Azure), then a stale
+repo variable pair that was silently overriding the ollama default and
+breaking the model pull, fixed by giving Azure its own `AZURE_OLLAMA_MODEL`
+variable. One thing keeps this short of a clean Excellent: the article
 search feature (`?q=` on the dashboard) is fully implemented but fails live
 with a MongoDB `IndexNotFound` error (`auto-index-creation` defaults to
 `false`, no text index is ever actually created) — confirmed via a live 500
 from `content-service`.
 
 - **Evidence:** `web-client/src/lib/api/{reads,ai}.ts`, `web-client/src/app/(app)/article/[id]/ai-actions.ts`, `web-client/src/components/article/ai/`; `services/gen-ai/app/routers/{summarize,explain,sentiment,qa}.py`; `services/spring/content-service/src/main/java/rolling_restarts/content/service/ArticleService.java` (search, broken); `infra/docker-compose.azure.yaml` (Ollama); `docs/internal/06-observability.md` and `docs/internal/07-gotchas.md` for the live-verification incident log
-- **Re-verify:** exercise the AI widgets and search bar against the live Kubernetes deployment; `kubectl logs -n deployment deploy/content-service | grep "IndexNotFound"` (search bug); a fresh Azure VM deploy, exercising gen-ai's endpoints against the new Ollama container
+- **Re-verify:** exercise the search bar against the live Kubernetes deployment; `kubectl logs -n deployment deploy/content-service | grep "IndexNotFound"` (search bug — only remaining gap; AI widgets and Azure's Ollama container are both confirmed working)
 
 ### Architecture Quality — **Excellent** (up from "Good, borderline")
 
