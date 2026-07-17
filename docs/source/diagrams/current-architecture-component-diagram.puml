@@ -1,0 +1,106 @@
+@startuml CurrentArchitectureComponentDiagram
+title Personalised News Aggregator - Current Component Diagram (as implemented)
+
+top to bottom direction
+
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+skinparam defaultFontSize 12
+skinparam nodesep 45
+skinparam ranksep 60
+skinparam ArrowColor #555555
+skinparam ArrowFontSize 10
+skinparam ArrowFontColor #444444
+
+skinparam rectangle {
+  BorderColor #444444
+  FontStyle bold
+  FontSize 12
+}
+
+skinparam component {
+  BackgroundColor #DDEEFF
+  BorderColor #336699
+  FontColor #003366
+}
+
+skinparam database {
+  BackgroundColor #E8F5E9
+  BorderColor #388E3C
+  FontColor #1B5E20
+}
+
+' ── Actors ───────────────────────────────────────────
+actor "End User" as EndUser
+
+' ── Presentation ─────────────────────────────────────
+rectangle "Presentation" #FFF8E1 {
+  [web-client\n(Next.js 16, React 19)] as WebClient
+}
+
+' ── Backend (Spring Boot 4, Java 25; gen-ai is Python) ─
+rectangle "Backend" #E3F2FD {
+  [api-gateway\n(Spring Cloud Gateway MVC)\nStripPrefix=2 routing] as ApiGateway
+  [user-service\n(OAuth2 Authorization Server)\nAuthController, UserController] as UserService
+  [content-service\n(Spring Data MongoDB)\nArticleController, SourceController, TopicController] as ContentService
+  [RssFetcherService\n(@Scheduled, inside content-service)] as Scheduler
+  [gen-ai\n(FastAPI + LangChain)\n/summarize /explain /sentiment /qa] as GenAiService
+}
+
+' ── Data ─────────────────────────────────────────────
+rectangle "Data" #E8F5E9 {
+  database "MongoDB (mongo:8)\nusers db: users" as UsersDb
+  database "MongoDB (mongo:8)\ncontent db: articles,\nsources, topics" as ContentDb
+}
+
+' ── Third-party integrations ─────────────────────────
+rectangle "Data Sources" #FBE9E7 {
+  [RSS Feeds] as NewsFeeds
+}
+
+rectangle "AI Provider" #F3E5F5 {
+  [LLM Provider\n(Logos cloud / local Ollama,\nvia LLM_PROVIDER)] as AiProvider
+}
+
+rectangle "Observability" #FFF3E0 {
+  [grafana-lgtm\n(Grafana + Prometheus-compatible\nMimir + Tempo + Loki)] as Monitoring
+}
+
+' ── Connections ──────────────────────────────────────
+EndUser    --> WebClient  : <<HTTPS>>
+WebClient  --> ApiGateway : REST\n<<JWT Bearer, except\npublic routes>>
+
+ApiGateway --> UserService    : /api/users/**\n<<StripPrefix=2, JWT validated>>
+ApiGateway --> ContentService : /api/content/**\n<<StripPrefix=2, JWT validated>>
+ApiGateway --> GenAiService   : /api/ai/**\n<<StripPrefix=2, public — no JWT>>
+
+UserService --> UsersDb : Spring Data MongoDB
+ContentService --> ContentDb : Spring Data MongoDB
+
+' Service-to-service call for subscribe/unsubscribe, using a dedicated
+' client_credentials machine token (scope source.write), not the end user's JWT.
+UserService --> ContentService : POST /sources/{id}/(un)subscribe\n<<client_credentials,\nscope source.write>>
+
+GenAiService --> AiProvider : chat completions\n<<HTTPS>>
+GenAiService ..> ContentService : GET article text when\narticleId supplied\n<<REST>>
+
+' Ingestion is async / scheduled – not on the user request path
+Scheduler .down.> NewsFeeds  : poll Source.rssUrl\nwhere active\n<<async>>
+Scheduler .down.> ContentDb  : upsert Article,\ndedupe by externalUrl\n<<async>>
+
+WebClient .down.> Monitoring : traces (@vercel/otel)\n<<OTLP>>
+ApiGateway .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+UserService .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+ContentService .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+GenAiService .down.> Monitoring : metrics/traces/logs\n<<OTLP>>
+
+note bottom of Monitoring
+  Not in the initial component diagram. Runs in its own
+  namespace (monitoring-rolling-restarts) in Kubernetes,
+  its own network in Docker Compose. web-client exports
+  traces only (no scrapable metrics endpoint) — its RED
+  metrics come from Tempo's metrics-generator.
+end note
+
+note "Not implemented (in the initial component diagram, not in\nthe current build): a Notification Provider (push/email) —\nthe settings UI has a disclaimed, non-persisted mock only." as N2
+@enduml

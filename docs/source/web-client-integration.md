@@ -63,9 +63,8 @@ inline in each widget; the page still renders if GenAI is unavailable.
 ## Current state
 
 Backend integration is complete — `web-client/README.md`'s "Backend integration" section
-documents the real gateway URL and API paths, `src/lib/mock/` no longer exists (see
-[02-web-client.md](../internal/02-web-client.md)), and the auth flow is wired to
-`/api/users/auth/login`/`/register` with the JWT stored via `src/lib/api/client.ts`.
+documents the real gateway URL and API paths, `src/lib/mock/` no longer exists, and the auth flow
+is wired to `/api/users/auth/login`/`/register` with the JWT stored via `src/lib/api/client.ts`.
 
 - **Generated types** — the API is code-first: `api/openapi.yaml` is generated
   from the Spring controllers, and `web-client/src/generated/api.ts` is generated

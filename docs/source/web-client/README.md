@@ -42,8 +42,7 @@ web-client/
 ## Routes
 
 Backend-integrated — real auth and API calls, not placeholders (see
-[Backend integration](#backend-integration) below and
-[docs/internal/02-web-client.md](../../internal/02-web-client.md)).
+[Backend integration](#backend-integration) below).
 
 | Path               | Purpose                                                                                 |
 |--------------------|-----------------------------------------------------------------------------------------|
@@ -69,12 +68,13 @@ npm run dev          # http://localhost:3000
 
 ## Scripts
 
-| Command         | Purpose                                  |
-| --------------- | ---------------------------------------- |
-| `npm run dev`   | Start dev server (Turbopack, hot reload) |
-| `npm run build` | Production build                         |
-| `npm run start` | Run the production build                 |
-| `npm run lint`  | ESLint                                   |
+| Command         | Purpose                                                    |
+| --------------- | ---------------------------------------------------------- |
+| `npm run dev`   | Start dev server (Turbopack, hot reload)                   |
+| `npm run build` | Production build                                           |
+| `npm run start` | Run the production build                                   |
+| `npm run lint`  | ESLint                                                     |
+| `npm run test`  | Vitest — utility/data-layer tests (`src/lib/**/*.test.ts`) |
 
 ## Adding shadcn components
 

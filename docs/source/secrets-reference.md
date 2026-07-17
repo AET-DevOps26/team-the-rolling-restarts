@@ -190,10 +190,9 @@ password), or copy `secrets-values.example.yaml` and fill it in by hand.
 > **Rotating `monitoring.adminPassword`:** unlike the above, this one _is_ fully automatic — an
 > initContainer (Kubernetes) / one-shot service (docker-compose) runs `grafana cli admin
 > reset-admin-password` on every deploy, before Grafana starts, so changing the value and
-> redeploying is enough. See `docs/internal/07-gotchas.md` for how this works and two sharp edges
-> hit building it (a `ResourceQuota` requiring explicit limits on the initContainer, and a
-> `checksum/grafana-admin-password` pod-template annotation needed so a Secret-only value change
-> actually triggers a new pod on the Helm path).
+> redeploying is enough. Two sharp edges were involved in building it: a `ResourceQuota` requiring
+> explicit limits on the initContainer, and a `checksum/grafana-admin-password` pod-template
+> annotation needed so a Secret-only value change actually triggers a new pod on the Helm path.
 
 Both services share the same MongoDB instance with data isolation via separate databases:
 

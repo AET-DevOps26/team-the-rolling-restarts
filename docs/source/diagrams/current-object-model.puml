@@ -1,0 +1,89 @@
+@startuml CurrentObjectModel
+title Personalised News Aggregator - Current Object Model (as implemented)
+
+' Style: keep it simple, attributes only (analysis level, no methods) — same convention as
+' analysis-object-model.puml, so the two are visually comparable side by side.
+hide circle
+hide empty methods
+skinparam classAttributeIconSize 0
+skinparam classFontStyle bold
+skinparam linetype ortho
+
+' ===== Persisted (MongoDB @Document) =====
+
+class User {
+  username
+  email
+  passwordHash
+  name
+  avatarInitials
+  createdAt
+}
+
+class UserSettings <<embedded>> {
+  selectedTopicIds
+  enabledSourceIds
+  savedArticleIds
+}
+
+class Topic {
+  name
+  color
+}
+
+class Source {
+  name
+  rssUrl
+  initials
+  active
+  subscriberCount
+  lastFetchedAt
+  fetchStatus
+  fetchError
+  createdAt
+}
+
+class Article {
+  headline
+  snippet
+  imageUrl
+  body
+  author
+  publishedAt
+  readingMinutes
+  fetchedAt
+  externalUrl
+}
+
+' ===== Computed, not persisted =====
+' GenAI responses (summarize/explain/sentiment/qa) are returned directly to the caller and never
+' written to a collection — shown here only to make that explicit, since the initial analysis
+' model (Summary/Explanation/SentimentAnalysis) assumed they would be stored per-article.
+class "GenAI Response" as GenAiResponse <<transient, not persisted>> {
+  kind          ' summary | explanation | sentiment | qa-answer
+  text
+  ' sentiment responses also carry: score, bias (left|center|right|unclear), rationale
+}
+
+' =====================================================
+' Associations
+' =====================================================
+
+User        "1" -- "1"  UserSettings     : embeds >
+UserSettings "*" -- "*" Topic            : selectedTopicIds >
+UserSettings "*" -- "*" Source           : enabledSourceIds >
+UserSettings "*" -- "*" Article          : savedArticleIds >
+
+Source  "1" -- "*" Article : sourceId >
+Article "0..1" -- "0..1" Topic : topicId\n(field exists, never\nset by ingestion — see note) >
+
+Article ..> GenAiResponse : generates on demand >
+
+note bottom of Article
+  topicId is defined on the model and filterable via the API, but
+  RssFetcherService never sets it on ingestion and nothing else does
+  either — every article's topicId is null in practice today.
+end note
+
+note "Not implemented (present in the initial\nanalysis model, not in the current build):\nTag, Publisher, Folder, Bookmark (as its own\nentity — it's just Article ids on User),\nInteraction, Recommendation, Notification,\nTrendingTopic" as N1
+@enduml

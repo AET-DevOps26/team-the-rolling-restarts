@@ -11,6 +11,7 @@ nav:
   - Initial Backlog: INITIAL_BACKLOG.md
   - Problem Statement: PROBLEM_STATEMENT.md
   - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
+  - Current System Structure: CURRENT_SYSTEM_STRUCTURE.md
   - API Docs: api.html
   - Services:
     - Spring Microservices: services/spring/README.md
@@ -19,6 +20,7 @@ nav:
   - Guides:
     - OpenAPI Workflow: openapi-workflow.md
     - Web Client Integration: web-client-integration.md
+    - Database Schema: database-schema.md
     - Deployment Testing: deployment-testing.md
     - Monitoring: monitoring.md
     - Secrets & Environment Variables: secrets-reference.md

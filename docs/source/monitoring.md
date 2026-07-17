@@ -17,8 +17,7 @@ stack is deployed.
 - **Kubernetes**: `https://<ingress host>/monitoring/` (e.g.
   `https://rolling-restarts.stud.k8s.aet.cit.tum.de/monitoring/` on the Helm target, or the raw
   `k8s.rolling-restarts.stud.k8s.aet.cit.tum.de` host on the raw-manifests target)
-- **Azure VM**: `http://<vm-ip>/monitoring/` (no TLS on that target yet — see the cookie-`Secure`
-  gotcha in `docs/internal/07-gotchas.md` for the related, still-open TLS gap)
+- **Azure VM**: `http://<vm-ip>/monitoring/` (no TLS on that target yet)
 
 Login: `admin` / whatever `GRAFANA_ADMIN_PASSWORD` (docker-compose/Ansible) or
 `monitoring.adminPassword` (Helm secrets-values.yaml) / the `GRAFANA_ADMIN_PASSWORD` repo secret
@@ -30,9 +29,7 @@ first-boot-only application of `GF_SECURITY_ADMIN_PASSWORD`, which would otherwi
 nothing on an already-initialized volume). **The raw-k8s-manifests path has the same
 initContainer but no equivalent of Helm's checksum-annotation trick** (no templating engine to
 compute one), so rotating the password there additionally needs a manual `kubectl rollout
-restart deployment/grafana-lgtm -n monitoring-rolling-restarts` after updating the Secret — see
-`docs/internal/07-gotchas.md` for the full story, including two more sharp edges hit getting this
-right on the real cluster.
+restart deployment/grafana-lgtm -n monitoring-rolling-restarts` after updating the Secret.
 
 Grafana is also still reachable directly, bypassing the proxy/ingress entirely, which is handy for
 ad-hoc access or scripts (`infra/scripts/smoke-test.sh`'s Loki check uses this path):
@@ -123,10 +120,9 @@ unrelated pull-based path) kept working and masked it.
   fixed in Service Overview). "JVM Metrics" is still the image's unmodified original. The image's
   third bundled dashboard, "RED Metrics (native histogram)", is intentionally removed — our
   services only ever emit classic bucketed Prometheus histograms, not true native histograms, so
-  it would always be empty (see `docs/internal/06-observability.md`'s Known gaps).
+  it would always be empty.
   `infra/grafana/dashboards/genai-overview.json` ("GenAI Overview") reads gen-ai's custom LLM
-  metrics (request/error rate, latency, token usage per `endpoint`/`provider`) — see
-  `docs/internal/06-observability.md` for the exact metric names.
+  metrics (request/error rate, latency, token usage per `endpoint`/`provider`).
   `infra/grafana/dashboards/webclient-overview.json` ("Web Client Overview") reads
   `traces_spanmetrics_*`, RED-style metrics that Tempo's metrics-generator derives automatically
   from web-client's OTel traces (web-client has no scrapable Prometheus endpoint of its own — see
@@ -411,8 +407,7 @@ ceiling each service's `HorizontalPodAutoscaler` scales up to (`global.autoscali
 
 Headroom: app namespace **670m CPU (19%)**, **172Mi memory (3.3%)**; monitoring namespace
 **100m CPU (20%)**, **50Mi memory (5.6%)**. This table has gone through several live-data-driven
-revisions already (see `docs/internal/06-observability.md` for the full incident history) — treat
-the numbers as a snapshot, not a one-time decision:
+revisions already — treat the numbers as a snapshot, not a one-time decision:
 
 - **mongodb is at 512Mi** (not the 260Mi it was briefly cut to) — that cut left almost no headroom
   above the 256Mi request and caused a live OOMKill during first-boot init (WiredTiger cache
