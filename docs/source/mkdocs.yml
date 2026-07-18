@@ -5,6 +5,12 @@ site_dir: ../site
 use_directory_urls: true
 theme:
   name: material
+plugins:
+  # `search` is enabled by default, but declaring a plugins: block
+  # disables the defaults — so it must be listed explicitly here.
+  - search
+  # Click-to-zoom lightbox for images (PNG diagrams etc.)
+  - glightbox
 # optional: add a nav: section to control ordering
 nav:
   - Home: index.md

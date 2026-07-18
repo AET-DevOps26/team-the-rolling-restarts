@@ -64,7 +64,7 @@ jobs:
         with:
           python-version: 3.x
 
-      - run: pip install mkdocs-material
+      - run: pip install mkdocs-material==9.7.7 mkdocs-glightbox==0.5.2
 
       - name: Build site
         run: mkdocs build -f docs/source/mkdocs.yml
