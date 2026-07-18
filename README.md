@@ -102,8 +102,7 @@ access Grafana and what's provisioned in each deployment target.
 
 This team has 2 active members (originally 3 — the third member left the project). Each member
 owns a primary subsystem but collaborates across boundaries for integration, deployment, and
-debugging, per the course's team model — see
-[docs/requirements/01-team-and-collaboration.md](docs/requirements/01-team-and-collaboration.md).
+debugging, per the course's team model.
 Enforced via [`.github/CODEOWNERS`](.github/CODEOWNERS):
 
 | Member | GitHub | Owns |
