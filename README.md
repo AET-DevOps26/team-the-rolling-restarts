@@ -72,9 +72,9 @@ flowchart LR
     gw -->|/api/content · JWT| con["content-service"]
     gw -->|/api/ai · public| gen["gen-ai<br/>FastAPI · LangChain"]
 
-    rss["RSS Feeds"] -->|@Scheduled poll| con
+    rss["RSS Feeds"] -->|scheduled poll| con
     gen -->|fetch article text| con
-    gen -->|summaries · explanations<br/>sentiment| llm["LLM Provider<br/>Logos cloud / local Ollama"]
+    gen -->|summaries, explanations, sentiment| llm["LLM Provider<br/>Logos cloud / local Ollama"]
 
     usr --> mongo[("MongoDB")]
     con --> mongo
