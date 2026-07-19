@@ -5,12 +5,19 @@ site_dir: ../site
 use_directory_urls: true
 theme:
   name: material
+plugins:
+  # `search` is enabled by default, but declaring a plugins: block
+  # disables the defaults — so it must be listed explicitly here.
+  - search
+  # Click-to-zoom lightbox for images (PNG diagrams etc.)
+  - glightbox
 # optional: add a nav: section to control ordering
 nav:
   - Home: index.md
-  - Initial Backlog: INITIAL_BACKLOG.md
-  - Problem Statement: PROBLEM_STATEMENT.md
-  - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
+  - Project Inception:
+    - Initial Backlog: INITIAL_BACKLOG.md
+    - Problem Statement: PROBLEM_STATEMENT.md
+    - Initial System Structure: INITIAL_SYSTEM_STRUCTURE.md
   - Current System Structure: CURRENT_SYSTEM_STRUCTURE.md
   - API Docs: api.html
   - Services:
