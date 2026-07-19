@@ -59,7 +59,7 @@ make preflight       # generate spec, build+test Spring, lint Helm, validate Ter
 
 ## Architecture
 
-The web-client talks to everything through the **api-gateway** over REST (JWT bearer, except the public GenAI routes). `content-service` owns article state and runs an embedded `RssFetcherService` that polls active RSS sources on a schedule and upserts articles asynchronously, off the request path. `gen-ai` is a stateless FastAPI service that fetches article text from `content-service` and calls an LLM provider. Each Spring service owns its data in MongoDB; every service exports telemetry to a bundled Grafana LGTM stack over OTLP.
+The web-client talks to everything through the **api-gateway** over REST (JWT bearer, except the public GenAI routes). `content-service` owns article state and runs an embedded `RssFetcherService` that polls active RSS sources on a schedule and upserts articles asynchronously, off the request path. `gen-ai` is a stateless FastAPI service that fetches article text from `content-service` and calls an LLM provider. `user-service` and `content-service` each own their data in their own MongoDB database, while `api-gateway` stays stateless — routing and JWT validation only. Every service exports telemetry to a bundled Grafana LGTM stack over OTLP.
 
 ### Service communication
 
